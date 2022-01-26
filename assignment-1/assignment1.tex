@@ -1,0 +1,563 @@
+\documentclass[10pt, oneside, letterpaper]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage[english]{babel}
+\usepackage[utf8]{inputenc}
+\usepackage{xcolor}
+\definecolor{mygreen}{rgb}{0,0.6,0}
+\definecolor{mygray}{rgb}{0.5,0.5,0.5}
+\definecolor{mymauve}{rgb}{0.58,0,0.82}
+\usepackage{listings}
+\lstset{
+  backgroundcolor=\color{white}, % choose the background color
+  basicstyle=\footnotesize\ttfamily, % size of fonts used for the code
+  breaklines=true, % automatic line breaking only at whitespace
+  frame=single, % add a frame
+  captionpos=b, % sets the caption-position to bottom
+  commentstyle=\color{mygreen}, % comment style
+  escapeinside={\%*}{*)}, % if you want to add LaTeX within your code
+  keywordstyle=\color{blue}, % keyword style
+  stringstyle=\color{mymauve}, % string literal style
+}
+\usepackage{enumitem}
+\usepackage{blindtext}
+\usepackage{datetime2}
+\usepackage{fancyhdr}
+\usepackage{amsmath}
+\usepackage{arydshln} % dash line package for matrices
+\usepackage{mathtools} % for things like \Aboxed
+\usepackage{float}
+\usepackage{pgf}
+\usepackage{enumitem} % to easily change style of counters in item lists
+\usepackage{xurl} % to easily insert URLs in the LaTeX source
+\usepackage{braket} % for bra-ket notation
+\usepackage{bm} % for bold vector variables
+\usepackage{cases} % for piecewise definitions
+\usepackage[makeroom]{cancel} % for crossing out terms
+\usepackage{graphicx} % for \scalebox
+  \newcommand\scalemath[2]{\scalebox{#1}{\mbox{\ensuremath{\displaystyle #2}}}}
+
+\setcounter{MaxMatrixCols}{32} % increase the maximum number of matrix columns
+
+\title{Assignment 1}
+\author{Introduction: Infinite Potential Well}
+\date{Due: 2022/01/28}
+
+\pagestyle{fancy}
+\setlength{\headheight}{23pt}
+\setlength{\parskip}{1em}
+\fancyhf{}
+\chead{Assignment 1}
+\rhead{Michel Kakulphimp \\ Student \#63542880}
+\lhead{ELEC542 \\ UBC MEng}
+\cfoot{\thepage}
+
+\begin{document}
+\maketitle
+\thispagestyle{fancy}
+
+\section{Directions}
+
+Neglect spin in this problem.
+
+\begin{enumerate}[label=(\alph*)]
+  \item Consider one electron in a one-dimensional, infinitely-deep potential well, with a width of 10 in atomic units. Find the electron wavefunctions and allowed energy levels by analytically solving the Schrödinger equation. Plot the first six wave functions and give their associated eigenvalues.
+  \item Same as (a), but this time solve the equation numerically using a language of your choice (Python, Matlab, Maple, Mathematica, Basic, C, Pascal, Fortran, assembly, machine code, etc.). Discretize the width of the potential well into at least 10 segments. Finite difference is preferred for solving the equation numerically.
+  \item Same as (b), but this time assume that there are two non-interacting electrons in the well. Note that in this case the wave function will have two variables (the positions of the two electrons).
+  \item Same as (c), but this time include the Coulomb interaction between the two electrons. Comment on the solutions and their difference with those obtained in part (c).
+\end{enumerate}
+
+\section{Solution}
+
+For this assignment, we need to find the solutions of the following one-dimensional, time-independent Schr\"{o}dinger's equation:
+
+\begin{align*}
+  \hat{H}\Phi_n(x_i) &= {E_n}\Phi_n(x_i)
+\end{align*}
+
+For this assignment, $\hat{H}$ is the Hamiltonian operator for a system of electrons described by their position $x_{i}$, $E_n$ is the energy eigenvalue, and $\Phi_n(x_i)$ is the wavefunction that we want to solve for. Note that we will have multiple solutions and we are tasked to obtain the first six. Nuclei are ignored for this problem as only electrons and their interactions are involed, so their contribution is not included in the operator. The expanded form of this Hamiltonian operator for N electrons is as follows (in Hartree atomic units where $\hbar = m_e = e^2 = 1$):
+
+\begin{align*}
+  \hat{H} &= \hat{T} + \hat{U} + \hat{V} & \text{total energy of the system}\\
+  \hat{H} &= -\sum_{i=1}^{N}\frac{1}{2}\nabla^{2}_i + \sum_{i=1}^{N}\sum_{j>i}^{N}\frac{1}{x_{ij}} + \sum_{i=1}^{N}v(x_i)\\
+  \hat{T} &= -\sum_{i=1}^{N}\frac{1}{2}\nabla^{2}_i & \text{kinetic energy of each electron}\\
+  \hat{U} &= \sum_{i=1}^{N}\sum_{j>i}^{N}\frac{1}{x_{ij}} & \text{Coulomb repulsion between electrons}\\
+  \hat{V} &= \sum_{i=1}^{N}v(x_i) & \text{potential energy of each electron}
+\end{align*}
+
+Our one-dimensional, infinitely-deep potential well with a width of 10 atomic units gives us the following boundary conditions for each electron's potential energy $v(x_i)$:
+
+\begin{align*}
+  v(x_i) &= \begin{cases}
+          0       \quad \, & |x| < 5a \\
+          \infty  \quad \, & |x| > 5a \\
+     \end{cases}
+\end{align*}
+
+\subsection{Analytical Solution: Single Electron}
+
+For the first two steps, we will analytically solve the Schr\"{o}dinger equation for a single electron bounded within the 10 atomic unit infinite well to obtain the first six wavefunctions and the associated eigenvalues. For a single electron, the Hamiltonian shown above is simplied as follows:
+
+\begin{align*}
+  \hat{H} &= -\frac{1}{2}\nabla^{2}_i + v(x_i)\\
+\end{align*}
+
+We only have one electron, so the summations are dropped and there is no Coulomb interaction to consider. We can then plug this new Hamiltonian into Schr\"{o}dinger's equation:
+
+\begin{align*}
+  \hat{H}\Phi_n(x) &= {E_n}\Phi_n(x) \\
+  -\frac{1}{2}\Phi^{''}_n(x) + v(x)\Phi_n(x) &= {E_n}\Phi_n(x)
+\end{align*}
+
+With the following boundary conditions:
+
+\begin{align*}
+  v(x_i) &= \begin{cases}
+          0       \quad \, & |x| < 5a \\
+          \infty  \quad \, & |x| > 5a \\
+     \end{cases}
+\end{align*}
+
+We know that the wave function will have the following value at the boundaries of the well (the walls):
+
+\begin{align*}
+  \Phi_n(\pm5a) = 0 
+\end{align*}
+
+Which leaves us with the following equation to solve for within the well:
+
+\begin{align*}
+  -\frac{1}{2}\Phi^{''}_n(x) &= {E_n}\Phi_n(x)
+\end{align*}
+
+This is a second order linear differential equation. The general solution to this form of the second order linear differential equation is as follows:
+
+\begin{align*}
+  \Phi_n(x) = Ae^{ikx} + Be^{-ikx}
+\end{align*}
+
+Plugging in our boundary conditions, we get the following relationships:
+
+\begin{align*}
+  \Phi_n(-5a) &= Ae^{-ik5a} + Be^{ik5a} = 0 \\
+  \Phi_n(5a) &= Ae^{ik5a} + Be^{-ik5a} = 0
+\end{align*}
+
+With some algebra, we can then get the following relationships:
+
+\begin{align*}
+  A + Be^{2ik5a} &= 0 \Longrightarrow A = -Be^{i10ka} \\
+  A + Be^{-2ik5a} &= 0 \Longrightarrow A = -Be^{-i10ka} \\
+  -Be^{i10ka} &= -Be^{-i10ka} \\
+  e^{i10ka} &= e^{-i10ka} \\
+  e^{i20ka} &= 1
+\end{align*}
+
+Using Euler's identity, we know that:
+
+\begin{align*}
+  e^{i2\pi n} &= 1
+\end{align*}
+
+Therefore our possible values for k are as follows:
+
+\begin{align*}
+  2\pi n &= 20ka \\
+  k &= \frac{\pi n}{10a}
+\end{align*}
+
+Where $n$ is an integer. With this result, we can progress further into defining the wave function as follows:
+
+\begin{align*}
+  A &= -Be^{i10ka} \\
+  A &= -Be^{i\pi n} \\
+  A &= -B(e^{i\pi})^n \\
+  A &= -B(-1)^n \\
+  \Aboxed{A &= -B} & \text{for even n} \\
+  \Aboxed{A &= B} & \text{for odd n} \\
+  \Phi_n(x) &= Ae^{-ikx} - Ae^{ikx} = 2iA\sin(kx) \\
+  \Aboxed{\Phi_n(x) &= 2iA\sin(\frac{\pi nx}{10a})} &\text{for even n} \\
+  \Phi_n(x) &= Ae^{-ikx} + Ae^{ikx} = 2A\cos(kx) \\
+  \Aboxed{\Phi_n(x) &= 2A\cos(\frac{\pi nx}{10a})} &\text{for odd n}
+\end{align*}
+
+We are left with finding the value for the constant $A$. We can normalize the wavefunction to calculate this value. This represents the fact that the probability of finding the wave function in all space is equal to 1.
+
+\begin{align*}
+  1 = \int_{-\infty}^{\infty}\left|\Phi_n(x)\right|^2dx
+\end{align*}
+
+Since the problem defines the bounds of the wavefunction to within an infinitely-deep potential well of a fixed size, we can use the bounds of the box as the integration limits.
+
+\begin{align*}
+  1 = \int_{-5a}^{5a}\left|\Phi_n(x)\right|^2dx
+\end{align*}
+
+We can now evaluate the integral for both even and odd cases as follows.
+
+For the even case:
+
+\begin{align*}
+  1 &= \int_{-5a}^{5a}\left|\Phi_n(x)\right|^2dx \\
+  1 &= 4\left|A\right|^2\int_{-5a}^{5a}\sin^2\left(\frac{\pi nx}{10a}\right)dx \\
+  1 &= 4\left|A\right|^2\int_{-5a}^{5a}\frac{1}{2}\left[1-\cos\left(\frac{\pi nx}{5a}\right)\right]dx \\
+  1 &= 2\left|A\right|^2\int_{-5a}^{5a}\left[1-\cos\left(\frac{\pi nx}{5a}\right)\right]dx \\
+  1 &= 2\left|A\right|^2\left[x\cancel{-\frac{5a}{\pi n}\sin\left(\frac{\pi nx}{5a}\right)}\right]_{-5a}^{5a} \\
+  1 &= 2\left|A\right|^2 10a \\
+  \left|A\right|^2 &= \frac{1}{20a} \\
+  A &= \frac{1}{\sqrt{20a}}, \frac{-i}{\sqrt{20a}} \\
+  \Aboxed{\Phi_n(x) &= \frac{2}{\sqrt{20a}}\sin\left(\frac{\pi nx}{10a}\right)} &\text{for even n}
+\end{align*}
+
+We choose the imaginary value for A so that we can cancel out the imaginary value in the wave equation to obtain a real result. We can perform the same steps for the odd case as follows:
+
+\begin{align*}
+  1 &= \int_{-5a}^{5a}\left|\Phi_n(x)\right|^2dx \\
+  1 &= 4\left|A\right|^2\int_{-5a}^{5a}\cos^2\left(\frac{\pi nx}{10a}\right)dx \\
+  1 &= 4\left|A\right|^2\int_{-5a}^{5a}\frac{1}{2}\left[1+\cos\left(\frac{\pi nx}{5a}\right)\right]dx \\
+  1 &= 2\left|A\right|^2\int_{-5a}^{5a}\left[1+\cos\left(\frac{\pi nx}{5a}\right)\right]dx \\
+  1 &= 2\left|A\right|^2\left[x\cancel{+\frac{5a}{\pi n}\sin\left(\frac{\pi nx}{5a}\right)}\right]_{-5a}^{5a} \\
+  1 &= 2\left|A\right|^2 10a \\
+  \left|A\right|^2 &= \frac{1}{20a} \\
+  A &= \frac{1}{\sqrt{20a}}, \frac{-i}{\sqrt{20a}} \\
+  \Aboxed{\Phi_n(x) &= \frac{2}{\sqrt{20a}}\cos\left(\frac{\pi nx}{10a}\right)} &\text{for odd n}
+\end{align*}
+
+In this case, we choose the real value for A so that the wave equation remains real. We can now plot the first six wave functions for $n = 1, 2, 3, 4, 5, 6$ as follows:
+
+\begin{figure}[H]
+  \begin{center}
+    \input{analytical-wave-function-plot.pgf}
+  \end{center}
+  \caption{Wave functions for the analytical solution of the one-dimensional, time-independent Schr\"{o}dinger's describing one electron in an infinitely-deep potential well of width $10a$}
+  \label{analytical-plot}
+\end{figure}
+
+For the energy eigenvalues for each of these wavefunctions, we'll need to relate the energy eigenvalue term $E_n$ back to the constant term k that was derived. We can do this by substituting the wave function derived and plug it into the Schr\"{o}dinger equation that is valid for within the well (where potential energy is equal to 0: $v(x) = 0$) as follows:
+
+\begin{align*}
+  -\frac{1}{2}\Phi^{''}_n(x) &= {E_n}\Phi_n(x) \\
+  -\frac{1}{2}\left[ \frac{2}{\sqrt{20a}}\sin\left(\frac{\pi nx}{10a}\right) \right]\frac{d^2\Phi_n(x)}{dx^2} &= E_n\frac{2}{\sqrt{20a}}\sin\left(\frac{\pi nx}{10a}\right) \\
+  -\frac{1}{2}\left[ \cancel{\frac{2}{\sqrt{20a}}} \left(-\frac{n^2\pi^2}{100a^2}\right) \cancel{\sin\left(\frac{\pi nx}{10a}\right)} \right] &= E_n\cancel{ \frac{2}{\sqrt{20a}}\sin\left(\frac{\pi nx}{10a}\right) } \\
+  \frac{n^2\pi^2}{200a^2} &= E_n \\
+  E_o &= \frac{\pi^2}{200a^2} \\
+  \Aboxed{E_n &= n^2E_o & }
+\end{align*}
+We started off with the even $n$ wavefunction, but the odd $n$ wavefunction results in the same energy eigenvalues. Therefore our result is valid for both even and odd $n$. Our first six eigenvalues are as follows:
+
+\begin{table}
+\begin{center}
+\begin{tabular}{l|llllll}\hline
+$n$    & $1$    & $2$     & $3$     & $4$      & $5$      & $6$      \\\hline
+$E_n$  & $E_o$  & $4E_o$  & $9E_o$  & $16E_o$  & $25E_o$  & $36E_o$ \\\hline
+\end{tabular}
+\end{center}
+  \caption{The first six energy levels calculated for this problem through the analytical method. This will be compared to the following problem's results.}
+  \label{analytical-energies}
+\end{table}
+
+\subsection{Numerical Solution 1: Single Electron}
+
+In order to solve the single electron problem numerically, we must discretize the following equation:
+
+\begin{align*}
+  -\frac{1}{2}\Phi^{''}_n(x) + v(x)\Phi_n(x) &= {E_n}\Phi_n(x)
+  & v(x_i) = \begin{cases}
+          0       \quad \, & |x| < 5a \\
+          \infty  \quad \, & |x| > 5a \\
+     \end{cases}
+\end{align*}
+
+To accomplish this, we can replace the second derivative of the wave function in the one-dimensional, time-independent Schr\"{o}dinger's with a second-order centered difference approximation which has the following form:
+
+\begin{align*}
+  \frac{d^2f(x)}{dx^2} &\approx \frac{f(x + \Delta x) - 2f(x) + f(x - \Delta x)}{\Delta x^2}
+\end{align*}
+
+Schr\"{o}dinger's equation then transforms into a discretized version as follows:
+
+\begin{align*}
+  -\frac{1}{2}\left[\frac{\Phi_n(x + \Delta x) - 2\Phi_n(x) + \Phi_n(x - \Delta x)}{\Delta x^2}\right] + v(x)\Phi_n(x) &= {E_n}\Phi_n(x)
+\end{align*}
+
+This solution relies on a step size $\Delta x$ with the second derivative approximation requiring a previous value ($x - \Delta x$) and the next value ($x + \Delta x$) along with the current value $x$. By taking into account the entire well, sliced into $N$ segments of size $\Delta x$, each segment will represent a different set of the discretized Schr\"{o}dinger's equation to solve, which together forms a linear set of equations which can be solved with the help of linear algebra. For a discretization of $N=10$, we have the following matrices involved:
+
+The kinetic energy matrix:
+
+\begin{align*}
+\bm{T_{N=10}} = -\frac{1}{2\Delta x^2}
+\begin{bmatrix}
+-2 & 1 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0\\
+ 1 &-2 & 1 & 0 & 0 & 0 & 0 & 0 & 0 & 0\\
+ 0 & 1 &-2 & 1 & 0 & 0 & 0 & 0 & 0 & 0\\
+ 0 & 0 & 1 &-2 & 1 & 0 & 0 & 0 & 0 & 0\\
+ 0 & 0 & 0 & 1 &-2 & 1 & 0 & 0 & 0 & 0\\
+ 0 & 0 & 0 & 0 & 1 &-2 & 1 & 0 & 0 & 0\\
+ 0 & 0 & 0 & 0 & 0 & 1 &-2 & 1 & 0 & 0\\
+ 0 & 0 & 0 & 0 & 0 & 0 & 1 &-2 & 1 & 0\\
+ 0 & 0 & 0 & 0 & 0 & 0 & 0 & 1 &-2 & 1\\
+ 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 1 &-2\\
+\end{bmatrix}
+\end{align*}
+
+And the potential energy matrix:
+
+\begin{align*}
+\bm{V_{N=10}} =
+\begin{bmatrix}
+ v(x) & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0\\
+ 0 & v(x) & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0\\
+ 0 & 0 & v(x) & 0 & 0 & 0 & 0 & 0 & 0 & 0\\
+ 0 & 0 & 0 & v(x) & 0 & 0 & 0 & 0 & 0 & 0\\
+ 0 & 0 & 0 & 0 & v(x) & 0 & 0 & 0 & 0 & 0\\
+ 0 & 0 & 0 & 0 & 0 & v(x) & 0 & 0 & 0 & 0\\
+ 0 & 0 & 0 & 0 & 0 & 0 & v(x) & 0 & 0 & 0\\
+ 0 & 0 & 0 & 0 & 0 & 0 & 0 & v(x) & 0 & 0\\
+ 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & v(x) & 0\\
+ 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & v(x)\\
+\end{bmatrix}
+\end{align*}
+
+where
+
+\begin{align*}
+  v(x) &= \begin{cases}
+          0       \quad \, & |x| < 5a \\
+          \infty  \quad \, & |x| > 5a \\
+     \end{cases}
+\end{align*}
+
+Which results in the following system to solve for:
+
+\begin{align*}
+\bm{T}\ket{\Phi} + \bm{V}\ket{\Phi} = \bm{E}\ket{\Phi}
+\end{align*}
+
+or simply:
+
+\begin{align*}
+\bm{H}\ket{\Phi} = \bm{E}\ket{\Phi}
+\end{align*}
+
+where $\ket{\Phi}$ is the column vector representing each step of the wave function's discretization:
+
+\begin{align*}
+\ket{\Phi} =
+\begin{bmatrix}
+ \Phi_1 \\
+ \Phi_2 \\ 
+ \Phi_3 \\ 
+ \Phi_4 \\ 
+ \Phi_5 \\ 
+ \Phi_6 \\ 
+ \Phi_7 \\ 
+ \Phi_8 \\ 
+ \Phi_9 \\ 
+ \Phi_{10} \\ 
+\end{bmatrix}
+\end{align*}
+
+and $\bm{H}$ is the Hamiltonian matrix composed of $\bm{T} + \bm{V}$. By diagonalizing $\bm{H}$, we will obtain the eigenvectors as well as the eigenvalues of the system. The eigenvalues will provide the energies and the eigenvectors will provide the associated functions for the discretization chosen for the problem.
+
+When simulating using $N=10$, we obtain the following wavefunctions and energies:
+
+\begin{figure}[H]
+  \begin{center}
+    \input{numerical-solution-1-wave-function-plot.pgf}
+  \end{center}
+  \caption{Wave functions for the numerical solution of the one-dimensional, time-independent Schr\"{o}dinger's describing one electron in an infinitely-deep potential well of width $10a$ and discretization of $N=10$}
+  \label{numerical-plot}
+\end{figure}
+
+\begin{table}
+\begin{center}
+\begin{tabular}{l|llllll}\hline
+$n$    & $1$    & $2$     & $3$     & $4$      & $5$      & $6$      \\\hline
+$E_n$  & $1$  & $3.91898595$  & $8.52047896$  & $14.43169344$  & $21.17373795$  & $28.20041213$ \\\hline
+\end{tabular}
+\end{center}
+  \caption{The first six energy levels calculated for this problem. They roughly match the coefficients that were obtained and listed in Table \ref{analytical-energies}}
+  \label{numerical-energies-1}
+\end{table}
+
+\subsection{Numerical Solution 2: Two Non-Interacting Electrons}
+
+When an additional, non-interacting electron is introduced, the Hamiltonian changes as follows:
+
+\begin{align*}
+  \hat{H} &= -\frac{1}{2}\nabla^{2}_1 -\frac{1}{2}\nabla^{2}_2 + v(x_1) + v(x_2)\\
+\end{align*}
+
+A second electron is introduced into the system, meanining that the wave function will also be composed of two coordinates $x_1$ and $x_2$: $\Phi(x_1, x_2)$ The second order differentiation will now have to occur for the wave function with respect to $x_1$ as well as a second time with respect to $x_2$. Therefore, using the work outlined previously, the version of the two, non-interacting electron Schr\"{o}dinger equation is equal to:
+
+\begin{align*}
+  -\frac{1}{2}\frac{d^2\Phi(x_1, x_2)}{dx_1^2} + -\frac{1}{2}\frac{d^2\Phi(x_1, x_2)}{dx_2^2} + v(x_1)\Phi(x_1, x_2) + v(x_2)\Phi(x_1, x_2) &= {E}\Phi(x_1, x_2)
+  \\ v(x_1) = v(x_2) = v(x) =
+  \begin{cases}
+          0       \quad \, & |x| < 5a \\
+          \infty  \quad \, & |x| > 5a \\
+  \end{cases}
+\end{align*}
+
+Which discretizes as follows:
+
+\begin{align*}
+  -\frac{1}{2}\left[\frac{\Phi(x_1 + \Delta x, x_2) - 2\Phi(x_1, x_2) + \Phi(x_1 - \Delta x, x_2)}{\Delta x^2}\right] + -\frac{1}{2}\left[\frac{\Phi(x1, x_2 + \Delta x) - 2\Phi(x1, x_2) + \Phi(x1, x_2 - \Delta x)}{\Delta x^2}\right] \\ + 2v(x)\Phi(x_1, x_2) = {E}\Phi(x_1, x_2) \\
+  -\frac{1}{2}\frac{\Phi(x_1 + \Delta x, x_2) + \Phi(x1, x_2 + \Delta x) - 4\Phi(x_1, x_2) + \Phi(x_1 - \Delta x, x_2) + \Phi(x1, x_2 - \Delta x)}{\Delta x^2} + 2v(x)\Phi(x_1, x_2) = {E}\Phi(x_1, x_2)
+\end{align*}
+
+Numerically solving this problem is more complicated than the previous case because now we are solving for two variables: $x_1$ and $x_2$. This bears resemblance to solving the one-dimensional problem in two dimensions. To solve this problem, we construct the wave equation column vector as follows:
+
+\begin{align*}
+\ket{\Phi} =
+\begin{bmatrix}
+\Phi_{0,0}    \\
+\Phi_{1,0}    \\
+\vdots        \\
+\Phi_{N-1,0}  \\ 
+\Phi_{N,0}    \\
+\Phi_{0,1}    \\
+\Phi_{1,1}    \\
+\vdots        \\
+\Phi_{N-1,1}  \\ 
+\Phi_{N,1}    \\
+\vdots        \\
+\Phi_{0,N}    \\
+\Phi_{1,N}    \\
+\vdots        \\
+\Phi_{N-1,N}  \\
+\Phi_{N,N}    \\ 
+\end{bmatrix}
+\end{align*}
+
+The problem must now take into account the independent positions of the two electrons in the system. This means that we now have $N \times N \times N \times N$ systems of equations to solve for. Using the equation above, the kinetic energy matrix will take the following general form:
+
+\begin{align*}
+\left[\scalemath{0.6}{\begin{array}{c c c c c | c c c c c | c c c c c | c | c c c c c | c c c c c | c c c c c}
+   -4   &    1   &        &        &        &    1   &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        \\
+    1   &   -4   &        &        &        &        &    1   &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        \\
+        &        & \ddots &        &        &        &        & \ddots &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        \\
+        &        &        &   -4   &    1   &        &        &        &    1   &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        \\
+        &        &        &    1   &   -4   &        &        &        &        &    1   &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        \\
+\hline
+    1   &        &        &        &        &   -4   &    1   &        &        &        &    1   &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        \\
+        &    1   &        &        &        &    1   &   -4   &        &        &        &        &    1   &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        \\
+        &        & \ddots &        &        &        &        & \ddots &        &        &        &        & \ddots &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        \\
+        &        &        &    1   &        &        &        &        &   -4   &    1   &        &        &        &    1   &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        \\
+        &        &        &        &    1   &        &        &        &    1   &   -4   &        &        &        &        &    1   &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        \\
+\hline
+        &        &        &        &        &    1   &        &        &        &        &   -4   &    1   &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        \\
+        &        &        &        &        &        &    1   &        &        &        &    1   &   -4   &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        \\
+        &        &        &        &        &        &        & \ddots &        &        &        &        & \ddots &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        \\
+        &        &        &        &        &        &        &        &    1   &        &        &        &        &   -4   &    1   &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        \\
+        &        &        &        &        &        &        &        &        &    1   &        &        &        &    1   &   -4   &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        \\
+\hline
+        &        &        &        &        &        &        &        &        &        &        &        &        &        &        & \ddots &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        \\
+\hline
+        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &   -4   &    1   &        &        &        &    1   &        &        &        &        &        &        &        &        &        \\
+        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &    1   &   -4   &        &        &        &        &    1   &        &        &        &        &        &        &        &        \\
+        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        & \ddots &        &        &        &        & \ddots &        &        &        &        &        &        &        \\
+        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &   -4   &    1   &        &        &        &    1   &        &        &        &        &        &        \\
+        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &    1   &   -4   &        &        &        &        &    1   &        &        &        &        &        \\
+\hline
+        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &    1   &        &        &        &        &   -4   &    1   &        &        &        &    1   &        &        &        &        \\
+        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &    1   &        &        &        &    1   &   -4   &        &        &        &        &    1   &        &        &        \\
+        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        & \ddots &        &        &        &        & \ddots &        &        &        &        & \ddots &        &        \\
+        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &    1   &        &        &        &        &   -4   &    1   &        &        &        &    1   &        \\
+        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &    1   &        &        &        &    1   &   -4   &        &        &        &        &    1   \\
+\hline
+        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &    1   &        &        &        &        &   -4   &    1   &        &        &        \\
+        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &    1   &        &        &        &    1   &   -4   &        &        &        \\
+        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        & \ddots &        &        &        &        & \ddots &        &        \\
+        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &    1   &        &        &        &        &   -4   &    1   \\
+        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &        &    1   &        &        &        &    1   &   -4   \\
+\end{array}}\right]
+\end{align*}
+
+This general form is also known as the sparse matrix for the Laplacian differential operator. Obtaining the eigenvalues and the eigenvectors of the system will provide us with the solutions for the equation. Unfortunately, since we now have two electrons with two different possibilities for their current energy levels, it isn't obvious how to discern between the two. For the following numerical answers, the first six energy levels are calculated from lowest to highest, but the specific values for n for each of the electrons is not evident.
+
+\begin{figure}[H]
+  \begin{center}
+    \input{numerical-solution-2-wave-function-plot.pgf}
+  \end{center}
+  \caption{Wave functions for the numerical solution of the one-dimensional, time-independent Schr\"{o}dinger's describing two non-interacting electrons in an infinitely-deep potential well of width $10a$ and discretization of $N=25$. Each plot represents two electrons, with the x and y axis corresponding to the position of each electron in the well: $\Phi_n{x_1,x_2}$.}
+  \label{numerical-plot-2}
+\end{figure}
+
+\begin{table}
+\begin{center}
+\begin{tabular}{l|llllll}\hline
+$n$    & $1$    & $2$     & $3$     & $4$      & $5$      & $6$      \\\hline
+$E_n$  & $1$  & $3.97946748$  & $5.26546441$  & $5.27606611$  & $8.17405936$  & $8.27969253$ \\\hline
+\end{tabular}
+\end{center}
+  \caption{The first six energy levels calculated for this problem, normalized to the first level. All of the solution energies were computed and these are the first six to come out of the sorting process. The associated plots are related to these values through their $n$ values, although the $n$ value doesn't correlate exactly to the actual $n$ for each electron.}
+  \label{numerical-energies-2}
+\end{table}
+
+\subsection{Numerical Solution 3: Two Electrons using Coulomb Interaction}
+
+For this last problem, we will now introduce the Coulomb repulsion between the two electrons in the system. This adds a third term to the Hamiltonian as follows:
+
+\begin{align*}
+  \hat{H} &= -\frac{1}{2}\nabla^{2}_1 -\frac{1}{2}\nabla^{2}_2 + \frac{1}{\left|\left|\bf{x_1} - \bf{x_2}\right|\right|} + v(x_1) + v(x_2)\\
+\end{align*}
+
+This is straightforward to implement. The magnitude of the distance between the two electrons is computed as follows:
+
+\begin{align*}
+  \frac{1}{\left|\left|\bf{x_1} - \bf{x_2}\right|\right|} &= \frac{1}{\sqrt{(x_2 - x_1)^2}}
+\end{align*}
+
+In the numerical solution, this is implemented as a matrix with a diagonal, where every element of the diagonal computes the Coulomb repulsion for the given $x_1$ and $x_2$ coordinates of each electron. For each row of the matrix, we know what discretization slice is assigned to it.
+
+\begin{figure}[H]
+  \begin{center}
+    \input{numerical-solution-3-wave-function-plot.pgf}
+  \end{center}
+  \caption{Wave functions for the numerical solution of the one-dimensional, time-independent Schr\"{o}dinger's describing two interacting electrons (Coulomb repulsion taken into account) in an infinitely-deep potential well of width $10a$ and discretization of $N=25$. Each plot represents two electrons, with the x and y axis corresponding to the position of each electron in the well: $\Phi_n(x_1,x_2)$.}
+  \label{numerical-plot-3}
+\end{figure}
+
+\begin{table}
+\begin{center}
+\begin{tabular}{l|llllll}\hline
+$n$    & $1$    & $2$     & $3$     & $4$      & $5$      & $6$      \\\hline
+$E_n$  & $1$  & $1.36143053$  & $8.65467932$  & $1.93060894$  & $2.30840873$  & $2.60201186$ \\\hline
+
+\end{tabular}
+\end{center}
+  \caption{The first six energy levels calculated for this problem, normalized to the first level. All of the solution energies were computed and these are the first six to come out of the sorting process. The associated plots are related to these values through their $n$ values, although the $n$ value doesn't correlate exactly to the actual $n$ for each electron.}
+  \label{numerical-energies-2}
+\end{table}
+
+\section{Discussion}
+
+\begin{itemize}
+    \item The analytical solution obtains exact answers, but the problem has been greatly simplified. I don't believe exact answers can be easily obtained for more complicated.
+    \item I am unsure of what causes the discretized solution to switch the orientation of the wave function, however, I do recognize that the inverse of the wavefunction is a valid solution to the problem that is presented. By modifying the value for N, I was able to get both orientations of the wavefunction. The likely culprit is the diagonalization algorithm on the Hermitian matrix settling on one solution versus another.
+    \item In the two electron case, it makes sense that the electrons would each have their own energy level, which would lead to NxM different possibilities for the first N=M energy levels of each. However, I am unsure how to extract a specific combination of energy levels from the numerical data. When sorting the energy values from low to high, we are sorting the combination of N and M electrons for both electrons.
+    \item In the two electron case, I expected there to be symmetry in both axes. Especially in the lowest energy case, where I expected a dome-shaped response. I am unsure why we see a linear gradient type of response. This response was evident as the discretization level was increased, so there is likely an error in the implementation or the Hamiltonian.
+    \item When comparing the wavefunctions between the last two numerical solutions, we see that the Coulomb repulsion between the two electrons is highest at $x_1 = x_2$. This manifests as a diagonal line along $x_1 = x_2$ which splits the original wavefunction. Ignoring the sign change between the two wavefunctions, the original wavefunction shape is preserved except for the diagonal where the Coulomb attraction is highest.
+\end{itemize}
+
+\newpage
+\section{Code Listings and Data}
+
+\subsection{Python Code Listing}
+\label{code-listing-python}
+The following is the code written in Python to generate the solutions and plots used in this report.
+\lstinputlisting[language=Python]{plots.py}
+
+\newpage
+\section{References}
+
+\begin{itemize}
+    \item\url{https://medium.com/modern-physics/finite-difference-solution-of-the-schrodinger-equation-c49039d161a8}
+    \item\url{https://chem.libretexts.org/Bookshelves/Physical_and_Theoretical_Chemistry_Textbook_Maps/Time_Dependent_Quantum_Mechanics_and_Spectroscopy_(Tokmakoff)/01%3A_Overview_of_Time-Independent_Quantum_Mechanics/1.05%3A_Numerically_Solving_the_Schrodinger_Equation}
+    \item\url{https://www.12000.org/my_notes/mma_matlab_control/KERNEL/KEse82.htm}
+    \item\url{https://digitalcommons.calpoly.edu/cgi/viewcontent.cgi?article=1119&context=physsp}
+    \item\url{https://chem.libretexts.org/Bookshelves/Physical_and_Theoretical_Chemistry_Textbook_Maps/Supplemental_Modules_(Physical_and_Theoretical_Chemistry)/Quantum_Mechanics/05.5%3A_Particle_in_Boxes/Particle_in_a_2-Dimensional_Box}
+\end{itemize}
+
+\end{document}
+

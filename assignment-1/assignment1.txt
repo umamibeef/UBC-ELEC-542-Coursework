@@ -1,0 +1,11 @@
+Neglect spin in this problem.
+
+a) Consider one electron in a one-dimensional, infinitely-deep potential well, with a width of 10 in atomic units. Find the electron wavefunctions and allowed energy levels by analytically solving the Schrödinger equation. Plot the first six wave functions and give their associated eigenvalues.
+
+b) Same as a, but this time solve the equation numerically using a language of your choice (Python, Matlab, Maple, Mathematica, Basic, C, Pascal, Fortran, assembly, machine code, etc.). Discretize the width of the potential well into at least 10 segments.
+
+c) Same as b, but this time assume that there are two non-interacting electrons in the well. Note that in this case the wave function will have two variables (the positions of the two electrons).
+
+d) Same as c, but this time include the Coulomb interaction between the two electrons. Comment on the solutions and their difference with those obtained in part c.
+
+Include your codes for all parts.
