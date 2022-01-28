@@ -1,0 +1,100 @@
+\documentclass[10pt, oneside, letterpaper]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage[english]{babel}
+\usepackage[utf8]{inputenc}
+\usepackage{xcolor}
+\definecolor{mygreen}{rgb}{0,0.6,0}
+\definecolor{mygray}{rgb}{0.5,0.5,0.5}
+\definecolor{mymauve}{rgb}{0.58,0,0.82}
+\usepackage{listings}
+\lstset{
+  backgroundcolor=\color{white}, % choose the background color
+  basicstyle=\footnotesize\ttfamily, % size of fonts used for the code
+  breaklines=true, % automatic line breaking only at whitespace
+  frame=single, % add a frame
+  captionpos=b, % sets the caption-position to bottom
+  commentstyle=\color{mygreen}, % comment style
+  escapeinside={\%*}{*)}, % if you want to add LaTeX within your code
+  keywordstyle=\color{blue}, % keyword style
+  stringstyle=\color{mymauve}, % string literal style
+}
+\usepackage{enumitem}
+\usepackage{blindtext}
+\usepackage{datetime2}
+\usepackage{fancyhdr}
+\usepackage{amsmath}
+\usepackage{arydshln} % dash line package for matrices
+\usepackage{mathtools} % for things like \Aboxed
+\usepackage{float}
+\usepackage{pgf}
+\usepackage{enumitem} % to easily change style of counters in item lists
+\usepackage{xurl} % to easily insert URLs in the LaTeX source
+\usepackage{braket} % for bra-ket notation
+\usepackage{bm} % for bold vector variables
+\usepackage{cases} % for piecewise definitions
+\usepackage[makeroom]{cancel} % for crossing out terms
+\usepackage{graphicx} % for \scalebox
+  \newcommand\scalemath[2]{\scalebox{#1}{\mbox{\ensuremath{\displaystyle #2}}}}
+
+\setcounter{MaxMatrixCols}{32} % increase the maximum number of matrix columns
+
+\title{Assignment 2}
+\author{Electronic Structures of the Helium atom and Hydrogen Molecule}
+\date{Due: 2022/02/11}
+
+\pagestyle{fancy}
+\setlength{\headheight}{23pt}
+\setlength{\parskip}{1em}
+\fancyhf{}
+\chead{Assignment 2}
+\rhead{Michel Kakulphimp \\ Student \#63542880}
+\lhead{ELEC542 \\ UBC MEng}
+\cfoot{\thepage}
+
+\begin{document}
+\maketitle
+\thispagestyle{fancy}
+
+\section{Directions}
+
+The goal in this assignment is to calculate the electronic structure of the helium atom and the hydrogen molecule (two separate systems). The distance between the two hydrogen atoms (the bond length) is 0.74 Angstroms. In this assignment, do not perform geometry optimization, and instead use that fixed bond length in order to calculate the molecular orbitals (both energies and wave functions). Also, note that the problem is in full 3-dimensional space. The goal is to solve the Hartree-Fock equation for these two systems.
+
+Note that you are solving an iterative problem. The Fock operator depends on the orbitals, which you do not have. So, start by making a guess for the orbital shapes, form the Fock operator, solve for the orbitals, and keep iterating until convergence. Use the convergence of the total energy of the system as your convergence criterion.
+
+In this assignment, the calculations must be done directly on a real-space grid, over which the orbitals (wave functions) are defined. So, do not use the Roothaan equations (which we will see soon).
+
+\begin{enumerate}[label=(\alph*)]
+  \item (7 points) Directly discretize the Fock operator to put it into matrix form. Describe your approach and show the steps of your derivation all the way to obtaining the matrix equation.ls by analytically solving the Schrödinger equation. Plot the first six wave functions and give their associated eigenvalues.
+  \item (5 points) Write a computer code to implement what you built in part a.hine code, etc.). Discretize the width of the potential well into at least 10 segments. Finite difference is preferred for solving the equation numerically.
+  \item (4 points) Plot several molecular orbitals and give their associated energies for the helium atom. Also calculate the total energy of the system (not including the nucleus-nucleus interaction). Discuss your results.ions of the two electrons).
+  \item (4 points) Plot several molecular orbitals and give their associated energies for the hydrogen molecule. Also calculate the total energy of the system (not including the nucleus-nucleus interaction). Discuss your results.
+\end{enumerate}
+
+\section{Solution}
+
+
+\section{Discussion}
+
+\begin{itemize}
+    \item 
+\end{itemize}
+
+\newpage
+\section{Code Listings and Data}
+
+% \subsection{Python Code Listing}
+% \label{code-listing-python}
+% The following is the code written in Python to generate the solutions and plots used in this report.
+% \lstinputlisting[language=Python]{plots.py}
+
+\newpage
+\section{References}
+
+These aren't citing anything, but they were useful in helping me figure out this assignment.
+
+\begin{itemize}
+  \item lala
+\end{itemize}
+
+\end{document}
+
