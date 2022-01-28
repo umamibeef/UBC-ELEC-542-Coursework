@@ -1,0 +1,13 @@
+The goal in this assignment is to calculate the electronic structure of the helium atom and the hydrogen molecule (two separate systems). The distance between the two hydrogen atoms (the bond length) is 0.74 Angstroms. In this assignment, do not perform geometry optimization, and instead use that fixed bond length in order to calculate the molecular orbitals (both energies and wave functions). Also, note that the problem is in full 3-dimensional space. The goal is to solve the Hartree-Fock equation for these two systems.
+
+Note that you are solving an iterative problem. The Fock operator depends on the orbitals, which you do not have. So, start by making a guess for the orbital shapes, form the Fock operator, solve for the orbitals, and keep iterating until convergence. Use the convergence of the total energy of the system as your convergence criterion.
+
+In this assignment, the calculations must be done directly on a real-space grid, over which the orbitals (wave functions) are defined. So, do not use the Roothaan equations (which we will see soon).
+
+a) [7 points] Directly discretize the Fock operator to put it into matrix form. Describe your approach and show the steps of your derivation all the way to obtaining the matrix equation.
+
+b) [5 points] Write a computer code to implement what you built in part a.
+
+c) [4 points] Plot several molecular orbitals and give their associated energies for the helium atom. Also calculate the total energy of the system (not including the nucleus-nucleus interaction). Discuss your results.
+
+d) [4 points] Plot several molecular orbitals and give their associated energies for the hydrogen molecule. Also calculate the total energy of the system (not including the nucleus-nucleus interaction). Discuss your results.
