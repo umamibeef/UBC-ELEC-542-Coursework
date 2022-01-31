@@ -64,9 +64,9 @@ Note that you are solving an iterative problem. The Fock operator depends on the
 In this assignment, the calculations must be done directly on a real-space grid, over which the orbitals (wave functions) are defined. So, do not use the Roothaan equations (which we will see soon).
 
 \begin{enumerate}[label=(\alph*)]
-  \item (7 points) Directly discretize the Fock operator to put it into matrix form. Describe your approach and show the steps of your derivation all the way to obtaining the matrix equation.ls by analytically solving the Schrödinger equation. Plot the first six wave functions and give their associated eigenvalues.
-  \item (5 points) Write a computer code to implement what you built in part a.hine code, etc.). Discretize the width of the potential well into at least 10 segments. Finite difference is preferred for solving the equation numerically.
-  \item (4 points) Plot several molecular orbitals and give their associated energies for the helium atom. Also calculate the total energy of the system (not including the nucleus-nucleus interaction). Discuss your results.ions of the two electrons).
+  \item (7 points) Directly discretize the Fock operator to put it into matrix form. Describe your approach and show the steps of your derivation all the way to obtaining the matrix equation.
+  \item (5 points) Write a computer code to implement what you built in part (a).
+  \item (4 points) Plot several molecular orbitals and give their associated energies for the helium atom. Also calculate the total energy of the system (not including the nucleus-nucleus interaction). Discuss your results.
   \item (4 points) Plot several molecular orbitals and give their associated energies for the hydrogen molecule. Also calculate the total energy of the system (not including the nucleus-nucleus interaction). Discuss your results.
 \end{enumerate}
 
@@ -82,10 +82,10 @@ In this assignment, the calculations must be done directly on a real-space grid,
 \newpage
 \section{Code Listings and Data}
 
-% \subsection{Python Code Listing}
-% \label{code-listing-python}
-% The following is the code written in Python to generate the solutions and plots used in this report.
-% \lstinputlisting[language=Python]{plots.py}
+\subsection{Python Code Listing}
+\label{code-listing-python}
+The following is the code written in Python to generate the solutions and plots used in this report.
+\lstinputlisting[language=Python]{fock-discretization.py}
 
 \newpage
 \section{References}
@@ -93,7 +93,14 @@ In this assignment, the calculations must be done directly on a real-space grid,
 These aren't citing anything, but they were useful in helping me figure out this assignment.
 
 \begin{itemize}
-  \item lala
+  \item https://physics.stackexchange.com/questions/20703/why-does-iteratively-solving-the-hartree-fock-equations-result-in-convergence
+  \item https://scicomp.stackexchange.com/questions/1297/why-does-iteratively-solving-the-hartree-fock-equations-result-in-convergence
+  \item https://nznano.blogspot.com/2018/03/simple-quantum-chemistry-hartree-fock.html
+  \item https://github.com/peter-juritz/computational-chemistry
+  \item https://github.com/CrawfordGroup/ProgrammingProjects
+  \item https://github.com/aromanro/HartreeFock
+  \item https://github.com/ipudu/SCFpy
+  \item https://medium.com/analytics-vidhya/practical-introduction-to-hartree-fock-448fc64c107b
 \end{itemize}
 
 \end{document}
