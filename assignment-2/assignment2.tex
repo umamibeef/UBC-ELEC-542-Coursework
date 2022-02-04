@@ -101,16 +101,39 @@ Expanded, the Fock operator takes the following form:
 For the Helium atom, the Fock operator takes the following form:
 
 \begin{align*}
-  \hat{F}(\vec{r}) &= -\frac{1}{2}\nabla_1^2 - \frac{2}{\|\vec{r}_{1 A}\|} + 2\int_{-\infty}^{\infty}\left|\psi_1(\vec{r}_2)\right|^2\frac{1}{\|\vec{r}_{12}\|}d\vec{r}_2 - \int_{-\infty}^{\infty}\frac{\psi_1^\ast(\vec{r}_2)\psi_1(\vec{r}_2)}{\|\vec{r}_{12}\|}d\vec{r}_2
+  \hat{F}(\vec{r}) &= -\frac{1}{2}\nabla_1^2 - \frac{2}{\|\vec{r}_{1 A}\|} + \int_{-\infty}^{\infty}\left|\psi_1(\vec{r}_2)\right|^2\frac{1}{\|\vec{r}_{12}\|}d\vec{r}_2
 \end{align*}
 
 and for the Hydrogen molecule, the Fock operator takes the following form:
 
 \begin{align*}
-  \hat{F}(\vec{r}) &= -\frac{1}{2}\nabla_1^2 - \frac{1}{\|\vec{r}_{1 A}\|} - \frac{1}{\|\vec{r}_{1 B}\|} + 2\int_{-\infty}^{\infty}\left|\psi_1(\vec{r}_2)\right|^2\frac{1}{\|\vec{r}_{12}\|}d\vec{r}_2 - \int_{-\infty}^{\infty}\frac{\psi_1^\ast(\vec{r}_2)\psi_1(\vec{r}_2)}{\|\vec{r}_{12}\|}d\vec{r}_2
+  \hat{F}(\vec{r}) &= -\frac{1}{2}\nabla_1^2 - \frac{1}{\|\vec{r}_{1 A}\|} - \frac{1}{\|\vec{r}_{1 B}\|} + \int_{-\infty}^{\infty}\left|\psi_1(\vec{r}_2)\right|^2\frac{1}{\|\vec{r}_{12}\|}d\vec{r}_2
 \end{align*}
 
-For the ground state, we only consider one orbital to fill, which simplifies the exchange operator's index switch operator in both Fock operators. For the Helium atom, our value for $Z_A$ is 2 as there are two protons in the nucleus and for the Hydrogen molecule, we consider both Hydrogen nuclei containing one proton each, so $Z_A = Z_B = 1$. The nuclei are separated by 0.74 \angstrom. Since we are solving this problem using Hartree atomic units, we must convert this value accordingly when considering the coordinates of the hydrogen nuclei. In Hartree atomic units, the atomic unit of length converts the Bohr radius $a_0$ to $1$. Therefore, the distance between the two Hydrogen nuclei is $\frac{0.74 \times 0.1\times10^{-9}}{5.29177210903\times10^{-11}} = 1.39839733222307$ atomic units of length.
+For the ground state, we only consider one orbital to fill, which simplifies the exchange operator's index-switch operator in both Fock operators. This also has the effect of making the Coulomb and exchange integrals identical, greatly simplifying the equation. Note that: $\psi_n^\ast(\vec{r}_2)\psi_n(\vec{r}_2) = \left|\psi_1(\vec{r}_2)\right|^2$. For the Helium atom, our value for $Z_A$ is 2 as there are two protons in the nucleus and for the Hydrogen molecule, we consider both Hydrogen nuclei containing one proton each, so $Z_A = Z_B = 1$. The nuclei are separated by 0.74 \angstrom. Since we are solving this problem using Hartree atomic units, we must convert this value accordingly when considering the coordinates of the hydrogen nuclei. In Hartree atomic units, the atomic unit of length converts the Bohr radius $a_0$ to $1$. Therefore, the distance between the two Hydrogen nuclei is $\frac{0.74 \times 0.1\times10^{-9}}{5.29177210903\times10^{-11}} = 1.39839733222307$ atomic units of length.
+
+In order to discretize these equations, the second order differentiation and the finite integration must be numerically performed, in the three spatial dimensions $x$, $y$, and $z$. For the second order differentiation, it will discretize in the following manner:
+
+\begin{align*}
+  \nabla^2f(x, y, z) \approx \frac{f(x + \Delta x,y,z) - 2f(x, y, z) + f(x - \Delta x,y,z)}{\Delta x^2}\\
+  + \frac{f(x,y + \Delta y,z) - 2f(x, y, z) + f(x,y - \Delta y,z)}{\Delta y^2}\\
+  + \frac{f(x,y,z + \Delta z) - 2f(x, y, z) + f(x,y,z - \Delta z)}{\Delta z^2}
+\end{align*}
+
+If we choose the same discretization size, such that $\Delta x = \Delta y = \Delta z = h$, the discretization takes the following simplification:
+
+\begin{align*}
+  \nabla^2f(x, y, z) \approx \frac{f(x+h,y,z) + f(x,y+h,z) + f(x,y,z+h) - 6f(x, y, z) + f(x-h,y,z) + f(x,y-h,z) + f(x,y,z-h)}{h^2}\\
+\end{align*}
+
+As seen in the previous assignment, by forming a column vector of the following form:
+
+\begin{align*}
+  \left[f(0,0,0), \hdots ,f(N,0,0),f(0,1,0),\hdots,f(N,1,0),\hdots,f(0,N,0),\hdots,f(N,N,N)\right]^T
+\end{align*}
+
+With three dimensions and $N$ discretization points, the total number of equations to solve will be $N^3$. The sparse matrix for the Laplacian differential operator on three variables. Will have 
+
 
 \section{Discussion}
 
@@ -141,6 +164,7 @@ These aren't citing anything, but they were useful in helping me figure out this
   \item https://github.com/ipudu/SCFpy % solves using a basis set, can't use
   \item https://medium.com/analytics-vidhya/practical-introduction-to-hartree-fock-448fc64c107b % solves using a basis set, can't use
   \item https://adambaskerville.github.io/posts/HartreeFockGuide/ % relies on Roothaan basis functions, can't use
+  \item https://www.12000.org/my_notes/mma_matlab_control/KERNEL/KEse83.htm % Laplacian differential operator for 3D grid
 \end{itemize}
 
 \end{document}
