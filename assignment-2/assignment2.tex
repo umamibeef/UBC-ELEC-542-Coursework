@@ -126,14 +126,64 @@ If we choose the same discretization size, such that $\Delta x = \Delta y = \Del
   \nabla^2f(x, y, z) \approx \frac{f(x+h,y,z) + f(x,y+h,z) + f(x,y,z+h) - 6f(x, y, z) + f(x-h,y,z) + f(x,y-h,z) + f(x,y,z-h)}{h^2}\\
 \end{align*}
 
-As seen in the previous assignment, by forming a column vector of the following form:
+As seen in the previous assignment, by forming a column vector in the following form:
 
 \begin{align*}
-  \left[f(0,0,0), \hdots ,f(N,0,0),f(0,1,0),\hdots,f(N,1,0),\hdots,f(0,N,0),\hdots,f(N,N,N)\right]^T
+  \ket{\psi} = \left[\psi(0,0,0), \hdots ,\psi(N,0,0),\psi(0,1,0),\hdots,\psi(N,1,0),\hdots,\psi(0,N,0),\hdots,\psi(N,N,N)\right]^T
 \end{align*}
 
-With three dimensions and $N$ discretization points, the total number of equations to solve will be $N^3$. The sparse matrix for the Laplacian differential operator on three variables.
+The indices found in this vector will depend on the limits chosen for the solution in all directions, as well as the number of partitions $N$. With three dimensions and $N$ discretization points, the total number of equations to solve will be $N^3$. The sparse matrix $\bm{S}_{\nabla^2}$ for the Laplacian differential operator on three variables for $N=3$ and $h=1$ is shown below. Three rows have been highlighted to demonstrate how they correspond to an equation in the total solution.
 
+\lstinputlisting{sample_sparse_matrix.txt}
+
+The next operator to be considered for discretization is the integration that is performed on the Coulomb and exchange terms. For this integration, we can extend the one dimensional numerical integration intro three dimensions. First we consider the expanded form of the spatial integral:
+
+\begin{align*}
+  \int_{-\infty}^{\infty} f(\vec{r})d\vec{r} = \int_{-\infty}^{\infty}\int_{-\infty}^{\infty}\int_{-\infty}^{\infty}f(x,y,z)\,dx\,dy\,dz
+\end{align*}
+
+We then split the three spatial dimensions into $N$ partitions in all cardinal directions to quantize the problem into discretized volumes of the solution, $\Delta x$, $\Delta y$, and $\Delta z$ as we did in the differential discretization. Once again, if we choose the same discretization size, such that $\Delta x = \Delta y = \Delta z = h$, we evenly divide the solution space into partitions. By evaluating the function at each coordinate, multiplying the result by our discretization size $h$, and summing over the solution space, we obtain a Riemann sum, which is a trivial implementation of numerical integration. The sums approximate the integral as follows:
+
+\begin{align*}
+  \int_{-\infty}^{\infty}\int_{-\infty}^{\infty}\int_{-\infty}^{\infty}f(x,y,z)\,dx\,dy\,dz &\approx \sum_{k_z=0}^N\sum_{k_y=0}^N\sum_{k_x=0}^N \left[w^{[k_x, k_y, k_z]}f(k_x, k_y, k_z)\right] \\
+  w_{k_x} = w_{k_y} = w_{k_z} &= \{0, h, h, ..., h\}
+\end{align*}
+
+One limitation of this approximated integration is that the infinite limit definite integral required by the original equation is now confined within the limits we choose for the problem and the $N$ partitions we make out of the space in all directions. Choosing the limits and $N$ must be done carefully as the matrices generated for the solution will easily balloon into very difficult diagonalization problems.
+
+Both the Helium atom and the Hydrogen molecule share the following integral term:
+
+\begin{align*}
+  \int_{-\infty}^{\infty}\left|\psi_1(\vec{r}_2)\right|^2\frac{1}{\|\vec{r}_{12}\|}d\vec{r}_2
+\end{align*}
+
+For every iteration of the Hartree-Fock algorithm, a solution set will be generated for $\psi_1(\vec{r}_1)$ when the Fock matrix $\bf{F}$ is diagonalized. This solution is then re-used in the upcoming iteration as the solution for $\psi_1(\vec{r}_2)$ for use in the integrals. For the first iteration, a version of $\psi_1(\vec{r}_2)$ will be use where every entry is 0. If that fails to converge, then a noisy solution will be attempted. Using the sums above, $\psi_1(x_2, y_2, z_2)$ will be evaluated and a value will be obtained. This integral also possesses a distance calculation between the current and other electron. This calculation relies on the position of the current step as seen below:
+
+\begin{align*}
+  \frac{1}{\|\vec{r}_{12}\|} = \frac{1}{\sqrt{(x_2-x_1)^2 + (y_2-y_1)^2 + (z_2-z_1)^2}}
+\end{align*}
+
+This integral will be evaluated for every partition in the problem; therefore, the values for $x_1$, $y_1$, and $z_1$ will correspond to those found in the column vector $\ket{\psi}$ as defined above. This integration operator can be summarized as follows:
+
+\begin{align*}
+  I(x_1, y_1, z_1) = \int_{-\infty}^{\infty}\left|\psi_1(\vec{r}_2)\right|^2\frac{1}{\|\vec{r}_{12}\|}d\vec{r}_2
+\end{align*}
+
+This equation will form a diagonal in a matrix $J$ of size $N \times N$:
+
+\begin{align*}
+\bm{J} =
+\begin{bmatrix}
+ I(x_1, y_1, z_1) & 0 & \hdots & 0\\
+ 0 &  I(x_1, y_1, z_1) & \hdots & 0\\
+ \vdots & \vdots & \ddots & 0\\
+ 0 & 0 & 0 &  I(x_1, y_1, z_1)\\
+\end{bmatrix}
+\end{align*}
+
+%TODO Coulomb repulsion matrices
+%TODO Matrix form of each solution (Fock matrix)
+%TODO Plot/calculation of orbitals and their energies
 
 \section{Discussion}
 
@@ -155,16 +205,20 @@ The following is the code written in Python to generate the solutions and plots 
 These aren't citing anything, but they were useful in helping me figure out this assignment.
 
 \begin{itemize}
-  \item https://physics.stackexchange.com/questions/20703/why-does-iteratively-solving-the-hartree-fock-equations-result-in-convergence
-  \item https://scicomp.stackexchange.com/questions/1297/why-does-iteratively-solving-the-hartree-fock-equations-result-in-convergence
-  \item https://nznano.blogspot.com/2018/03/simple-quantum-chemistry-hartree-fock.html % basis
-  \item https://github.com/peter-juritz/computational-chemistry
-  \item https://github.com/CrawfordGroup/ProgrammingProjects
-  \item https://github.com/aromanro/HartreeFock
-  \item https://github.com/ipudu/SCFpy % solves using a basis set, can't use
-  \item https://medium.com/analytics-vidhya/practical-introduction-to-hartree-fock-448fc64c107b % solves using a basis set, can't use
-  \item https://adambaskerville.github.io/posts/HartreeFockGuide/ % relies on Roothaan basis functions, can't use
-  \item https://www.12000.org/my\_notes/mma\_matlab\_control/KERNEL/KEse83.htm % laplacian matrix derivation
+  \item \url{https://www.12000.org/my\_notes/mma\_matlab\_control/KERNEL/KEse83.htm} % laplacian matrix derivation
+  \item \url{https://www.value-at-risk.net/numerical-integration-multiple-dimensions/} % numerical integration
+  \item \url{https://chem.libretexts.org/Bookshelves/Physical_and_Theoretical_Chemistry_Textbook_Maps/Book%3A_Quantum_States_of_Atoms_and_Molecules_(Zielinksi_et_al)/09%3A_The_Electronic_States_of_the_Multielectron_Atoms/9.07%3A_The_Self-Consistent_Field_Approximation_(Hartree-Fock_Method)} % good overview of HF
+  \item \url{http://vergil.chemistry.gatech.edu/notes/hf-intro/hf-intro.html} % another good overview of HF
+
+  % Other not relevant
+  % \item https://physics.stackexchange.com/questions/20703/why-does-iteratively-solving-the-hartree-fock-equations-result-in-convergence
+  % \item https://scicomp.stackexchange.com/questions/1297/why-does-iteratively-solving-the-hartree-fock-equations-result-in-convergence
+  % \item https://nznano.blogspot.com/2018/03/simple-quantum-chemistry-hartree-fock.html % basis
+  % \item https://github.com/CrawfordGroup/ProgrammingProjects
+  % \item https://github.com/aromanro/HartreeFock
+  % \item https://github.com/ipudu/SCFpy % solves using a basis set, can't use
+  % \item https://medium.com/analytics-vidhya/practical-introduction-to-hartree-fock-448fc64c107b % solves using a basis set, can't use
+  % \item https://adambaskerville.github.io/posts/HartreeFockGuide/ % relies on Roothaan basis functions, can't use
 \end{itemize}
 
 \end{document}
