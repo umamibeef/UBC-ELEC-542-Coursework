@@ -12,4 +12,4 @@ Analytically and numerically solving Schrodinger's equation for electrons in an 
 
 ## Assignment 2
 
-Implementing exact restricted Hartree-Fock equations to the Helium atom and the Hydrogen Molecule.
+Implementing and numerically solving exact restricted Hartree-Fock equations for the Helium atom and the Hydrogen molecule.
