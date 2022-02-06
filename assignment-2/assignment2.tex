@@ -134,6 +134,7 @@ As seen in the previous assignment, by forming a column vector in the following 
 
 The indices found in this vector will depend on the limits chosen for the solution in all directions, as well as the number of partitions $N$. With three dimensions and $N$ discretization points, the total number of equations to solve will be $N^3$. The sparse matrix $\bm{S}_{\nabla^2}$ for the Laplacian differential operator on three variables for $N=3$ and $h=1$ is shown below. Three rows have been highlighted to demonstrate how they correspond to an equation in the total solution.
 
+\newpage
 \lstinputlisting{sample_sparse_matrix.txt}
 
 The next operator to be considered for discretization is the integration that is performed on the Coulomb and exchange terms. For this integration, we can extend the one dimensional numerical integration intro three dimensions. First we consider the expanded form of the spatial integral:
@@ -169,7 +170,7 @@ This integral will be evaluated for every partition in the problem; therefore, t
   I(x_1, y_1, z_1) = \int_{-\infty}^{\infty}\left|\psi_1(\vec{r}_2)\right|^2\frac{1}{\|\vec{r}_{12}\|}d\vec{r}_2
 \end{align*}
 
-This equation will form a diagonal in a matrix $J$ of size $N \times N$ as follows:
+This equation will form a diagonal in a matrix $J$ of size $N \times N \times N$ as follows:
 
 \begin{align*}
 \bm{J} =
@@ -195,7 +196,7 @@ The Hydrogen molecule on the other hand takes a slightly different form. A hydro
   A_{H_2}(x_1, y_1, z_1) = -\sum_A\frac{Z_A}{\|\vec{r}_{1 A}\|} = -\frac{1}{\sqrt{(\frac{-1.39839733222307}{2}-x_1)^2 + y_1^2 + z_1^2}} -\frac{1}{\sqrt{(\frac{1.39839733222307}{2}-x_1)^2 + y_1^2 + z_1^2}}
 \end{align*}
 
-The nuclear attraction operator will form a diagonal in a matrix $A$ of size $N \times N$ as follows:
+The nuclear attraction operator will form a diagonal in a matrix $A$ of size $N \times N \times N$ as follows:
 
 \begin{align*}
 \bm{A} =
