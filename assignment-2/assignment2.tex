@@ -169,7 +169,7 @@ This integral will be evaluated for every partition in the problem; therefore, t
   I(x_1, y_1, z_1) = \int_{-\infty}^{\infty}\left|\psi_1(\vec{r}_2)\right|^2\frac{1}{\|\vec{r}_{12}\|}d\vec{r}_2
 \end{align*}
 
-This equation will form a diagonal in a matrix $J$ of size $N \times N$:
+This equation will form a diagonal in a matrix $J$ of size $N \times N$ as follows:
 
 \begin{align*}
 \bm{J} =
@@ -181,7 +181,46 @@ This equation will form a diagonal in a matrix $J$ of size $N \times N$:
 \end{bmatrix}
 \end{align*}
 
-%TODO Coulomb repulsion matrices
+The final term of the Fock equation that needs to be considered is the nuclear attraction operator. For the Helium element case, we have a single term, and for the Hydrogen molecule we have two terms. For the Helium element, the expanded nuclear attraction term is as follows:
+
+\begin{align*}
+  A_{He}(x_1, y_1, z_1) = -\sum_A\frac{Z_A}{\|\vec{r}_{1 A}\|} = -\frac{2}{\sqrt{(x_1^2 + y_1^2 + z_1^2)}}
+\end{align*}
+
+With the Helium nucleus placed at the origin of the problem, the distance between the electron and the nucleus becomes the distance of the electron from the origin. Also, the atomic number for Helium is 2, which puts that number in the denominator.
+
+The Hydrogen molecule on the other hand takes a slightly different form. A hydrogen molecule has two nuclei in its system and they are separated by $1.39839733222307$ atomic units of length as calculated above. For this problem, the Hydrogen nuclei will be placed $\frac{1.39839733222307}{2}$ in the positive and negative $x$ directions from the origin. With an atomic number of 1 for the Hydrogen element, the nuclear attraction terms will take the following form:
+
+\begin{align*}
+  A_{H_2}(x_1, y_1, z_1) = -\sum_A\frac{Z_A}{\|\vec{r}_{1 A}\|} = -\frac{1}{\sqrt{(\frac{-1.39839733222307}{2}-x_1)^2 + y_1^2 + z_1^2}} -\frac{1}{\sqrt{(\frac{1.39839733222307}{2}-x_1)^2 + y_1^2 + z_1^2}}
+\end{align*}
+
+The nuclear attraction operator will form a diagonal in a matrix $A$ of size $N \times N$ as follows:
+
+\begin{align*}
+\bm{A} =
+\begin{bmatrix}
+ A(x_1, y_1, z_1) & 0 & \hdots & 0\\
+ 0 &  A(x_1, y_1, z_1) & \hdots & 0\\
+ \vdots & \vdots & \ddots & 0\\
+ 0 & 0 & 0 &  A(x_1, y_1, z_1)\\
+\end{bmatrix}
+\end{align*}
+
+Now we have all of the components necessary to implement a solution. To summarize, for the Helium element, the following matrix system will be solved:
+
+\begin{align*}
+  \bm{F}_{He}\ket{\psi} = \bm{\epsilon}\ket{\psi} \\
+  \bm{F}_{He} = \bm{S}_{\nabla^2} + \bm{A}_{He} + \bm{J}
+\end{align*}
+
+and for the Hydrogen molecule, the following matrix system will be solved:
+
+\begin{align*}
+  \bm{F}_{H_2}\ket{\psi} = \bm{\epsilon}\ket{\psi} \\
+  \bm{F}_{H_2} = \bm{S}_{\nabla^2} + \bm{A}_{H_2} + \bm{J}
+\end{align*}
+
 %TODO Matrix form of each solution (Fock matrix)
 %TODO Plot/calculation of orbitals and their energies
 
