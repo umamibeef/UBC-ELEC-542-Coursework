@@ -24,8 +24,13 @@ SOFTWARE.
 
 import matplotlib
 import matplotlib.pyplot as plt
-import numpy as np
+import numpy
+import scipy
+import scipy.sparse
 import math
+
+numpy.set_printoptions(edgeitems=30, linewidth=100000, 
+    formatter=dict(float=lambda x: "%.3g" % x))
 
 # Matplotlib export settings
 matplotlib.use("pgf")
@@ -43,6 +48,26 @@ TINY_NUMBER = 1e-9
 IDX_X = 0
 IDX_Y = 1
 IDX_Z = 2
+
+def main():
+
+    # number of partitions in the solution
+    N = 25
+
+    # generate coordinates
+    coords = generate_coordinates(-5, 5, N)
+
+    # generate attraction matrix for hydrogen molecule
+    attraction_matrix_hydrogen = attraction_matrix_gen(attraction_func_hydrogen, N, coords)
+
+    # generate attraction matrix for helium molecule
+    attraction_matrix_helium = attraction_matrix_gen(attraction_func_helium, N, coords)
+
+    # generate laplacian matrix
+    laplacian_matrix = second_order_laplacian_3d_sparse_matrix_gen(N)
+
+    # TODO: Implement numeric integration function
+    # TODO: Implement integration term matrix generator
 
 #
 # This function takes in a matrix index (row or column) and returns the
@@ -79,9 +104,9 @@ def coordinate_index_to_coordinates(coord_indices, coords):
 #
 def generate_coordinates(minimum, maximum, N):
 
-    IDX_X = np.linspace(minimum, maximum, N)
-    IDX_Y = np.linspace(minimum, maximum, N)
-    IDX_Z = np.linspace(minimum, maximum, N)
+    IDX_X = numpy.linspace(minimum, maximum, N)
+    IDX_Y = numpy.linspace(minimum, maximum, N)
+    IDX_Z = numpy.linspace(minimum, maximum, N)
 
     return (IDX_X, IDX_Y, IDX_Z)
 
@@ -122,41 +147,117 @@ def attraction_func_hydrogen(coords):
 #
 def attraction_matrix_gen(attraction_func, N, coords):
 
-    # create an empty matrix with the correct dimensions
-    matrix = np.zeros((N**3,N**3))
-    # fill in the diagonal with the evaluated attraction function
-    for i in range(N**3):
-        for j in range(N**3):
-            # diagonal
-            if (i == j):
-                coordinate_indices = matrix_index_to_coordinate_indices(i, N)
-                matrix[i][j] = attraction_func(coordinate_index_to_coordinates(coordinate_indices, coords))
+    # # old method using numpy matrices
+    # # create an empty matrix with the correct dimensions
+    # matrix = numpy.zeros((N**3,N**3))
+    # # fill in the diagonal with the evaluated attraction function
+    # for i in range(N**3):
+    #     for j in range(N**3):
+    #         # diagonal
+    #         if (i == j):
+    #             coordinate_indices = matrix_index_to_coordinate_indices(i, N)
+    #             matrix[i][j] = attraction_func(coordinate_index_to_coordinates(coordinate_indices, coords))
+
+    # use scipy sparse matrix generation
+    # create the diagonal 
+    diagonal = [attraction_func(coordinate_index_to_coordinates(matrix_index_to_coordinate_indices(i, N), coords)) for i in range(N**3)]
+
+    # now generate the matrix with the desired diagonal
+    matrix = scipy.sparse.spdiags(data=diagonal, diags=0, m=N**3, n=N**3)
 
     return matrix
 
-def second_order_laplacian_3d_sparse_matrix_gen(dimensions):
-    pass
+#
+# This function generates the second order laplacian matrix for 3D space for N
+# partitions.
+#
+#
+#   e.g. N = 3
+#   
+#     +-------+-------+-------+-------+-------+-------+-------+-------+-------+
+#     |-6 1   | 1     |       | 1     |       |       |       |       |       | 
+#     | 1-6 1 |   1   |       |   1   |       |       |       |       |       | 
+#     |   1-6 |     1 |       |     1 |       |       |       |       |       | 
+#     +-------+-------+-------+-------+-------+-------+-------+-------+-------+
+#     | 1     |-6 1   | 1     |       | 1     |       |       |       |       | 
+#     |   1   | 1-6 1 |   1   |       |   1   |       |       |       |       | 
+#     |     1 |   1-6 |     1 |       |     1 |       |       |       |       | 
+#     +-------+-------+-------+-------+-------+-------+-------+-------+-------+
+#     |       | 1     |-6 1   |       |       | 1     |       |       |       | 
+#     |       |   1   | 1-6 1 |       |       |   1   |       |       |       | 
+#     |       |     1 |   1-6 |       |       |     1 |       |       |       | 
+#     +-------+-------+-------+-------+-------+-------+-------+-------+-------+
+#     | 1     |       |       |-6 1   | 1     |       | 1     |       |       | 
+#     |   1   |       |       | 1-6 1 |   1   |       |   1   |       |       | 
+#     |     1 |       |       |   1-6 |     1 |       |     1 |       |       | 
+#     +-------+-------+-------+-------+-------+-------+-------+-------+-------+
+#     |       | 1     |       | 1     |-6 1   | 1     |       | 1     |       |
+#     |       |   1   |       |   1   | 1-6 1 |   1   |       |   1   |       |
+#     |       |     1 |       |     1 |   1-6 |     1 |       |     1 |       |
+#     +-------+-------+-------+-------+-------+-------+-------+-------+-------+
+#     |       |       | 1     |       | 1     |-6 1   |       |       | 1     | 
+#     |       |       |   1   |       |   1   | 1-6 1 |       |       |   1   | 
+#     |       |       |     1 |       |     1 |   1-6 |       |       |     1 | 
+#     +-------+-------+-------+-------+-------+-------+-------+-------+-------+
+#     |       |       |       | 1     |       |       |-6 1   | 1     |       | 
+#     |       |       |       |   1   |       |       | 1-6 1 |   1   |       | 
+#     |       |       |       |     1 |       |       |   1-6 |     1 |       | 
+#     +-------+-------+-------+-------+-------+-------+-------+-------+-------+
+#     |       |       |       |       | 1     |       | 1     |-6 1   | 1     | 
+#     |       |       |       |       |   1   |       |   1   | 1-6 1 |   1   | 
+#     |       |       |       |       |     1 |       |     1 |   1-6 |     1 | 
+#     +-------+-------+-------+-------+-------+-------+-------+-------+-------+
+#     |       |       |       |       |       | 1     |       | 1     |-6 1   | 
+#     |       |       |       |       |       |   1   |       |   1   | 1-6 1 | 
+#     |       |       |       |       |       |     1 |       |     1 |   1-6 | 
+#     +-------+-------+-------+-------+-------+-------+-------+-------+-------+
+def second_order_laplacian_3d_sparse_matrix_gen(N):
 
+    # create block matrices
+    # sub main block diagonals (containing -6 surrounded by 1s) found within N*N blocks
+    sub_main_block_diag = [-6.0 for i in range(N)]
+    sub_main_block_outer_diags = [1.0 for i in range(N)]
+    sub_main_block = scipy.sparse.spdiags(data=[sub_main_block_outer_diags, sub_main_block_diag, sub_main_block_outer_diags], diags=[-1,0,1], m=N, n=N)
+
+    # create mini identity blocks found within N*N blocks
+    mini_ident_block = scipy.sparse.identity(N)
+
+    # create a list of blocks to be used in the sparse.bmat function to generate
+    # main block along the diagonal
+    block_lists = [[None for i in range(N)] for j in range(N)]
+    for i in range(N):
+        for j in range(N):
+            # add main blocks
+            if j == i:
+                block_lists[i][j] = sub_main_block
+            # add diagonal blocks
+            if (j == (i + 1)) and ((i + 1) != N):
+                block_lists[i][j] = mini_ident_block
+            if (j == (i - 1)) and ((i - 1) != -1):
+                block_lists[i][j] = mini_ident_block
+    main_block = scipy.sparse.bmat(block_lists)
+
+    # create large identity blocks of size N*N
+    large_ident_block = scipy.sparse.identity(N*N)
+
+    # create a list of blocks to be used in the sparse.bmat function to generate
+    # the final laplacian_matrix
+    block_lists = [[None for i in range(N)] for j in range(N)]
+    for i in range(N):
+        for j in range(N):
+            # add main blocks
+            if j == i:
+                block_lists[i][j] = main_block
+            # add diagonal blocks
+            if (j == (i + 1)) and ((i + 1) != N):
+                block_lists[i][j] = large_ident_block
+            if (j == (i - 1)) and ((i - 1) != -1):
+                block_lists[i][j] = large_ident_block
+
+    return scipy.sparse.bmat(block_lists)
+ 
 def make_plots(results):
     pass
-
-def main():
-
-    # number of partitions in the solution
-    N = 15
-
-    # generate coordinates
-    coords = generate_coordinates(-5, 5, N)
-
-    # generate attraction matrix for hydrogen molecule
-    attraction_matrix_hydrogen = attraction_matrix_gen(attraction_func_hydrogen, N, coords)
-
-    # generate attraction matrix for helium molecule
-    attraction_matrix_helium = attraction_matrix_gen(attraction_func_helium, N, coords)
-
-    # TODO: Implement laplacian matrix generator
-    # TODO: Implement numeric integration function
-    # TODO: Implement integration term matrix generator
 
 if __name__ == "__main__":
     main()
