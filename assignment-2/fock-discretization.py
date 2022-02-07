@@ -29,6 +29,7 @@ import scipy
 import scipy.sparse
 import scipy.sparse.linalg
 import math
+import functools
 
 numpy.set_printoptions(edgeitems=30, linewidth=100000, 
     formatter=dict(float=lambda x: "%.3g" % x))
@@ -45,7 +46,7 @@ matplotlib.rcParams.update({
 
 # program constants
 H2_BOND_LENGTH_ATOMIC_UNITS = 1.39839733222307
-TINY_NUMBER = 1e-9
+TINY_NUMBER = 1e-6
 IDX_X = 0
 IDX_Y = 1
 IDX_Z = 2
@@ -59,7 +60,7 @@ def main():
     energy_level = 0
 
     # generate coordinates
-    coords = generate_coordinates(-5, 5, N)
+    coords = generate_coordinates(-2, 2, N)
 
     # generate attraction matrix for hydrogen molecule
     attraction_matrix_hydrogen = attraction_matrix_gen(attraction_func_hydrogen, N, coords)
@@ -78,6 +79,11 @@ def main():
 
     for i in range(5):
 
+        if (i == 0):
+            print('First solution (nothing integrated')
+        else:
+            print('Using previous solution')
+
         # create integration matrix
         integration_matrix = integration_matrix_gen(solution, sorted_eigenval_indices[energy_level], N, coords)
 
@@ -90,20 +96,26 @@ def main():
         # print(integration_matrix.toarray())
 
         # create Fock matrix
+
         fock_matrix = laplacian_matrix + attraction_matrix_helium + integration_matrix
 
-        # print(fock_matrix.toarray())
+        # check symmetry
+        # print(is_symmetric(fock_matrix))
+        # print(fock_matrix.diagonal())
+        # print(numpy.isreal(fock_matrix.diagonal()))
 
         # get eigenvectors and eigenvalues
         eigenvals, solution = scipy.sparse.linalg.eigs(fock_matrix)
-
-        print(solution)
-        print(eigenvals)
 
         # sort eigenvalues
         sorted_eigenval_indices = numpy.argsort(eigenvals)
 
         # print(eigenvals[sorted_eigenval_indices])
+
+# This functions returns whether or not the matrix is symmetric
+def is_symmetric(A, tol=1e-8):
+    return scipy.sparse.linalg.norm(A-A.T, scipy.Inf) < tol;
+
 #
 # This function takes in a matrix index (row or column) and returns the
 # associated coordinate indices as a tuple.
@@ -125,6 +137,12 @@ def matrix_index_to_coordinate_indices(matrix_index, N):
 
     return tuple(digits)
 
+#
+# This function coverts coordinate indices to a matrix index
+#
+def coordinate_indices_to_matrix_index(coord_indices, N):
+
+    return coord_indices[IDX_X] + coord_indices[IDX_Y]*N + coord_indices[IDX_Z]*N*N 
 #
 # This function takes in coordinate indices and returns the coordinates
 # associated with them.
@@ -180,6 +198,7 @@ def attraction_func_hydrogen(coords):
 # This functions calculates the repulsion between two electrons. A small number
 # TINY_NUMBER is provided to prevent divide by zero scenarios.
 #
+@functools.lru_cache
 def repulsion_func(coords_1, coords_2):
 
     x1 = coords_1[IDX_X]
@@ -192,7 +211,7 @@ def repulsion_func(coords_1, coords_2):
 
     denominator = math.sqrt((x2 - x1)**2 + (y2 - y1)**2 + (z2 - z1)**2)
 
-    return -((1.0/(TINY_NUMBER + denominator)))
+    return ((1.0/(TINY_NUMBER + denominator)))
 
 #
 # This function generates an attraction matrix with the specified attraction
@@ -347,10 +366,17 @@ def integration_func(eigenvectors, eigenvector_index, N, coords_1, all_coords, h
     sum = 0
 
     # calculate the integration over the solution space of the specified psi squared
-    for i in range(N**3):
-        # "other" electron coordinates
-        coords_2 = coordinate_index_to_coordinates(matrix_index_to_coordinate_indices(i, N), all_coords)
-        sum = sum + (h**3)*(eigenvectors[:,eigenvector_index][i]**2)*repulsion_func(coords_1, coords_2)
+    for xi, x in enumerate(all_coords[IDX_X]):
+        for yi, y in enumerate(all_coords[IDX_Y]):
+            for zi, z in enumerate(all_coords[IDX_Z]):
+                matrix_index = xi + yi*N + zi*N*N
+                coords_2 = (x, y, z)
+                sum = sum + h*(eigenvectors[:,eigenvector_index][matrix_index]**2)*repulsion_func(coords_1, coords_2)
+
+    # for i in range(N**3):
+    #     # "other" electron coordinates
+    #     coords_2 = coordinate_index_to_coordinates(matrix_index_to_coordinate_indices(i, N), all_coords)
+    #     sum = sum + h*(eigenvectors[:,eigenvector_index][i]**2)*repulsion_func(coords_1, coords_2)
 
     return sum
 
