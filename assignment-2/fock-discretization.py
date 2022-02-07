@@ -27,6 +27,7 @@ import matplotlib.pyplot as plt
 import numpy
 import scipy
 import scipy.sparse
+import scipy.sparse.linalg
 import math
 
 numpy.set_printoptions(edgeitems=30, linewidth=100000, 
@@ -52,7 +53,10 @@ IDX_Z = 2
 def main():
 
     # number of partitions in the solution
-    N = 25
+    N = 10
+
+    # energy level to converge on
+    energy_level = 0
 
     # generate coordinates
     coords = generate_coordinates(-5, 5, N)
@@ -66,9 +70,35 @@ def main():
     # generate laplacian matrix
     laplacian_matrix = second_order_laplacian_3d_sparse_matrix_gen(N)
 
-    # TODO: Implement numeric integration function
-    # TODO: Implement integration term matrix generator
+    # create base solution
+    solution = scipy.sparse.csr_matrix((N**3, N**3))
 
+    # create dummy sorted index for first iteration
+    sorted_eigenval_indices = [0]
+
+    for i in range(10):
+
+        # create integration matrix
+        integration_matrix = integration_matrix_gen(solution, sorted_eigenval_indices[energy_level], N, coords)
+
+        # print(laplacian_matrix.getformat())
+        # print(attraction_matrix_helium.getformat())
+        # print(integration_matrix.getformat())
+
+        # print(laplacian_matrix.toarray())
+        # print(attraction_matrix_helium.toarray())
+        # print(integration_matrix.toarray())
+
+        # create Fock matrix
+        fock_matrix = laplacian_matrix + attraction_matrix_helium + integration_matrix
+
+        # get eigenvectors and eigenvalues
+        eigenvals, solution = scipy.sparse.linalg.eigs(fock_matrix)
+
+        # sort eigenvalues
+        sorted_eigenval_indices = numpy.argsort(eigenvals)
+
+        print(eigenvals[sorted_eigenval_indices])
 #
 # This function takes in a matrix index (row or column) and returns the
 # associated coordinate indices as a tuple.
@@ -104,11 +134,11 @@ def coordinate_index_to_coordinates(coord_indices, coords):
 #
 def generate_coordinates(minimum, maximum, N):
 
-    IDX_X = numpy.linspace(minimum, maximum, N)
-    IDX_Y = numpy.linspace(minimum, maximum, N)
-    IDX_Z = numpy.linspace(minimum, maximum, N)
+    x = numpy.linspace(minimum, maximum, N)
+    y = numpy.linspace(minimum, maximum, N)
+    z = numpy.linspace(minimum, maximum, N)
 
-    return (IDX_X, IDX_Y, IDX_Z)
+    return (x, y, z)
 
 #
 # This function returns the nuclear attraction for an electron in the Helium
@@ -142,21 +172,28 @@ def attraction_func_hydrogen(coords):
     return -((1.0/(TINY_NUMBER + denominator_1)) + (1.0/(TINY_NUMBER + denominator_2)))
 
 #
+# This functions calculates the repulsion between two electrons. A small number
+# TINY_NUMBER is provided to prevent divide by zero scenarios.
+#
+def repulsion_func(coords_1, coords_2):
+
+    x1 = coords_1[IDX_X]
+    y1 = coords_1[IDX_Y]
+    z1 = coords_1[IDX_Z]
+
+    x2 = coords_2[IDX_X]
+    y2 = coords_2[IDX_Y]
+    z2 = coords_2[IDX_Z]
+
+    denominator = math.sqrt((x2 - x1)**2 + (y2 - y1)**2 + (z2 - z1)**2)
+
+    return -((1.0/(TINY_NUMBER + denominator)))
+
+#
 # This function generates an attraction matrix with the specified attraction
 # function and coordinates
 #
 def attraction_matrix_gen(attraction_func, N, coords):
-
-    # # old method using numpy matrices
-    # # create an empty matrix with the correct dimensions
-    # matrix = numpy.zeros((N**3,N**3))
-    # # fill in the diagonal with the evaluated attraction function
-    # for i in range(N**3):
-    #     for j in range(N**3):
-    #         # diagonal
-    #         if (i == j):
-    #             coordinate_indices = matrix_index_to_coordinate_indices(i, N)
-    #             matrix[i][j] = attraction_func(coordinate_index_to_coordinates(coordinate_indices, coords))
 
     # use scipy sparse matrix generation
     # create the diagonal 
@@ -165,12 +202,11 @@ def attraction_matrix_gen(attraction_func, N, coords):
     # now generate the matrix with the desired diagonal
     matrix = scipy.sparse.spdiags(data=diagonal, diags=0, m=N**3, n=N**3)
 
-    return matrix
+    return matrix.tocoo()
 
 #
 # This function generates the second order laplacian matrix for 3D space for N
 # partitions.
-#
 #
 #   e.g. N = 3
 #   
@@ -215,15 +251,41 @@ def second_order_laplacian_3d_sparse_matrix_gen(N):
 
     # create block matrices
     # sub main block diagonals (containing -6 surrounded by 1s) found within N*N blocks
+    # e.g N=3
+    # +-------+
+    # |-6 1   |
+    # | 1-6 1 |
+    # |   1-6 |
+    # +-------+
     sub_main_block_diag = [-6.0 for i in range(N)]
     sub_main_block_outer_diags = [1.0 for i in range(N)]
     sub_main_block = scipy.sparse.spdiags(data=[sub_main_block_outer_diags, sub_main_block_diag, sub_main_block_outer_diags], diags=[-1,0,1], m=N, n=N)
 
     # create mini identity blocks found within N*N blocks
+    # e.g N=3
+    # +-------+
+    # | 1     |
+    # |   1   |
+    # |     1 |
+    # +-------+
     mini_ident_block = scipy.sparse.identity(N)
 
     # create a list of blocks to be used in the sparse.bmat function to generate
     # main block along the diagonal
+    # e.g. N=3
+    # +-------+-------+-------+
+    # |-6 1   | 1     |       |
+    # | 1-6 1 |   1   |       |
+    # |   1-6 |     1 |       |
+    # +-------+-------+-------+
+    # | 1     |-6 1   | 1     |
+    # |   1   | 1-6 1 |   1   |
+    # |     1 |   1-6 |     1 |
+    # +-------+-------+-------+
+    # |       | 1     |-6 1   |
+    # |       |   1   | 1-6 1 |
+    # |       |     1 |   1-6 |
+    # +-------+-------+-------+
     block_lists = [[None for i in range(N)] for j in range(N)]
     for i in range(N):
         for j in range(N):
@@ -238,6 +300,20 @@ def second_order_laplacian_3d_sparse_matrix_gen(N):
     main_block = scipy.sparse.bmat(block_lists)
 
     # create large identity blocks of size N*N
+    # e.g. N=3
+    # +-------+-------+-------+
+    # | 1     |       |       |
+    # |   1   |       |       |
+    # |     1 |       |       |
+    # +-------+-------+-------+
+    # |       | 1     |       |
+    # |       |   1   |       |
+    # |       |     1 |       |
+    # +-------+-------+-------+
+    # |       |       | 1     |
+    # |       |       |   1   |
+    # |       |       |     1 |
+    # +-------+-------+-------+
     large_ident_block = scipy.sparse.identity(N*N)
 
     # create a list of blocks to be used in the sparse.bmat function to generate
@@ -256,6 +332,40 @@ def second_order_laplacian_3d_sparse_matrix_gen(N):
 
     return scipy.sparse.bmat(block_lists)
  
+#
+# This function evaluates the integration function used by both the Helium
+# element and the Hydrogen molecule.
+#
+def integration_func(eigenvectors, eigenvector_index, N, coords, h):
+
+    # running sum
+    sum = 0
+
+    # calculate the integration over the solution space of the specified psi squared
+    for i in range(N**3):
+        sum = sum + (h**3)*(eigenvectors[:,eigenvector_index][i]**2)*repulsion_func(coords, matrix_index_to_coordinate_indices(i, N))
+
+    return sum
+
+# This function generates the the integration matrix
+def integration_matrix_gen(eigenvectors, eigenvector_index, N, coords):
+
+    # extract h from coordinates
+    h = coords[IDX_X][1] - coords[IDX_X][0]
+
+    # turn eigenvectors into a normal array if necessary
+    if type(eigenvectors) != numpy.ndarray:
+        eigenvectors = eigenvectors.toarray()
+
+    # use scipy sparse matrix generation
+    # create the diagonal 
+    diagonal = [integration_func(eigenvectors, eigenvector_index, N, matrix_index_to_coordinate_indices(i, N), h) for i in range(N**3)]
+
+    # now generate the matrix with the desired diagonal
+    matrix = scipy.sparse.spdiags(data=diagonal, diags=0, m=N**3, n=N**3)
+
+    return matrix.tocoo()
+
 def make_plots(results):
     pass
 
