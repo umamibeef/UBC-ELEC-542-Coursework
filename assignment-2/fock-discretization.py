@@ -53,7 +53,7 @@ IDX_Z = 2
 def main():
 
     # number of partitions in the solution
-    N = 10
+    N = 2
 
     # energy level to converge on
     energy_level = 0
@@ -76,7 +76,7 @@ def main():
     # create dummy sorted index for first iteration
     sorted_eigenval_indices = [0]
 
-    for i in range(10):
+    for i in range(5):
 
         # create integration matrix
         integration_matrix = integration_matrix_gen(solution, sorted_eigenval_indices[energy_level], N, coords)
@@ -92,13 +92,18 @@ def main():
         # create Fock matrix
         fock_matrix = laplacian_matrix + attraction_matrix_helium + integration_matrix
 
+        # print(fock_matrix.toarray())
+
         # get eigenvectors and eigenvalues
         eigenvals, solution = scipy.sparse.linalg.eigs(fock_matrix)
+
+        print(solution)
+        print(eigenvals)
 
         # sort eigenvalues
         sorted_eigenval_indices = numpy.argsort(eigenvals)
 
-        print(eigenvals[sorted_eigenval_indices])
+        # print(eigenvals[sorted_eigenval_indices])
 #
 # This function takes in a matrix index (row or column) and returns the
 # associated coordinate indices as a tuple.
@@ -336,14 +341,16 @@ def second_order_laplacian_3d_sparse_matrix_gen(N):
 # This function evaluates the integration function used by both the Helium
 # element and the Hydrogen molecule.
 #
-def integration_func(eigenvectors, eigenvector_index, N, coords, h):
+def integration_func(eigenvectors, eigenvector_index, N, coords_1, all_coords, h):
 
     # running sum
     sum = 0
 
     # calculate the integration over the solution space of the specified psi squared
     for i in range(N**3):
-        sum = sum + (h**3)*(eigenvectors[:,eigenvector_index][i]**2)*repulsion_func(coords, matrix_index_to_coordinate_indices(i, N))
+        # "other" electron coordinates
+        coords_2 = coordinate_index_to_coordinates(matrix_index_to_coordinate_indices(i, N), all_coords)
+        sum = sum + (h**3)*(eigenvectors[:,eigenvector_index][i]**2)*repulsion_func(coords_1, coords_2)
 
     return sum
 
@@ -359,7 +366,7 @@ def integration_matrix_gen(eigenvectors, eigenvector_index, N, coords):
 
     # use scipy sparse matrix generation
     # create the diagonal 
-    diagonal = [integration_func(eigenvectors, eigenvector_index, N, matrix_index_to_coordinate_indices(i, N), h) for i in range(N**3)]
+    diagonal = [integration_func(eigenvectors, eigenvector_index, N, coordinate_index_to_coordinates(matrix_index_to_coordinate_indices(i, N), coords), coords, h) for i in range(N**3)]
 
     # now generate the matrix with the desired diagonal
     matrix = scipy.sparse.spdiags(data=diagonal, diags=0, m=N**3, n=N**3)
