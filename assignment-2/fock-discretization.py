@@ -183,7 +183,7 @@ def attraction_func_helium(coords):
 
     denominator = math.sqrt(x**2 + y**2 + z**2)
 
-    return -((1.0/(TINY_NUMBER + denominator)))
+    return -((2.0/(TINY_NUMBER + denominator)))
 
 #
 # This function returns the nuclear attraction for an electron in the Hydrogen
