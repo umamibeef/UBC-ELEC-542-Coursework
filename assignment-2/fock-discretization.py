@@ -62,6 +62,9 @@ def main():
     # generate coordinates
     coords = generate_coordinates(-2, 2, N)
 
+    # calculate partition size
+    h = coords[IDX_X][1]-coords[IDX_X][0]
+
     # generate attraction matrix for hydrogen molecule
     attraction_matrix_hydrogen = attraction_matrix_gen(attraction_func_hydrogen, N, coords)
 
@@ -70,6 +73,9 @@ def main():
 
     # generate laplacian matrix
     laplacian_matrix = second_order_laplacian_3d_sparse_matrix_gen(N)
+
+    # generate kinetic matrix
+    kinetic_energy_matrix = (-1.0/(2.0*h**2))*laplacian_matrix
 
     # create base solution
     solution = scipy.sparse.csr_matrix((N**3, N**3))
@@ -80,7 +86,7 @@ def main():
     for i in range(5):
 
         if (i == 0):
-            print('First solution (nothing integrated')
+            print('First solution (nothing integrated)')
         else:
             print('Using previous solution')
 
@@ -97,12 +103,13 @@ def main():
 
         # create Fock matrix
 
-        fock_matrix = laplacian_matrix + attraction_matrix_helium + integration_matrix
+        fock_matrix = kinetic_energy_matrix + attraction_matrix_helium + integration_matrix
 
         # check symmetry
-        # print(is_symmetric(fock_matrix))
-        # print(fock_matrix.diagonal())
-        # print(numpy.isreal(fock_matrix.diagonal()))
+        print('Fock is symmetric? ' + str(is_symmetric(fock_matrix)))
+        print(fock_matrix.diagonal())
+        print('Fock diagonal is real?')
+        print(numpy.isreal(fock_matrix.diagonal()))
 
         # get eigenvectors and eigenvalues
         eigenvals, solution = scipy.sparse.linalg.eigs(fock_matrix)
