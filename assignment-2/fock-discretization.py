@@ -47,7 +47,7 @@ if False:
 
 # program constants
 H2_BOND_LENGTH_ATOMIC_UNITS = 1.39839733222307
-TINY_NUMBER = 0.1
+TINY_NUMBER = 1
 IDX_X = 0
 IDX_Y = 1
 IDX_Z = 2
@@ -55,13 +55,19 @@ IDX_Z = 2
 def main():
 
     # number of partitions in the solution
-    N = 10
+    N = 8
+
+    # number of eigenvalues to calculate
+    k = 6
+
+    # convergence condition percentage
+    convergence_percentage = 1
 
     # energy level to converge on
     energy_level = 0
 
     # generate coordinates
-    coords = generate_coordinates(-3, 3, N)
+    coords = generate_coordinates(-2, 2, N)
 
     # calculate partition size
     h = coords[IDX_X][1]-coords[IDX_X][0]
@@ -81,23 +87,26 @@ def main():
     # create base solution
     solution = scipy.sparse.csr_matrix((N**3, N**3))
 
-    for i in range(3):
+    # last eigenvals
+    last_total_energy = 0
 
-        if (i == 0):
-            print('First solution (nothing integrated)')
+    # first iteration
+    first_iteration = True
+
+    # iteration counter
+    iteration_count = 0
+
+    while True:
+
+        if first_iteration:
+            print('First iteration, zeros used as first guess')
+            first_iteration = False
         else:
-            print('Using previous solution')
+
+            print('Iteration: %d' % iteration_count)
 
         # create integration matrix
         integration_matrix = integration_matrix_gen(solution, energy_level, N, coords)
-
-        # print(laplacian_matrix.getformat())
-        # print(attraction_matrix_helium.getformat())
-        # print(integration_matrix.getformat())
-
-        # print(laplacian_matrix.toarray())
-        # print(attraction_matrix_helium.toarray())
-        # print(integration_matrix.toarray())
 
         # create Fock matrix
         fock_matrix = kinetic_energy_matrix + attraction_matrix_hydrogen + integration_matrix
@@ -105,12 +114,30 @@ def main():
         # print('Fock is hermitian? ' + str(is_hermitian(fock_matrix)))
 
         # get eigenvectors and eigenvalues
-        eigenvals, solution = scipy.sparse.linalg.eigsh(fock_matrix)
+        eigenvals, solution = scipy.sparse.linalg.eigsh(fock_matrix, k=k, which='SM')
 
         print('Solutions:')
         print('Fock: ' + str(fock_matrix.toarray()))
         print('Eigenvectors: ' + str(solution))
         print('Eigenvals: ' + str(eigenvals))
+
+        # check percentage difference between previous and current eigenvalues
+        total_energy = numpy.sum(numpy.absolute(eigenvals))
+
+        # calculate total energy
+        total_energy_percent_diff = abs(total_energy - last_total_energy)/((total_energy + last_total_energy) / 2)
+
+        # check if we meet convergence condition
+        if total_energy_percent_diff < (convergence_percentage/100.0):
+            break
+
+        print('Total energy %% diff: %.3f%%' % (total_energy_percent_diff * 100.0))
+
+        # update last value
+        last_total_energy = total_energy
+
+        # update iteration count
+        iteration_count = iteration_count + 1
 
     # plot data
     make_plots(N, coords, solution)
@@ -425,14 +452,19 @@ def make_plots(N, coords, solution):
     axes.xaxis.pane.fill = False
     axes.yaxis.pane.fill = False
     axes.zaxis.pane.fill = False
+
+    axes.set_xlim3d(x_start, x_end)
+    axes.set_ylim3d(y_start, y_end)
+    axes.set_zlim3d(z_start, z_end)
+
     # create a mask for the data to make the visualization clearer
     mask = energy_0_points > (energy_0_points.max() * 0.2)
     idx = numpy.arange(int(numpy.prod(energy_0_points.shape)))
     x, y, z = numpy.unravel_index(idx, energy_0_points.shape)
-    axes.scatter(x, y, z, c=energy_0_points.flatten(), s=200.0 * mask, edgecolor='face', alpha=0.7, marker='o', cmap='viridis', linewidth=0)
+    x, y, z = numpy.meshgrid(coords[IDX_X], coords[IDX_Y], coords[IDX_Z])
+    axes.scatter(x, y, z, c=energy_0_points.flatten(), s=200.0 * mask, edgecolor='face', alpha=0.2, marker='o', cmap='viridis', linewidth=0)
     plt.tight_layout()
     plt.show()
-
 
 if __name__ == "__main__":
     main()
