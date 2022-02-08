@@ -62,6 +62,8 @@ class Results:
         self.eigenvectors = eigenvectors
         self.eigenvals = eigenvals
         self.args = args
+        self.iteration_times = []
+        self.total_time = None
 
     def load(self, input_file):
         with open(input_file, 'rb') as file:
@@ -242,9 +244,16 @@ def main(cmd_args):
             # update iteration count
             iteration_count = iteration_count + 1
 
-            print("--- Iteration time: %.3f seconds ---" % (time.time() - iteration_time_start))
+            # append iteration time
+            iteration_time = time.time() - iteration_time_start
+            results.iteration_times.append(iteration_time)
 
-        print("--- Total time: %.3f seconds ---" % (time.time() - total_time_start))
+            print('** Iteration time: %.3f seconds **' % iteration_time)
+
+        # append total time
+        total_time = time.time() - total_time_start
+        results.total_time = total_time
+        print('** Total time: %.3f seconds **' % total_time)
 
         # construct file name
         if not output_file:
