@@ -96,7 +96,7 @@ def make_plots(results):
     # number of partitions in the solution
     N = results.args.num_partitions
     # limits of sim
-    limits = results.args.limits
+    limits = (-1*results.args.limit, results.args.limit)
     # generate coordinates
     coords = generate_coordinates(limits[IDX_START], limits[IDX_END], N)
 
@@ -115,7 +115,7 @@ def make_plots(results):
     elif args.target_subject == 'h2':
         title_subject = 'H_2'
 
-    fig.suptitle('Exact restricted Hartree-Fock calculated orbitals for %s with N=%d' % (title_subject, N))
+    fig.suptitle('Exact restricted Hartree-Fock calculated orbitals for $%s$ with $N=%d$' % (title_subject, N))
     axes = []
 
     # create results table
@@ -207,7 +207,7 @@ def main(cmd_args):
     N = args.num_partitions
 
     # limits of sim
-    limits = args.limits
+    limits = (-1*args.limit, args.limit)
 
     # generate coordinates
     coords = generate_coordinates(limits[IDX_START], limits[IDX_END], N)
@@ -304,14 +304,16 @@ def main(cmd_args):
                 break
 
         # append total time
-        total_time = time.time() - total_time_start
+        total_time_end = time.time()
+        total_time = total_time_end - total_time_start
         results.total_time = total_time
+        print('\n** Simulation end! (%.3f)\n' % total_time_end)
         print('** Total time: %.3f seconds **' % total_time)
 
         # construct file name
         if not output_file:
-            output_file = target_subject + '_N%d.xyzp' % N
-            results.args.output_file = output_file
+            output_file = target_subject + '_N%d_l%d.xyzp' % (N, limits[IDX_END])
+            args.output_file = output_file
 
         print("** Saving results to " + output_file)
         results.eigenvectors = eigenvectors
@@ -337,6 +339,8 @@ def main(cmd_args):
         results.args.output_file = results.args.input_file
         results.save(results.args.input_file)
 
+    print('\n** Coordinates:\n')
+    print(coords)
     print('\n** Eigenvalues:\n')
     print(results.eigenvalues)
     print('\n** Total energies:\n')
@@ -344,7 +348,7 @@ def main(cmd_args):
         eigenvector = results.eigenvectors[:,n]
         squared_eigenvector = numpy.square(eigenvector)
         expectation = integrate(eigenvector, coords)
-        print('\tn=%d total energy: %.3f' % (n, expectation))
+        print('\tn=%d total energy: %f' % (n, expectation))
 
     # plot data
     print('\n** Plotting data...\n')
@@ -694,11 +698,11 @@ if __name__ == "__main__":
     parser.add_argument('-t', type=str, default='h2', dest='target_subject', action='store', choices=['h2', 'he'],
         help='target subject to run exact HF sim on')
 
-    parser.add_argument('-p', type=int, default=10, dest='num_partitions', action='store',
+    parser.add_argument('-p', type=int, default=15, dest='num_partitions', action='store',
         help='number of partitions to discretize the simulation')
 
-    parser.add_argument('-l', type=int, nargs=2, default=[-2,2], dest='limits', action='store',
-        help='the x,y,z min and max')
+    parser.add_argument('-l', type=float, default=5, dest='limit', action='store',
+        help='the x,y,z max limit, forming a cubic solution space')
 
     parser.add_argument('-c', type=float, default=1.0, dest='convergence_percentage', action='store',
         help='percent change threshold for convergence')
