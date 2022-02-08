@@ -30,6 +30,7 @@ import scipy.sparse
 import scipy.sparse.linalg
 import math
 import functools
+import time
 
 numpy.set_printoptions(edgeitems=30, linewidth=100000, 
     formatter=dict(float=lambda x: "%.3g" % x))
@@ -55,7 +56,7 @@ IDX_Z = 2
 def main():
 
     # number of partitions in the solution
-    N = 8
+    N = 25
 
     # number of eigenvalues to calculate
     k = 6
@@ -96,7 +97,13 @@ def main():
     # iteration counter
     iteration_count = 0
 
+    # total time
+    total_time_start = time.time()
+
     while True:
+
+        # iteration time
+        iteration_time_start = time.time()
 
         if first_iteration:
             print('First iteration, zeros used as first guess')
@@ -138,6 +145,10 @@ def main():
 
         # update iteration count
         iteration_count = iteration_count + 1
+
+        print("--- Iteration time: %s seconds ---" % (time.time() - iteration_time_start))
+
+    print("--- Total time: %s seconds ---" % (time.time() - total_time_start))
 
     # plot data
     make_plots(N, coords, solution)
