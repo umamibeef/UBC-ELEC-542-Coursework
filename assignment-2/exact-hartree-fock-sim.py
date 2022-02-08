@@ -54,16 +54,18 @@ TINY_NUMBER = 1
 IDX_X = 0
 IDX_Y = 1
 IDX_Z = 2
+IDX_START = 0
+IDX_END = 1
 
 #
 # This object encapsulates the results for pickling/unpickling
 #
 class Results:
 
-    def __init__(self, eigenvectors=None, eigenvals=None, args=None):
+    def __init__(self, eigenvectors=None, eigenvalues=None, args=None):
 
         self.eigenvectors = eigenvectors
-        self.eigenvals = eigenvals
+        self.eigenvalues = eigenvalues
         self.args = args
         self.iteration_times = []
         self.total_time = None
@@ -78,26 +80,39 @@ class Results:
         with open(output_file, 'wb') as file:
             pickle.dump(self.__dict__, file, 2)
 
+    def display_data(self):
+        for key in self.__dict__:
+            print(key)
+            print(self.__dict__[key])
+
 #
 # This function generates the plots
 #
-def make_plots(N, coords, eigenvectors, energy_level, total_energy_levels, subject):
+def make_plots(results):
 
     # with help from this SO answer (4D scatter plots in matplotlib)
     # https://stackoverflow.com/a/66939879
 
-    # get limits
-    x_start, x_end = (coords[IDX_X][0],coords[IDX_X][-1])
-    y_start, y_end = (coords[IDX_Y][0],coords[IDX_Y][-1])
-    z_start, z_end = (coords[IDX_Z][0],coords[IDX_Z][-1])
+    # number of partitions in the solution
+    N = results.args.num_partitions
+    # limits of sim
+    limits = results.args.limits
+    # generate coordinates
+    coords = generate_coordinates(limits[IDX_START], limits[IDX_END], N)
+
+    # eigenvectors
+    eigenvectors = results.eigenvectors
+
+    # total energy levels
+    total_energy_levels = len(results.eigenvalues)
 
     # create figure object
     fig = plt.figure(figsize=(9,10), dpi=150, constrained_layout=True)
 
     # modify subject formatting
-    if subject == 'he':
+    if args.target_subject == 'he':
         title_subject = 'He'
-    elif subject == 'h2':
+    elif args.target_subject == 'h2':
         title_subject = 'H_2'
 
     fig.suptitle('Exact restricted Hartree-Fock calculated orbitals for %s with N=%d' % (title_subject, N))
@@ -120,9 +135,9 @@ def make_plots(N, coords, eigenvectors, energy_level, total_energy_levels, subje
         axes[-1].zaxis.pane.fill = False
 
         # set limits
-        axes[-1].set_xlim3d(x_start, x_end)
-        axes[-1].set_ylim3d(y_start, y_end)
-        axes[-1].set_zlim3d(z_start, z_end)
+        axes[-1].set_xlim3d(limits[IDX_START], limits[IDX_END])
+        axes[-1].set_ylim3d(limits[IDX_START], limits[IDX_END])
+        axes[-1].set_zlim3d(limits[IDX_START], limits[IDX_END])
 
         axes[-1].set_xlabel("$x$")
         axes[-1].set_ylabel("$y$")
@@ -132,38 +147,15 @@ def make_plots(N, coords, eigenvectors, energy_level, total_energy_levels, subje
         axes[-1].set_title('n = %d' % current_energy_level, y=0.95)
 
         # create a mask for the data to make the visualization clearer
-        mask = data > (data.max() * 0.3)
+        mask = data > (data.max() * 0.2)
         idx = numpy.arange(int(numpy.prod(data.shape)))
         x, y, z = numpy.unravel_index(idx, data.shape)
         x, y, z = numpy.meshgrid(coords[IDX_X], coords[IDX_Y], coords[IDX_Z])
         axes[-1].scatter(x, y, z, c=data.flatten(), s=100.0 * mask, edgecolor='face', alpha=0.2, marker='o', cmap='viridis', linewidth=0)
 
-    fig.savefig('%s_N%d.png' % (subject, N))
-
-    # gui plot
-    if False:
-        # reshape eigenvectors for specified
-        data = numpy.square(eigenvectors[:,energy_level].reshape((N,N,N)).transpose())
-
-        fig = plt.figure()
-        axes = plt.axes(projection="3d")
-        axes.xaxis.pane.fill = False
-        axes.yaxis.pane.fill = False
-        axes.zaxis.pane.fill = False
-
-        # set limits
-        axes.set_xlim3d(x_start, x_end)
-        axes.set_ylim3d(y_start, y_end)
-        axes.set_zlim3d(z_start, z_end)
-
-        # create a mask for the data to make the visualization clearer
-        mask = data > (data.max() * 0.3)
-        idx = numpy.arange(int(numpy.prod(data.shape)))
-        x, y, z = numpy.unravel_index(idx, data.shape)
-        x, y, z = numpy.meshgrid(coords[IDX_X], coords[IDX_Y], coords[IDX_Z])
-        axes.scatter(x, y, z, c=data.flatten(), s=100.0 * mask, edgecolor='face', alpha=0.2, marker='o', cmap='viridis', linewidth=0)
-        plt.tight_layout()
-        plt.show()
+    plot_file_name = results.args.output_file.strip('.xyzp') + ('.png')
+    fig.savefig(plot_file_name)
+    plt.show()
 
 #
 # This is the main function
@@ -205,20 +197,23 @@ def main(cmd_args):
     # target subject to run sim on
     target_subject = args.target_subject
 
+    # convergence condition percentage
+    convergence_percentage = args.convergence_percentage
+
+    # number of eigenvalues to calculate
+    total_energy_levels = 6
+
     # number of partitions in the solution
     N = args.num_partitions
 
     # limits of sim
     limits = args.limits
 
-    # convergence condition percentage
-    convergence_percentage = args.convergence_percentage
-
     # generate coordinates
-    coords = generate_coordinates(limits[IDX_X], limits[IDX_Y], N)
+    coords = generate_coordinates(limits[IDX_START], limits[IDX_END], N)
 
-    # number of eigenvalues to calculate
-    total_energy_levels = 6
+    # calculate partition size
+    h = coords[IDX_X][1]-coords[IDX_X][0]
 
     ## start program
 
@@ -226,9 +221,6 @@ def main(cmd_args):
 
     # check if we're simulating something new (no input file specified)
     if not input_file:
-
-        # calculate partition size
-        h = coords[IDX_X][1]-coords[IDX_X][0]
 
         # generate attraction matrix for hydrogen molecule
         attraction_matrix_hydrogen = attraction_matrix_gen(attraction_func_hydrogen, N, coords)
@@ -245,7 +237,7 @@ def main(cmd_args):
         # create base solution
         eigenvectors = scipy.sparse.csr_matrix((N**3, total_energy_levels))
 
-        # last eigenvals
+        # last eigenvalues
         last_total_energy = 0
 
         # first iteration
@@ -256,6 +248,8 @@ def main(cmd_args):
 
         # total time
         total_time_start = time.time()
+
+        print('\n** Simulation start! (%.3f)\n' % total_time_start)
 
         # main loop
         while True:
@@ -283,10 +277,10 @@ def main(cmd_args):
                 return
 
             # get (total_energy_levels) eigenvectors and eigenvalues and order them from smallest to largest
-            eigenvals, eigenvectors = scipy.sparse.linalg.eigsh(fock_matrix, k=total_energy_levels, which='SM')
+            eigenvalues, eigenvectors = scipy.sparse.linalg.eigsh(fock_matrix, k=total_energy_levels, which='SM')
 
             # check percentage difference between previous and current eigenvalues
-            total_energy = numpy.sum(numpy.absolute(eigenvals))
+            total_energy = numpy.sum(numpy.absolute(eigenvalues))
 
             # calculate total energy
             total_energy_percent_diff = abs(total_energy - last_total_energy)/((total_energy + last_total_energy) / 2)
@@ -317,23 +311,44 @@ def main(cmd_args):
         # construct file name
         if not output_file:
             output_file = target_subject + '_N%d.xyzp' % N
+            results.args.output_file = output_file
 
         print("** Saving results to " + output_file)
         results.eigenvectors = eigenvectors
-        results.eigenvals = eigenvals
+        results.eigenvalues = eigenvalues
         results.args = args
         results.save(output_file)
-    
-    else: # if not input_file:
 
-        print('Solution took %d iterations to converge with a convergence criteria of %.1f%% in %.3f seconds' % (len(results.iteration_times), results.args.convergence_percentage, results.total_time))
-        for iteration, iteration_time in enumerate(results.iteration_times):
-            print('Iteration %i took %.3f seconds' % (iteration, iteration_time))
+    print('\n** Solution summary: **\n')
 
+    print('** Solution took %d iterations to converge with a convergence criteria of %.1f%% in %.3f seconds' % (len(results.iteration_times), results.args.convergence_percentage, results.total_time))
+    for iteration, iteration_time in enumerate(results.iteration_times):
+        print('\tIteration %i took %.3f seconds' % (iteration, iteration_time))
+
+    # solution results display
+
+    # clean up old data
+    if results.eigenvalues is None:
+        # backwards compatibility with older data
+        results.eigenvalues = results.eigenvals
+        del results.__dict__['eigenvals']
+        results.save(results.args.input_file)
+    if results.args.output_file is None:
+        results.args.output_file = results.args.input_file
+        results.save(results.args.input_file)
+
+    print('\n** Eigenvalues:\n')
+    print(results.eigenvalues)
+    print('\n** Total energies:\n')
+    for n in range(len(results.eigenvalues)):
+        eigenvector = results.eigenvectors[:,n]
+        squared_eigenvector = numpy.square(eigenvector)
+        expectation = integrate(eigenvector, coords)
+        print('\tn=%d total energy: %.3f' % (n, expectation))
 
     # plot data
     print('\n** Plotting data...\n')
-    make_plots(N, coords, results.eigenvectors, energy_level, total_energy_levels, target_subject)
+    make_plots(results)
 
 #
 # This functions returns whether or not the matrix is symmetric
@@ -587,12 +602,41 @@ def second_order_laplacian_3d_sparse_matrix_gen(N):
                 block_lists[i][j] = large_ident_block
 
     return scipy.sparse.bmat(block_lists)
- 
+
+#
+# This is a generic numerical integration over the cubic 3D space covered by the
+# solution space
+#
+def integrate(function_values_3d, coords):
+
+    # get partition size
+    h = coords[IDX_X][1] - coords[IDX_X][0]
+    # get number of partitions
+    N = len(coords[IDX_X])
+
+    # running sum
+    sum = 0
+
+    # calculate the integration over the solution space
+    for xi, x in enumerate(coords[IDX_X]):
+        for yi, y in enumerate(coords[IDX_Y]):
+            for zi, z in enumerate(coords[IDX_Z]):
+                # first integration weight is 0
+                if xi == 0 or yi == 0 or zi == 0:
+                    w = 0
+                else:
+                    w = h
+                row_index = xi + yi*N + zi*N*N
+                sum = sum + w*function_values_3d[row_index]
+
+    # return result
+    return sum
+
 #
 # This function evaluates the integration function used by both the Helium
 # element and the Hydrogen molecule.
 #
-def integration_func(eigenvectors, eigenvector_index, N, coords_1, all_coords, h):
+def integration_term_func(eigenvectors, eigenvector_index, N, coords_1, all_coords, h):
 
     # running sum
     sum = 0
@@ -612,7 +656,9 @@ def integration_func(eigenvectors, eigenvector_index, N, coords_1, all_coords, h
 
     return sum
 
+#
 # This function generates the the integration matrix
+#
 def integration_matrix_gen(eigenvectors, eigenvector_index, N, coords):
 
     # extract h from coordinates
@@ -624,7 +670,7 @@ def integration_matrix_gen(eigenvectors, eigenvector_index, N, coords):
 
     # use scipy sparse matrix generation
     # create the diagonal 
-    diagonal = [integration_func(eigenvectors, eigenvector_index, N, coordinate_index_to_coordinates(matrix_index_to_coordinate_indices(i, N), coords), coords, h) for i in range(N**3)]
+    diagonal = [integration_term_func(eigenvectors, eigenvector_index, N, coordinate_index_to_coordinates(matrix_index_to_coordinate_indices(i, N), coords), coords, h) for i in range(N**3)]
 
     # now generate the matrix with the desired diagonal
     matrix = scipy.sparse.spdiags(data=diagonal, diags=0, m=N**3, n=N**3)
