@@ -55,6 +55,9 @@ IDX_X = 0
 IDX_Y = 1
 IDX_Z = 2
 
+#
+# This object encapsulates the results for pickling/unpickling
+#
 class Results:
 
     def __init__(self, eigenvectors=None, eigenvals=None, args=None):
@@ -75,40 +78,96 @@ class Results:
         with open(output_file, 'wb') as file:
             pickle.dump(self.__dict__, file, 2)
 
-def make_plots(N, coords, solution, energy_level):
+#
+# This function generates the plots
+#
+def make_plots(N, coords, eigenvectors, energy_level, total_energy_levels, subject):
 
-    # With help from this SO answer (4D scatter plots in matplotlib)
+    # with help from this SO answer (4D scatter plots in matplotlib)
     # https://stackoverflow.com/a/66939879
-
-    # reshape solution for specified
-    data = numpy.square(solution[:,energy_level].reshape((N,N,N)).transpose())
 
     # get limits
     x_start, x_end = (coords[IDX_X][0],coords[IDX_X][-1])
     y_start, y_end = (coords[IDX_Y][0],coords[IDX_Y][-1])
     z_start, z_end = (coords[IDX_Z][0],coords[IDX_Z][-1])
 
-    # look at z-plane
-    fig = plt.figure()
-    axes = plt.axes(projection="3d")
-    axes.xaxis.pane.fill = False
-    axes.yaxis.pane.fill = False
-    axes.zaxis.pane.fill = False
+    # create figure object
+    fig = plt.figure(figsize=(9,10), dpi=150, constrained_layout=True)
 
-    # set limits
-    axes.set_xlim3d(x_start, x_end)
-    axes.set_ylim3d(y_start, y_end)
-    axes.set_zlim3d(z_start, z_end)
+    # modify subject formatting
+    if subject == 'he':
+        title_subject = 'He'
+    elif subject == 'h2':
+        title_subject = 'H_2'
 
-    # create a mask for the data to make the visualization clearer
-    mask = data > (data.max() * 0.3)
-    idx = numpy.arange(int(numpy.prod(data.shape)))
-    x, y, z = numpy.unravel_index(idx, data.shape)
-    x, y, z = numpy.meshgrid(coords[IDX_X], coords[IDX_Y], coords[IDX_Z])
-    axes.scatter(x, y, z, c=data.flatten(), s=100.0 * mask, edgecolor='face', alpha=0.2, marker='o', cmap='viridis', linewidth=0)
-    plt.tight_layout()
-    plt.show()
+    fig.suptitle('Exact restricted Hartree-Fock calculated orbitals for %s with N=%d' % (title_subject, N))
+    axes = []
 
+    # create results table
+    for current_energy_level in range(total_energy_levels):
+
+        # reshape eigenvectors for specified
+        data = numpy.square(eigenvectors[:,current_energy_level].reshape((N,N,N)).transpose())
+
+        # three rows, two columns, index
+        axes.append(fig.add_subplot(3, 2, current_energy_level + 1, projection='3d', proj_type='ortho'))
+
+        # change viewing angles
+        axes[-1].view_init(45, 45)
+
+        axes[-1].xaxis.pane.fill = False
+        axes[-1].yaxis.pane.fill = False
+        axes[-1].zaxis.pane.fill = False
+
+        # set limits
+        axes[-1].set_xlim3d(x_start, x_end)
+        axes[-1].set_ylim3d(y_start, y_end)
+        axes[-1].set_zlim3d(z_start, z_end)
+
+        axes[-1].set_xlabel("$x$")
+        axes[-1].set_ylabel("$y$")
+        axes[-1].set_zlabel("$z$")
+
+        # set title
+        axes[-1].set_title('n = %d' % current_energy_level, y=0.95)
+
+        # create a mask for the data to make the visualization clearer
+        mask = data > (data.max() * 0.3)
+        idx = numpy.arange(int(numpy.prod(data.shape)))
+        x, y, z = numpy.unravel_index(idx, data.shape)
+        x, y, z = numpy.meshgrid(coords[IDX_X], coords[IDX_Y], coords[IDX_Z])
+        axes[-1].scatter(x, y, z, c=data.flatten(), s=100.0 * mask, edgecolor='face', alpha=0.2, marker='o', cmap='viridis', linewidth=0)
+
+    fig.savefig('%s_N%d.png' % (subject, N))
+
+    # gui plot
+    if False:
+        # reshape eigenvectors for specified
+        data = numpy.square(eigenvectors[:,energy_level].reshape((N,N,N)).transpose())
+
+        fig = plt.figure()
+        axes = plt.axes(projection="3d")
+        axes.xaxis.pane.fill = False
+        axes.yaxis.pane.fill = False
+        axes.zaxis.pane.fill = False
+
+        # set limits
+        axes.set_xlim3d(x_start, x_end)
+        axes.set_ylim3d(y_start, y_end)
+        axes.set_zlim3d(z_start, z_end)
+
+        # create a mask for the data to make the visualization clearer
+        mask = data > (data.max() * 0.3)
+        idx = numpy.arange(int(numpy.prod(data.shape)))
+        x, y, z = numpy.unravel_index(idx, data.shape)
+        x, y, z = numpy.meshgrid(coords[IDX_X], coords[IDX_Y], coords[IDX_Z])
+        axes.scatter(x, y, z, c=data.flatten(), s=100.0 * mask, edgecolor='face', alpha=0.2, marker='o', cmap='viridis', linewidth=0)
+        plt.tight_layout()
+        plt.show()
+
+#
+# This is the main function
+#
 def main(cmd_args):
 
     print('\n** Exact Hartree-Fock simulator **\n')
@@ -158,15 +217,15 @@ def main(cmd_args):
     # generate coordinates
     coords = generate_coordinates(limits[IDX_X], limits[IDX_Y], N)
 
+    # number of eigenvalues to calculate
+    total_energy_levels = 6
+
     ## start program
 
     print('\n** Program start!\n')
 
     # check if we're simulating something new (no input file specified)
     if not input_file:
-
-        # number of eigenvalues to calculate
-        k = 6
 
         # calculate partition size
         h = coords[IDX_X][1]-coords[IDX_X][0]
@@ -184,7 +243,7 @@ def main(cmd_args):
         kinetic_energy_matrix = (-1.0/(2.0*h**2))*laplacian_matrix
 
         # create base solution
-        eigenvectors = scipy.sparse.csr_matrix((N**3, k))
+        eigenvectors = scipy.sparse.csr_matrix((N**3, total_energy_levels))
 
         # last eigenvals
         last_total_energy = 0
@@ -223,18 +282,14 @@ def main(cmd_args):
                 print('Fatal error, exiting.')
                 return
 
-            # get eigenvectors and eigenvalues
-            eigenvals, eigenvectors = scipy.sparse.linalg.eigsh(fock_matrix, k=k, which='SM')
+            # get (total_energy_levels) eigenvectors and eigenvalues and order them from smallest to largest
+            eigenvals, eigenvectors = scipy.sparse.linalg.eigsh(fock_matrix, k=total_energy_levels, which='SM')
 
             # check percentage difference between previous and current eigenvalues
             total_energy = numpy.sum(numpy.absolute(eigenvals))
 
             # calculate total energy
             total_energy_percent_diff = abs(total_energy - last_total_energy)/((total_energy + last_total_energy) / 2)
-
-            # check if we meet convergence condition
-            if total_energy_percent_diff < (convergence_percentage/100.0):
-                break
 
             print('Total energy %% diff: %.3f%%' % (total_energy_percent_diff * 100.0))
 
@@ -250,6 +305,10 @@ def main(cmd_args):
 
             print('** Iteration time: %.3f seconds **' % iteration_time)
 
+            # check if we meet convergence condition
+            if total_energy_percent_diff < (convergence_percentage/100.0):
+                break
+
         # append total time
         total_time = time.time() - total_time_start
         results.total_time = total_time
@@ -264,15 +323,27 @@ def main(cmd_args):
         results.eigenvals = eigenvals
         results.args = args
         results.save(output_file)
+    
+    else: # if not input_file:
+
+        print('Solution took %d iterations to converge with a convergence criteria of %.1f%% in %.3f seconds' % (len(results.iteration_times), results.args.convergence_percentage, results.total_time))
+        for iteration, iteration_time in enumerate(results.iteration_times):
+            print('Iteration %i took %.3f seconds' % (iteration, iteration_time))
+
 
     # plot data
-    make_plots(N, coords, results.eigenvectors, energy_level)
+    print('\n** Plotting data...\n')
+    make_plots(N, coords, results.eigenvectors, energy_level, total_energy_levels, target_subject)
 
+#
 # This functions returns whether or not the matrix is symmetric
+#
 def is_symmetric(A, tol=1e-8):
     return scipy.sparse.linalg.norm(A-A.T, scipy.Inf) < tol;
 
+#
 # This functions returns whether or not the matrix is symmetric
+#
 def is_hermitian(A, tol=1e-8):
     return scipy.sparse.linalg.norm(A-A.H, scipy.Inf) < tol;
 

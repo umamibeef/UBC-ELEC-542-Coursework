@@ -71,7 +71,7 @@ In this assignment, the calculations must be done directly on a real-space grid,
   \item (4 points) Plot several molecular orbitals and give their associated energies for the hydrogen molecule. Also calculate the total energy of the system (not including the nucleus-nucleus interaction). Discuss your results.
 \end{enumerate}
 
-\section{Solution}
+\section{Derivation of Solution}
 
 Since both subjects for this assignment have an even number of electrons that close shells, we can use the restricted Hartree-Fock equation for closed shell systems to numerically calculate the resulting orbitals. The equation is as follows:
 
@@ -182,7 +182,7 @@ This equation will form a diagonal in a matrix $J$ of size $N \times N \times N$
 \end{bmatrix}
 \end{align*}
 
-The final term of the Fock equation that needs to be considered is the nuclear attraction operator. For the Helium element case, we have a single term, and for the Hydrogen molecule we have two terms. For the Helium element, the expanded nuclear attraction term is as follows:
+The final term of the Fock equation that needs to be considered is the nuclear attraction operator. For the Helium atom case, we have a single term, and for the Hydrogen molecule we have two terms. For the Helium atom, the expanded nuclear attraction term is as follows:
 
 \begin{align*}
   A_{He}(x_1, y_1, z_1) = -\sum_A\frac{Z_A}{\|\vec{r}_{1 A}\|} = -\frac{2}{\sqrt{(x_1^2 + y_1^2 + z_1^2)}}
@@ -208,7 +208,7 @@ The nuclear attraction operator will form a diagonal in a matrix $A$ of size $N 
 \end{bmatrix}
 \end{align*}
 
-Now we have all of the components necessary to implement a solution. To summarize, for the Helium element, the following matrix system will be solved:
+Now we have all of the components necessary to implement a solution. To summarize, for the Helium atom, the following matrix system will be solved:
 
 \begin{align*}
   \bm{F}_{He}\ket{\psi} = \bm{\epsilon}\ket{\psi} \\
@@ -222,13 +222,46 @@ and for the Hydrogen molecule, the following matrix system will be solved:
   \bm{F}_{H_2} = -\frac{1}{2h^2}\bm{S}_{\nabla^2} + \bm{A}_{H_2} + \bm{J}
 \end{align*}
 
-%TODO Add kinetic matrix informationt 
-%TODO Plot/calculation of orbitals and their energies
+\newpage
+\section{Program Implementation}
+
+The program for this assignment was written in Python and the source can be viewed in Section \ref{code-listing-python}. It relies heavily on the SciPy package to perform the matrix algebra required to obtain the results. The program constructs the sparse matrices outlined in the previous section, obtains solutions based on convergence criteria, and outputs the plots and data for further analysis.
+
+The program features command line arguments for the user to set various runtime variables and features the ability to load and save the data in a specially formatted file. These files will also contain the configuration values for the simulation run as well as metrics to gauge how quickly each solution was able to converge to a final solution. The user can specify the number of partitions $N$ to use for the problem, resulting in an $N \times N \times N$ sized sparse matrix to calculate eigenvectors and eigenvalues from. Increasing the partition size has a severe impact on performance, so the user must be careful to pick a reasonable size.
+
+In order to optimize the calculations, sparse matrices provided by the SciPy package are used to reduce the memory footprint as well as enable more effective linear algebra operations. All of the sparse matrices are combined together into the Hermitian representing the Fock matrix, and the SciPy \texttt{scipy.sparse.linalg.eigsh} function is used to calculate the associated eigenvalues and eigenvectors. This eigenvalue solver does not fully utilize the capabilities of the computer, using very little CPU time.
+
+Only the lowest six eigenvalues and eigenvectors are calculated for from the Fock matrix. These six eigenvalues are used for the convergence criteria. Their absolute value is summed up, and their percent change is compared from iteration to iteration. If the percent change between two iterations is less than what was specified, the simulation finishes.
+
+The matplotlib Python package is used to generate 4D plots of the resulting orbitals. A 3D scatter plot is used with a heatmap and a mask. The mask allows the plot to selectively ignore points which fall out of a certain range, which allows the plots to effectively illustrate the calculated orbitals. The orbitals are plotted from their lowest energy to the highest energy.
+
+A Windows batch file was created to more easily construct simulation runs for execution and data retrieval. The batch file executes concurrent scripts which run in the background.
+
+%TODO energy level calculations
+
+\newpage
+\section{Results}
+
+\begin{figure}[H]
+  \begin{center}
+    \includegraphics[scale=0.7]{he_N25.png}
+  \end{center}
+  \caption{Calculated orbitals for $He$ atom}
+  \label{he-plot}
+\end{figure}
+
+\begin{figure}[H]
+  \begin{center}
+    \includegraphics[scale=0.7]{he_N25.png}
+  \end{center}
+  \caption{Calculated orbitals for $H_2$ molecule}
+  \label{h2-plot}
+\end{figure}
 
 \section{Discussion}
 
 \begin{itemize}
-    \item 
+    \item As mentioned in the program implementation, the eigenvalue solver used in this program does not fully utilize the capabilities of the computer. Future improvements on this solver would likely involve a re-write in a compiled language like C and make use of matrix algebra packages that are optimized to run on multiple cores and make use of large memory pools. This would help decrease the iteration speed and increase the possible resolution of the simulator.
 \end{itemize}
 
 \newpage
@@ -237,7 +270,7 @@ and for the Hydrogen molecule, the following matrix system will be solved:
 \subsection{Python Code Listing}
 \label{code-listing-python}
 The following is the code written in Python to generate the solutions and plots used in this report.
-\lstinputlisting[language=Python]{fock-discretization.py}
+\lstinputlisting[language=Python]{exact-hartree-fock-sim.py}
 
 \newpage
 \section{References}
