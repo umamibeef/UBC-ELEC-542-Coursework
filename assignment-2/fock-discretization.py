@@ -22,6 +22,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
+import argparse
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy
@@ -31,6 +32,7 @@ import scipy.sparse.linalg
 import math
 import functools
 import time
+import pickle
 
 numpy.set_printoptions(edgeitems=30, linewidth=100000, 
     formatter=dict(float=lambda x: "%.3g" % x))
@@ -53,105 +55,171 @@ IDX_X = 0
 IDX_Y = 1
 IDX_Z = 2
 
-def main():
+class Results:
 
-    # number of partitions in the solution
-    N = 25
+    def __init__(self, eigenvectors=None, eigenvals=None, args=None):
 
-    # number of eigenvalues to calculate
-    k = 6
+        self.eigenvectors = eigenvectors
+        self.eigenvals = eigenvals
+        self.args = args
 
-    # convergence condition percentage
-    convergence_percentage = 1
+    def load(self, input_file):
+        with open(input_file, 'rb') as file:
+            tmp_dict = pickle.load(file)         
+
+        self.__dict__.update(tmp_dict) 
+
+    def save(self, output_file):
+        with open(output_file, 'wb') as file:
+            pickle.dump(self.__dict__, file, 2)
+
+def main(args):
+
+    print('\n** Exact Hartree-Fock simulator **\n')
+
+    ## extract arguments
+
+    print('** Arguments:')
+
+    # print args
+    for arg in vars(args):
+        print('\t' + arg, getattr(args, arg))
+
+    # input file to process
+    input_file = args.input_file
+
+    # output file to save results to
+    output_file = args.output_file
 
     # energy level to converge on
-    energy_level = 0
+    energy_level = args.energy_level
+
+    # target subject to run sim on
+    target_subject = args.target_subject
+
+    # number of partitions in the solution
+    N = args.num_partitions
+
+    # limits of sim
+    limits = args.limits
+
+    # convergence condition percentage
+    convergence_percentage = args.convergence_percentage
+
+    # results object
+    results = Results()
 
     # generate coordinates
-    coords = generate_coordinates(-2, 2, N)
+    coords = generate_coordinates(limits[IDX_X], limits[IDX_Y], N)
 
-    # calculate partition size
-    h = coords[IDX_X][1]-coords[IDX_X][0]
+    ## start program
 
-    # generate attraction matrix for hydrogen molecule
-    attraction_matrix_hydrogen = attraction_matrix_gen(attraction_func_hydrogen, N, coords)
+    print('\n** Program start!\n')
 
-    # generate attraction matrix for helium molecule
-    attraction_matrix_helium = attraction_matrix_gen(attraction_func_helium, N, coords)
+    # check if we're simulating something new (no input file specified)
+    if not input_file:
 
-    # generate laplacian matrix
-    laplacian_matrix = second_order_laplacian_3d_sparse_matrix_gen(N)
+        # number of eigenvalues to calculate
+        k = 6
 
-    # generate kinetic matrix
-    kinetic_energy_matrix = (-1.0/(2.0*h**2))*laplacian_matrix
+        # calculate partition size
+        h = coords[IDX_X][1]-coords[IDX_X][0]
 
-    # create base solution
-    solution = scipy.sparse.csr_matrix((N**3, N**3))
+        # generate attraction matrix for hydrogen molecule
+        attraction_matrix_hydrogen = attraction_matrix_gen(attraction_func_hydrogen, N, coords)
 
-    # last eigenvals
-    last_total_energy = 0
+        # generate attraction matrix for helium molecule
+        attraction_matrix_helium = attraction_matrix_gen(attraction_func_helium, N, coords)
 
-    # first iteration
-    first_iteration = True
+        # generate laplacian matrix
+        laplacian_matrix = second_order_laplacian_3d_sparse_matrix_gen(N)
 
-    # iteration counter
-    iteration_count = 0
+        # generate kinetic matrix
+        kinetic_energy_matrix = (-1.0/(2.0*h**2))*laplacian_matrix
 
-    # total time
-    total_time_start = time.time()
+        # create base solution
+        eigenvectors = scipy.sparse.csr_matrix((N**3, k))
 
-    while True:
+        # last eigenvals
+        last_total_energy = 0
 
-        # iteration time
-        iteration_time_start = time.time()
+        # first iteration
+        first_iteration = True
 
-        if first_iteration:
-            print('First iteration, zeros used as first guess')
-            first_iteration = False
-        else:
+        # iteration counter
+        iteration_count = 0
 
-            print('Iteration: %d' % iteration_count)
+        # total time
+        total_time_start = time.time()
 
-        # create integration matrix
-        integration_matrix = integration_matrix_gen(solution, energy_level, N, coords)
+        # main loop
+        while True:
 
-        # create Fock matrix
-        fock_matrix = kinetic_energy_matrix + attraction_matrix_hydrogen + integration_matrix
-        # fock_matrix = kinetic_energy_matrix + attraction_matrix_helium + integration_matrix
-        # print('Fock is hermitian? ' + str(is_hermitian(fock_matrix)))
+            # iteration time
+            iteration_time_start = time.time()
 
-        # get eigenvectors and eigenvalues
-        eigenvals, solution = scipy.sparse.linalg.eigsh(fock_matrix, k=k, which='SM')
+            if first_iteration:
+                print('First iteration, zeros used as first guess')
+                first_iteration = False
+            else:
 
-        print('Solutions:')
-        print('Fock: ' + str(fock_matrix.toarray()))
-        print('Eigenvectors: ' + str(solution))
-        print('Eigenvals: ' + str(eigenvals))
+                print('Iteration: %d' % iteration_count)
 
-        # check percentage difference between previous and current eigenvalues
-        total_energy = numpy.sum(numpy.absolute(eigenvals))
+            # create integration matrix
+            integration_matrix = integration_matrix_gen(eigenvectors, energy_level, N, coords)
 
-        # calculate total energy
-        total_energy_percent_diff = abs(total_energy - last_total_energy)/((total_energy + last_total_energy) / 2)
+            # create Fock matrix
+            if target_subject == 'h2':
+                fock_matrix = kinetic_energy_matrix + attraction_matrix_hydrogen + integration_matrix
+            elif target_subject == 'he':
+                fock_matrix = kinetic_energy_matrix + attraction_matrix_helium + integration_matrix
+            else:
+                print('Fatal error, exiting.')
+                return
 
-        # check if we meet convergence condition
-        if total_energy_percent_diff < (convergence_percentage/100.0):
-            break
+            # get eigenvectors and eigenvalues
+            eigenvals, eigenvectors = scipy.sparse.linalg.eigsh(fock_matrix, k=k, which='SM')
 
-        print('Total energy %% diff: %.3f%%' % (total_energy_percent_diff * 100.0))
+            # check percentage difference between previous and current eigenvalues
+            total_energy = numpy.sum(numpy.absolute(eigenvals))
 
-        # update last value
-        last_total_energy = total_energy
+            # calculate total energy
+            total_energy_percent_diff = abs(total_energy - last_total_energy)/((total_energy + last_total_energy) / 2)
 
-        # update iteration count
-        iteration_count = iteration_count + 1
+            # check if we meet convergence condition
+            if total_energy_percent_diff < (convergence_percentage/100.0):
+                break
 
-        print("--- Iteration time: %s seconds ---" % (time.time() - iteration_time_start))
+            print('Total energy %% diff: %.3f%%' % (total_energy_percent_diff * 100.0))
 
-    print("--- Total time: %s seconds ---" % (time.time() - total_time_start))
+            # update last value
+            last_total_energy = total_energy
+
+            # update iteration count
+            iteration_count = iteration_count + 1
+
+            print("--- Iteration time: %.3f seconds ---" % (time.time() - iteration_time_start))
+
+        print("--- Total time: %.3f seconds ---" % (time.time() - total_time_start))
+
+        # construct file name
+        if not output_file:
+            output_file = target_subject + '_N%d.xyzp' % N
+
+        print("** Saving results to " + output_file)
+        results.eigenvectors = eigenvectors
+        results.eigenvals = eigenvals
+        results.args = args
+        results.save(output_file)
+
+    # input file is present, read that in
+    # if not input_file:
+    else:
+        
+        results.load(input_file)
 
     # plot data
-    make_plots(N, coords, solution)
+    make_plots(N, coords, results.eigenvectors, energy_level)
 
 # This functions returns whether or not the matrix is symmetric
 def is_symmetric(A, tol=1e-8):
@@ -445,13 +513,13 @@ def integration_matrix_gen(eigenvectors, eigenvector_index, N, coords):
 
     return matrix.tocoo()
 
-def make_plots(N, coords, solution):
+def make_plots(N, coords, solution, energy_level):
 
     # With help from this SO answer
     # https://stackoverflow.com/a/66939879
 
-    # reshape solution for lowest energy level
-    energy_0_points = numpy.square(solution[:,0].reshape((N,N,N)).transpose())
+    # reshape solution for specified
+    energy_0_points = numpy.square(solution[:,energy_level].reshape((N,N,N)).transpose())
 
     x_start, x_end = (coords[IDX_X][0],coords[IDX_X][-1])
     y_start, y_end = (coords[IDX_Y][0],coords[IDX_Y][-1])
@@ -478,4 +546,31 @@ def make_plots(N, coords, solution):
     plt.show()
 
 if __name__ == "__main__":
-    main()
+    # the following sets up the argument parser for the program
+    parser = argparse.ArgumentParser(description='Exact Hartree-Fock simulator')
+
+    # arguments for the program
+    parser.add_argument('-i', type=str, dest='input_file', action='store',
+        help='input file (*.xyzp) to plot')
+
+    parser.add_argument('-o', type=str, dest='output_file', action='store',
+        help='path and name of the file containing the results of the current run')
+
+    parser.add_argument('-e', type=int, default=0, dest='energy_level', action='store', choices=[0, 1, 2, 3, 4, 5],
+        help='energy level to generate and/or plot')
+
+    parser.add_argument('-t', type=str, default='h2', dest='target_subject', action='store', choices=['h2', 'he'],
+        help='target subject to run exact HF sim on')
+
+    parser.add_argument('-p', type=int, default=10, dest='num_partitions', action='store',
+        help='number of partitions to discretize the simulation')
+
+    parser.add_argument('-l', type=int, nargs=2, default=[-2,2], dest='limits', action='store',
+        help='the x,y,z min and max')
+
+    parser.add_argument('-c', type=float, default=1.0, dest='convergence_percentage', action='store',
+        help='percent change threshold for convergence')
+
+    args = parser.parse_args()
+
+    main(args)
