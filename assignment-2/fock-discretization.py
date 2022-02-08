@@ -73,26 +73,73 @@ class Results:
         with open(output_file, 'wb') as file:
             pickle.dump(self.__dict__, file, 2)
 
-def main(args):
+def make_plots(N, coords, solution, energy_level):
+
+    # With help from this SO answer (4D scatter plots in matplotlib)
+    # https://stackoverflow.com/a/66939879
+
+    # reshape solution for specified
+    data = numpy.square(solution[:,energy_level].reshape((N,N,N)).transpose())
+
+    # get limits
+    x_start, x_end = (coords[IDX_X][0],coords[IDX_X][-1])
+    y_start, y_end = (coords[IDX_Y][0],coords[IDX_Y][-1])
+    z_start, z_end = (coords[IDX_Z][0],coords[IDX_Z][-1])
+
+    # look at z-plane
+    fig = plt.figure()
+    axes = plt.axes(projection="3d")
+    axes.xaxis.pane.fill = False
+    axes.yaxis.pane.fill = False
+    axes.zaxis.pane.fill = False
+
+    # set limits
+    axes.set_xlim3d(x_start, x_end)
+    axes.set_ylim3d(y_start, y_end)
+    axes.set_zlim3d(z_start, z_end)
+
+    # create a mask for the data to make the visualization clearer
+    mask = data > (data.max() * 0.3)
+    idx = numpy.arange(int(numpy.prod(data.shape)))
+    x, y, z = numpy.unravel_index(idx, data.shape)
+    x, y, z = numpy.meshgrid(coords[IDX_X], coords[IDX_Y], coords[IDX_Z])
+    axes.scatter(x, y, z, c=data.flatten(), s=100.0 * mask, edgecolor='face', alpha=0.2, marker='o', cmap='viridis', linewidth=0)
+    plt.tight_layout()
+    plt.show()
+
+def main(cmd_args):
 
     print('\n** Exact Hartree-Fock simulator **\n')
+
+    # results object
+    results = Results()
 
     ## extract arguments
 
     print('** Arguments:')
 
+    # input file to process
+    input_file = cmd_args.input_file
+
+    # if we have an input file, it will have data and args, load them
+    if input_file:
+        print('Input %s supplied, reading its data and arguments...' % input_file)
+        results.load(input_file)
+        args = results.args
+        args.input_file = input_file
+    else:
+        args = cmd_args
+
     # print args
     for arg in vars(args):
         print('\t' + arg, getattr(args, arg))
-
-    # input file to process
-    input_file = args.input_file
 
     # output file to save results to
     output_file = args.output_file
 
     # energy level to converge on
-    energy_level = args.energy_level
+    # always use value provided by command line
+    energy_level = cmd_args.energy_level
 
     # target subject to run sim on
     target_subject = args.target_subject
@@ -105,9 +152,6 @@ def main(args):
 
     # convergence condition percentage
     convergence_percentage = args.convergence_percentage
-
-    # results object
-    results = Results()
 
     # generate coordinates
     coords = generate_coordinates(limits[IDX_X], limits[IDX_Y], N)
@@ -211,12 +255,6 @@ def main(args):
         results.eigenvals = eigenvals
         results.args = args
         results.save(output_file)
-
-    # input file is present, read that in
-    # if not input_file:
-    else:
-        
-        results.load(input_file)
 
     # plot data
     make_plots(N, coords, results.eigenvectors, energy_level)
@@ -512,38 +550,6 @@ def integration_matrix_gen(eigenvectors, eigenvector_index, N, coords):
     matrix = scipy.sparse.spdiags(data=diagonal, diags=0, m=N**3, n=N**3)
 
     return matrix.tocoo()
-
-def make_plots(N, coords, solution, energy_level):
-
-    # With help from this SO answer
-    # https://stackoverflow.com/a/66939879
-
-    # reshape solution for specified
-    energy_0_points = numpy.square(solution[:,energy_level].reshape((N,N,N)).transpose())
-
-    x_start, x_end = (coords[IDX_X][0],coords[IDX_X][-1])
-    y_start, y_end = (coords[IDX_Y][0],coords[IDX_Y][-1])
-    z_start, z_end = (coords[IDX_Z][0],coords[IDX_Z][-1])
-
-    # look at z-plane
-    fig = plt.figure()
-    axes = plt.axes(projection="3d")
-    axes.xaxis.pane.fill = False
-    axes.yaxis.pane.fill = False
-    axes.zaxis.pane.fill = False
-
-    axes.set_xlim3d(x_start, x_end)
-    axes.set_ylim3d(y_start, y_end)
-    axes.set_zlim3d(z_start, z_end)
-
-    # create a mask for the data to make the visualization clearer
-    mask = energy_0_points > (energy_0_points.max() * 0.2)
-    idx = numpy.arange(int(numpy.prod(energy_0_points.shape)))
-    x, y, z = numpy.unravel_index(idx, energy_0_points.shape)
-    x, y, z = numpy.meshgrid(coords[IDX_X], coords[IDX_Y], coords[IDX_Z])
-    axes.scatter(x, y, z, c=energy_0_points.flatten(), s=200.0 * mask, edgecolor='face', alpha=0.2, marker='o', cmap='viridis', linewidth=0)
-    plt.tight_layout()
-    plt.show()
 
 if __name__ == "__main__":
     # the following sets up the argument parser for the program
