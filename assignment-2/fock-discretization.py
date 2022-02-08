@@ -35,18 +35,19 @@ numpy.set_printoptions(edgeitems=30, linewidth=100000,
     formatter=dict(float=lambda x: "%.3g" % x))
 
 # Matplotlib export settings
-matplotlib.use("pgf")
-matplotlib.rcParams.update({
-    "pgf.texsystem": "pdflatex",
-    "font.size": 10 ,
-    "font.family": "serif",  # use serif/main font for text elements
-    "text.usetex": True,     # use inline math for ticks
-    "pgf.rcfonts": False     # don't setup fonts from rc parameters
-})
+if False:
+    matplotlib.use("pgf")
+    matplotlib.rcParams.update({
+        "pgf.texsystem": "pdflatex",
+        "font.size": 10 ,
+        "font.family": "serif",  # use serif/main font for text elements
+        "text.usetex": True,     # use inline math for ticks
+        "pgf.rcfonts": False     # don't setup fonts from rc parameters
+    })
 
 # program constants
 H2_BOND_LENGTH_ATOMIC_UNITS = 1.39839733222307
-TINY_NUMBER = 1e-6
+TINY_NUMBER = 0.1
 IDX_X = 0
 IDX_Y = 1
 IDX_Z = 2
@@ -54,13 +55,13 @@ IDX_Z = 2
 def main():
 
     # number of partitions in the solution
-    N = 2
+    N = 10
 
     # energy level to converge on
     energy_level = 0
 
     # generate coordinates
-    coords = generate_coordinates(-2, 2, N)
+    coords = generate_coordinates(-3, 3, N)
 
     # calculate partition size
     h = coords[IDX_X][1]-coords[IDX_X][0]
@@ -80,10 +81,7 @@ def main():
     # create base solution
     solution = scipy.sparse.csr_matrix((N**3, N**3))
 
-    # create dummy sorted index for first iteration
-    sorted_eigenval_indices = [0]
-
-    for i in range(5):
+    for i in range(3):
 
         if (i == 0):
             print('First solution (nothing integrated)')
@@ -91,7 +89,7 @@ def main():
             print('Using previous solution')
 
         # create integration matrix
-        integration_matrix = integration_matrix_gen(solution, sorted_eigenval_indices[energy_level], N, coords)
+        integration_matrix = integration_matrix_gen(solution, energy_level, N, coords)
 
         # print(laplacian_matrix.getformat())
         # print(attraction_matrix_helium.getformat())
@@ -102,26 +100,29 @@ def main():
         # print(integration_matrix.toarray())
 
         # create Fock matrix
-
-        fock_matrix = kinetic_energy_matrix + attraction_matrix_helium + integration_matrix
-
-        # check symmetry
-        print('Fock is symmetric? ' + str(is_symmetric(fock_matrix)))
-        print(fock_matrix.diagonal())
-        print('Fock diagonal is real?')
-        print(numpy.isreal(fock_matrix.diagonal()))
+        fock_matrix = kinetic_energy_matrix + attraction_matrix_hydrogen + integration_matrix
+        # fock_matrix = kinetic_energy_matrix + attraction_matrix_helium + integration_matrix
+        # print('Fock is hermitian? ' + str(is_hermitian(fock_matrix)))
 
         # get eigenvectors and eigenvalues
-        eigenvals, solution = scipy.sparse.linalg.eigs(fock_matrix)
+        eigenvals, solution = scipy.sparse.linalg.eigsh(fock_matrix)
 
-        # sort eigenvalues
-        sorted_eigenval_indices = numpy.argsort(eigenvals)
+        print('Solutions:')
+        print('Fock: ' + str(fock_matrix.toarray()))
+        print('Eigenvectors: ' + str(solution))
+        print('Eigenvals: ' + str(eigenvals))
 
-        # print(eigenvals[sorted_eigenval_indices])
+    # plot data
+    make_plots(N, coords, solution)
 
 # This functions returns whether or not the matrix is symmetric
 def is_symmetric(A, tol=1e-8):
     return scipy.sparse.linalg.norm(A-A.T, scipy.Inf) < tol;
+
+# This functions returns whether or not the matrix is symmetric
+def is_hermitian(A, tol=1e-8):
+    return scipy.sparse.linalg.norm(A-A.H, scipy.Inf) < tol;
+
 
 #
 # This function takes in a matrix index (row or column) and returns the
@@ -376,14 +377,14 @@ def integration_func(eigenvectors, eigenvector_index, N, coords_1, all_coords, h
     for xi, x in enumerate(all_coords[IDX_X]):
         for yi, y in enumerate(all_coords[IDX_Y]):
             for zi, z in enumerate(all_coords[IDX_Z]):
+                # first integration weight is 0
+                if xi == 0 or yi == 0 or zi == 0:
+                    w = 0
+                else:
+                    w = h
                 matrix_index = xi + yi*N + zi*N*N
                 coords_2 = (x, y, z)
-                sum = sum + h*(eigenvectors[:,eigenvector_index][matrix_index]**2)*repulsion_func(coords_1, coords_2)
-
-    # for i in range(N**3):
-    #     # "other" electron coordinates
-    #     coords_2 = coordinate_index_to_coordinates(matrix_index_to_coordinate_indices(i, N), all_coords)
-    #     sum = sum + h*(eigenvectors[:,eigenvector_index][i]**2)*repulsion_func(coords_1, coords_2)
+                sum = sum + w*(eigenvectors[:,eigenvector_index][matrix_index])**2*repulsion_func(coords_1, coords_2)
 
     return sum
 
@@ -406,8 +407,32 @@ def integration_matrix_gen(eigenvectors, eigenvector_index, N, coords):
 
     return matrix.tocoo()
 
-def make_plots(results):
-    pass
+def make_plots(N, coords, solution):
+
+    # With help from this SO answer
+    # https://stackoverflow.com/a/66939879
+
+    # reshape solution for lowest energy level
+    energy_0_points = numpy.square(solution[:,0].reshape((N,N,N)).transpose())
+
+    x_start, x_end = (coords[IDX_X][0],coords[IDX_X][-1])
+    y_start, y_end = (coords[IDX_Y][0],coords[IDX_Y][-1])
+    z_start, z_end = (coords[IDX_Z][0],coords[IDX_Z][-1])
+
+    # look at z-plane
+    fig = plt.figure()
+    axes = plt.axes(projection="3d")
+    axes.xaxis.pane.fill = False
+    axes.yaxis.pane.fill = False
+    axes.zaxis.pane.fill = False
+    # create a mask for the data to make the visualization clearer
+    mask = energy_0_points > (energy_0_points.max() * 0.2)
+    idx = numpy.arange(int(numpy.prod(energy_0_points.shape)))
+    x, y, z = numpy.unravel_index(idx, energy_0_points.shape)
+    axes.scatter(x, y, z, c=energy_0_points.flatten(), s=200.0 * mask, edgecolor='face', alpha=0.7, marker='o', cmap='viridis', linewidth=0)
+    plt.tight_layout()
+    plt.show()
+
 
 if __name__ == "__main__":
     main()
