@@ -116,7 +116,7 @@ def make_plots(results):
     elif results.args.target_subject == 'h2':
         title_subject = 'H_2'
 
-    fig.suptitle('Exact restricted Hartree-Fock calculated orbitals for $%s$ with $N=%d$' % (title_subject, N))
+    fig.suptitle('Exact restricted Hartree-Fock calculated orbitals for $%s$ with $N=%d$ and limits=[%d,%d]' % (title_subject, N, limits[IDX_START], limits[IDX_END]))
     axes = []
 
     # create results table
@@ -148,7 +148,7 @@ def make_plots(results):
         axes[-1].set_title('n = %d' % current_energy_level, y=0.95)
 
         # create a mask for the data to make the visualization clearer
-        mask = data > (data.max() * 0.2)
+        mask = data > (data.max() * 0.1)
         idx = numpy.arange(int(numpy.prod(data.shape)))
         x, y, z = numpy.unravel_index(idx, data.shape)
         x, y, z = numpy.meshgrid(coords[IDX_X], coords[IDX_Y], coords[IDX_Z])
