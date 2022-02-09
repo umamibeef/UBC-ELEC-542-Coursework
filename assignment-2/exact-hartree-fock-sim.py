@@ -33,29 +33,30 @@ import math
 import functools
 import time
 import pickle
+import datetime
 
 numpy.set_printoptions(edgeitems=30, linewidth=100000, 
-    formatter=dict(float=lambda x: "%.3g" % x))
+    formatter=dict(float=lambda x: '%.3g' % x))
 
 # Matplotlib export settings
 if False:
-    matplotlib.use("pgf")
+    matplotlib.use('pgf')
     matplotlib.rcParams.update({
-        "pgf.texsystem": "pdflatex",
-        "font.size": 10 ,
-        "font.family": "serif",  # use serif/main font for text elements
-        "text.usetex": True,     # use inline math for ticks
-        "pgf.rcfonts": False     # don't setup fonts from rc parameters
+        'pgf.texsystem': 'pdflatex',
+        'font.size': 10 ,
+        'font.family': 'serif',  # use serif/main font for text elements
+        'text.usetex': True,     # use inline math for ticks
+        'pgf.rcfonts': False     # don't setup fonts from rc parameters
     })
 
 # program constants
 H2_BOND_LENGTH_ATOMIC_UNITS = 1.39839733222307
-TINY_NUMBER = 1
 IDX_X = 0
 IDX_Y = 1
 IDX_Z = 2
 IDX_START = 0
 IDX_END = 1
+DATETIME_STR_FORMAT = '[%Y/%m/%d-%H:%M:%S]'
 
 #
 # This object encapsulates the results for pickling/unpickling
@@ -110,9 +111,9 @@ def make_plots(results):
     fig = plt.figure(figsize=(9,10), dpi=150, constrained_layout=True)
 
     # modify subject formatting
-    if args.target_subject == 'he':
+    if results.args.target_subject == 'he':
         title_subject = 'He'
-    elif args.target_subject == 'h2':
+    elif results.args.target_subject == 'h2':
         title_subject = 'H_2'
 
     fig.suptitle('Exact restricted Hartree-Fock calculated orbitals for $%s$ with $N=%d$' % (title_subject, N))
@@ -128,7 +129,7 @@ def make_plots(results):
         axes.append(fig.add_subplot(3, 2, current_energy_level + 1, projection='3d', proj_type='ortho'))
 
         # change viewing angles
-        axes[-1].view_init(45, 45)
+        axes[-1].view_init(45, 30)
 
         axes[-1].xaxis.pane.fill = False
         axes[-1].yaxis.pane.fill = False
@@ -139,9 +140,9 @@ def make_plots(results):
         axes[-1].set_ylim3d(limits[IDX_START], limits[IDX_END])
         axes[-1].set_zlim3d(limits[IDX_START], limits[IDX_END])
 
-        axes[-1].set_xlabel("$x$")
-        axes[-1].set_ylabel("$y$")
-        axes[-1].set_zlabel("$z$")
+        axes[-1].set_xlabel('$x$')
+        axes[-1].set_ylabel('$y$')
+        axes[-1].set_zlabel('$z$')
 
         # set title
         axes[-1].set_title('n = %d' % current_energy_level, y=0.95)
@@ -151,11 +152,11 @@ def make_plots(results):
         idx = numpy.arange(int(numpy.prod(data.shape)))
         x, y, z = numpy.unravel_index(idx, data.shape)
         x, y, z = numpy.meshgrid(coords[IDX_X], coords[IDX_Y], coords[IDX_Z])
-        axes[-1].scatter(x, y, z, c=data.flatten(), s=100.0 * mask, edgecolor='face', alpha=0.2, marker='o', cmap='viridis', linewidth=0)
+        axes[-1].scatter(x, y, z, c=data.flatten(), s=50.0 * mask, edgecolor='face', alpha=0.1, marker='o', cmap='viridis', linewidth=0)
 
-    plot_file_name = results.args.output_file.strip('.xyzp') + ('.png')
+    plot_file_name = results.args.output_file.replace('.xyzp','') + ('.png')
     fig.savefig(plot_file_name)
-    plt.show()
+    # plt.show()
 
 #
 # This is the main function
@@ -219,6 +220,8 @@ def main(cmd_args):
 
     print('\n** Program start!\n')
 
+    print('\tPartition size: %f' % h)
+
     # check if we're simulating something new (no input file specified)
     if not input_file:
 
@@ -244,12 +247,13 @@ def main(cmd_args):
         first_iteration = True
 
         # iteration counter
-        iteration_count = 0
+        iteration_count = 1
 
         # total time
         total_time_start = time.time()
 
-        print('\n** Simulation start! (%.3f)\n' % total_time_start)
+        datetime_now = datetime.datetime.now()
+        print('\n** Simulation start! %s\n' % datetime_now.strftime(DATETIME_STR_FORMAT))
 
         # main loop
         while True:
@@ -258,11 +262,11 @@ def main(cmd_args):
             iteration_time_start = time.time()
 
             if first_iteration:
-                print('First iteration, zeros used as first guess')
+                print('** First iteration, zeros used as first guess')
                 first_iteration = False
             else:
 
-                print('Iteration: %d' % iteration_count)
+                print('** Iteration: %d' % iteration_count)
 
             # create integration matrix
             integration_matrix = integration_matrix_gen(eigenvectors, energy_level, N, coords)
@@ -285,7 +289,7 @@ def main(cmd_args):
             # calculate total energy
             total_energy_percent_diff = abs(total_energy - last_total_energy)/((total_energy + last_total_energy) / 2)
 
-            print('Total energy %% diff: %.3f%%' % (total_energy_percent_diff * 100.0))
+            print('Total orbital energy %% diff: %.3f%%' % (total_energy_percent_diff * 100.0))
 
             # update last value
             last_total_energy = total_energy
@@ -297,7 +301,11 @@ def main(cmd_args):
             iteration_time = time.time() - iteration_time_start
             results.iteration_times.append(iteration_time)
 
-            print('** Iteration time: %.3f seconds **' % iteration_time)
+            datetime_now = datetime.datetime.now()
+            print('\n** Iteration end! %s\n' % datetime_now.strftime(DATETIME_STR_FORMAT))
+            print('** Iteration time: %.3f seconds**' % iteration_time)
+            print('\n** Eigenvalues:\n')
+            print(eigenvalues)
 
             # check if we meet convergence condition
             if total_energy_percent_diff < (convergence_percentage/100.0):
@@ -307,15 +315,16 @@ def main(cmd_args):
         total_time_end = time.time()
         total_time = total_time_end - total_time_start
         results.total_time = total_time
-        print('\n** Simulation end! (%.3f)\n' % total_time_end)
-        print('** Total time: %.3f seconds **' % total_time)
+        datetime_now = datetime.datetime.now()
+        print('\n** Simulation end! %s\n' % datetime_now.strftime(DATETIME_STR_FORMAT))
+        print('** Total time: %.3f seconds **' % results.total_time)
 
         # construct file name
         if not output_file:
             output_file = target_subject + '_N%d_l%d.xyzp' % (N, limits[IDX_END])
             args.output_file = output_file
 
-        print("** Saving results to " + output_file)
+        print('** Saving results to ' + output_file)
         results.eigenvectors = eigenvectors
         results.eigenvalues = eigenvalues
         results.args = args
@@ -329,26 +338,17 @@ def main(cmd_args):
 
     # solution results display
 
-    # clean up old data
-    if results.eigenvalues is None:
-        # backwards compatibility with older data
-        results.eigenvalues = results.eigenvals
-        del results.__dict__['eigenvals']
-        results.save(results.args.input_file)
-    if results.args.output_file is None:
-        results.args.output_file = results.args.input_file
-        results.save(results.args.input_file)
-
     print('\n** Coordinates:\n')
     print(coords)
     print('\n** Eigenvalues:\n')
     print(results.eigenvalues)
-    print('\n** Total energies:\n')
+    print('\n** Orbital energies:\n')
     for n in range(len(results.eigenvalues)):
+        print('\tn=%d orbital energy: %f' % (n, results.eigenvalues[n]))
         eigenvector = results.eigenvectors[:,n]
         squared_eigenvector = numpy.square(eigenvector)
-        expectation = integrate(eigenvector, coords)
-        print('\tn=%d total energy: %f' % (n, expectation))
+        expectation = integrate(squared_eigenvector, coords)
+        print('\t\tPsi_%d expectation value: %f' % (n, expectation))
 
     # plot data
     print('\n** Plotting data...\n')
@@ -365,7 +365,6 @@ def is_symmetric(A, tol=1e-8):
 #
 def is_hermitian(A, tol=1e-8):
     return scipy.sparse.linalg.norm(A-A.H, scipy.Inf) < tol;
-
 
 #
 # This function takes in a matrix index (row or column) and returns the
@@ -416,41 +415,45 @@ def generate_coordinates(minimum, maximum, N):
 
 #
 # This function returns the nuclear attraction for an electron in the Helium
-# element simulation. A small number TINY_NUMBER is provided to prevent divide
+# element simulation. A small number tiny_number is provided to prevent divide
 # by zero scenarios.
 #
-def attraction_func_helium(coords):
+def attraction_func_helium(coords, h):
 
     x = coords[IDX_X]
     y = coords[IDX_Y]
     z = coords[IDX_Z]
+
+    tiny_number = 0.1
 
     denominator = math.sqrt(x**2 + y**2 + z**2)
 
-    return -((2.0/(TINY_NUMBER + denominator)))
+    return -((2.0/(tiny_number + denominator)))
 
 #
 # This function returns the nuclear attraction for an electron in the Hydrogen
-# molecule simulation. A small number TINY_NUMBER is provided to prevent divide
+# molecule simulation. A small number tiny_number is provided to prevent divide
 # by zero scenarios.
 #
-def attraction_func_hydrogen(coords):
+def attraction_func_hydrogen(coords, h):
 
     x = coords[IDX_X]
     y = coords[IDX_Y]
     z = coords[IDX_Z]
+
+    tiny_number = 0.1
 
     denominator_1 = math.sqrt(((H2_BOND_LENGTH_ATOMIC_UNITS/2) - x)**2 + y**2 + z**2)
     denominator_2 = math.sqrt(((-H2_BOND_LENGTH_ATOMIC_UNITS/2) - x)**2 + y**2 + z**2)
 
-    return -((1.0/(TINY_NUMBER + denominator_1)) + (1.0/(TINY_NUMBER + denominator_2)))
+    return -((1.0/(tiny_number + denominator_1)) + (1.0/(tiny_number + denominator_2)))
 
 #
 # This functions calculates the repulsion between two electrons. A small number
 # TINY_NUMBER is provided to prevent divide by zero scenarios.
 #
 @functools.lru_cache
-def repulsion_func(coords_1, coords_2):
+def repulsion_func(coords_1, coords_2, h):
 
     x1 = coords_1[IDX_X]
     y1 = coords_1[IDX_Y]
@@ -459,6 +462,8 @@ def repulsion_func(coords_1, coords_2):
     x2 = coords_2[IDX_X]
     y2 = coords_2[IDX_Y]
     z2 = coords_2[IDX_Z]
+
+    TINY_NUMBER = 0.1
 
     denominator = math.sqrt((x2 - x1)**2 + (y2 - y1)**2 + (z2 - z1)**2)
 
@@ -470,9 +475,12 @@ def repulsion_func(coords_1, coords_2):
 #
 def attraction_matrix_gen(attraction_func, N, coords):
 
+    # extract h
+    h = coords[IDX_X][1] - coords[IDX_X][0]
+
     # use scipy sparse matrix generation
     # create the diagonal 
-    diagonal = [attraction_func(coordinate_index_to_coordinates(matrix_index_to_coordinate_indices(i, N), coords)) for i in range(N**3)]
+    diagonal = [attraction_func(coordinate_index_to_coordinates(matrix_index_to_coordinate_indices(i, N), coords), h) for i in range(N**3)]
 
     # now generate the matrix with the desired diagonal
     matrix = scipy.sparse.spdiags(data=diagonal, diags=0, m=N**3, n=N**3)
@@ -656,7 +664,7 @@ def integration_term_func(eigenvectors, eigenvector_index, N, coords_1, all_coor
                     w = h
                 matrix_index = xi + yi*N + zi*N*N
                 coords_2 = (x, y, z)
-                sum = sum + w*(eigenvectors[:,eigenvector_index][matrix_index])**2*repulsion_func(coords_1, coords_2)
+                sum = sum + w*(eigenvectors[:,eigenvector_index][matrix_index])**2*repulsion_func(coords_1, coords_2, h)
 
     return sum
 
@@ -681,7 +689,7 @@ def integration_matrix_gen(eigenvectors, eigenvector_index, N, coords):
 
     return matrix.tocoo()
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     # the following sets up the argument parser for the program
     parser = argparse.ArgumentParser(description='Exact Hartree-Fock simulator')
 
@@ -698,10 +706,10 @@ if __name__ == "__main__":
     parser.add_argument('-t', type=str, default='h2', dest='target_subject', action='store', choices=['h2', 'he'],
         help='target subject to run exact HF sim on')
 
-    parser.add_argument('-p', type=int, default=15, dest='num_partitions', action='store',
+    parser.add_argument('-p', type=int, default=12, dest='num_partitions', action='store',
         help='number of partitions to discretize the simulation')
 
-    parser.add_argument('-l', type=float, default=5, dest='limit', action='store',
+    parser.add_argument('-l', type=float, default=1, dest='limit', action='store',
         help='the x,y,z max limit, forming a cubic solution space')
 
     parser.add_argument('-c', type=float, default=1.0, dest='convergence_percentage', action='store',

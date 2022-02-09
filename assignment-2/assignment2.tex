@@ -73,6 +73,8 @@ In this assignment, the calculations must be done directly on a real-space grid,
 
 \section{Derivation of Solution}
 
+\subsection{Hartree-Fock Matrix Equation Derivation}
+
 Since both subjects for this assignment have an even number of electrons that close shells, we can use the restricted Hartree-Fock equation for closed shell systems to numerically calculate the resulting orbitals. The equation is as follows:
 
 \begin{align*}
@@ -222,6 +224,18 @@ and for the Hydrogen molecule, the following matrix system will be solved:
   \bm{F}_{H_2} = -\frac{1}{2h^2}\bm{S}_{\nabla^2} + \bm{A}_{H_2} + \bm{J}
 \end{align*}
 
+\subsection{Hartree-Fock Energy Calculation Derivation}
+
+The Hartree-Fock equation implies that the orbital energies can be written as follows:
+
+\begin{align*}
+  \hat{F}\psi_n &= \epsilon_n\psi_n \\
+  \epsilon_n &= \bra{\psi_n}\hat{F}\ket{\psi_n} \\
+  \epsilon_n &= \bra{\psi_n}\hat{H}_{core}\ket{\psi_n} + \sum_{m=1}^{N/2}\bra{\psi_n}2J_m - K_m\ket{\psi_n} \\
+\end{align*}
+
+%TODO energy level calculations
+
 \newpage
 \section{Program Implementation}
 
@@ -237,14 +251,12 @@ The matplotlib Python package is used to generate 4D plots of the resulting orbi
 
 A Windows batch file was created to more easily construct simulation runs for execution and data retrieval. The batch file executes concurrent scripts which run in the background.
 
-%TODO energy level calculations
-
 \newpage
 \section{Results}
 
 \begin{figure}[H]
   \begin{center}
-    \includegraphics[scale=0.7]{he_N25.png}
+    \includegraphics[scale=0.75]{he_N28_l1.png}
   \end{center}
   \caption{Calculated orbitals for $He$ atom}
   \label{he-plot}
@@ -252,17 +264,40 @@ A Windows batch file was created to more easily construct simulation runs for ex
 
 \begin{figure}[H]
   \begin{center}
-    \includegraphics[scale=0.7]{he_N25.png}
+    \includegraphics[scale=0.75]{h2_N28_l1.png}
   \end{center}
   \caption{Calculated orbitals for $H_2$ molecule}
   \label{h2-plot}
 \end{figure}
+
+\begin{table}[H]
+\begin{center}
+\begin{tabular}{l|llllll}\hline
+$n$    & $1$    & $2$     & $3$     & $4$      & $5$      & $6$      \\\hline
+$E_n$  & $0.007629$  & $3.942602o$  & $3.942602$  & $3.942602$  & $7.489690$  & $7.489690$ \\\hline
+\end{tabular}
+\end{center}
+  \caption{The first six orbital energy levels obtained from applying HF to the Helium atom}
+  \label{orbital-energies-he}
+\end{table}
+
+\begin{table}[H]
+\begin{center}
+\begin{tabular}{l|llllll}\hline
+$n$    & $1$    & $2$     & $3$     & $4$      & $5$      & $6$      \\\hline
+$E_n$  & $1.005352$  & $4.004340$  & $4.510553$  & $4.510553$  & $7.648020$  & $7.648020$ \\\hline
+\end{tabular}
+\end{center}
+  \caption{The first six orbital energy levels obtained from applying HF to the Hydrogen molecule}
+  \label{orbital-energies-h2}
+\end{table}
 
 \section{Discussion}
 
 \begin{itemize}
     \item As mentioned in the program implementation, the eigenvalue solver used in this program does not fully utilize the capabilities of the computer. Future improvements on this solver would likely involve a re-write in a compiled language like C and make use of matrix algebra packages that are optimized to run on multiple cores and make use of large memory pools. This would help decrease the iteration speed and increase the possible resolution of the simulator.
     \item The current implementation does not treat the solution space as an infinite space and is more similar to a closed box. Either the limits need to be made large enough for the system or the implementation needs to simulate a larger space. The numerical integration, for example, may be able to extend its range, to allow the "other" electron to smear further.
+    \item The solutions are extremely sensitive to partition size and the limits of the problem. Since the solver only reports the first six lowest eigenvalues, it's likely that similar solutions get moved in and out of these six slots as the parameters change.
 \end{itemize}
 
 \newpage
@@ -283,6 +318,7 @@ These aren't citing anything, but they were useful in helping me figure out this
   \item \url{https://www.value-at-risk.net/numerical-integration-multiple-dimensions/} % numerical integration
   \item \url{https://chem.libretexts.org/Bookshelves/Physical_and_Theoretical_Chemistry_Textbook_Maps/Book%3A_Quantum_States_of_Atoms_and_Molecules_(Zielinksi_et_al)/09%3A_The_Electronic_States_of_the_Multielectron_Atoms/9.07%3A_The_Self-Consistent_Field_Approximation_(Hartree-Fock_Method)} % good overview of HF
   \item \url{http://vergil.chemistry.gatech.edu/notes/hf-intro/hf-intro.html} % another good overview of HF
+  \item \url{https://chem.libretexts.org/Bookshelves/Physical_and_Theoretical_Chemistry_Textbook_Maps/Physical_Chemistry_(LibreTexts)/08%3A_Multielectron_Atoms/8.07%3A_Hartree-Fock_Calculations_Give_Good_Agreement_with_Experimental_Data} % energy extraction
 
   % Other not relevant
   % \item https://physics.stackexchange.com/questions/20703/why-does-iteratively-solving-the-hartree-fock-equations-result-in-convergence
