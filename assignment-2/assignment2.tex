@@ -230,28 +230,29 @@ and for the Hydrogen molecule, the following matrix system will be solved:
 The orbital energies do not sum the Hartree-Fock energy. Koopman's theorem states that in restricted Hartree-Fock, the energies associated with occupied orbitals approximate the ionization energy of that orbital, and the energies associated with unoccupied orbitals approximate the energy required to place an electron into that orbital. The total energy of the system must be calculated using the following equation which accounts for the double contribution of electrons in the double electron integrals (hence the $\frac{1}{2}$):
 
 \begin{align*}
-  E_o &= \sum_i^N\bra{i}\hat{h}\ket{i} + \frac{1}{2}\sum_i^N\sum_j^N\bra{ij}\ket{ij}
+  E_o &= \sum_i^N\bra{i}\hat{h}\ket{i} + \frac{1}{2}\sum_{i>j}^N\left[ij\|ij\right]
 \end{align*}
 
 This implies that for the total energy, we can take the expectation value of the resulting Fock operators for both the Helium atom and the Hydrogen molecule, while making sure to halve the contribution of the Coulomb and exchange terms and also using the calculated ground state orbital which both electrons occupy. Also, since both electrons occupy the same spin orbital, terms will end up combining (e.g. $\bra{1}\hat{h}\ket{1} + \bra{1}\hat{h}\ket{1} = 2\bra{1}\hat{h}\ket{1}$)
 
 \begin{align*}
-  E_{o(He)} &= E_{o(H_2)} = \sum_i^2\bra{i}\hat{h}\ket{i} + \frac{1}{2}\sum_i^2\sum_j^2\bra{ij}\ket{ij} \\
-  &= \bra{1}\hat{h}\ket{1} + \bra{2}\hat{h}\ket{2} + \frac{1}{2}\left[\bra{11}\ket{11} + \bra{12}\ket{12} + \bra{21}\ket{21} + \bra{22}\ket{22}\right] \\
-  &= 2\bra{1}\hat{h}\ket{1} + \bra{11}\ket{11} + \bra{12}\ket{12}
+  E_{o(He)} &= E_{o(H_2)} = \sum_i^2\bra{i}\hat{h}\ket{i} + \frac{1}{2}\sum_{i>j}^N\left[ij\middle|ij\right] \\
+  &= \bra{1}\hat{h}\ket{1} + \bra{2}\hat{h}\ket{2} + \frac{1}{2}\left(\left[11\middle|22\right] + \left[12\middle|12\right]\right) \\
+  &= 2\bra{1}\hat{h}\ket{1} + \frac{1}{2}\left[11\middle|22\right] + \frac{1}{2}\left[12\middle|12\right]
 \end{align*}
 
 The total energy for the Helium molecule and Hydrogen atom in their ground states should then be equal to:
 
 \begin{align*}
   E_{o(H_2)} &= 2\int_{-\infty}^{\infty}\psi_1^\ast(\vec{r}_1) \left[ -\frac{1}{2}\nabla_1^2 - \frac{2}{\|\vec{r}_{1 A}\|} \right] \psi_1(\vec{r}_1) d\vec{r}_1 + 
-  2\int_{-\infty}^{\infty} \psi_1^\ast(\vec{r}_1) \int_{-\infty}^{\infty} \left|\psi_1(\vec{r}_2)\right|^2\frac{1}{\|\vec{r}_{12}\|}d\vec{r}_2 \psi_1(\vec{r}_1) d\vec{r}_1 \\
-  &= 2\int_{-\infty}^{\infty}\left|\psi_1(\vec{r}_1)\right|^2 \left[ -\frac{1}{2}\nabla_1^2 - \frac{2}{\|\vec{r}_{1 A}\|} \right] d\vec{r}_1 + 2\int_{-\infty}^{\infty} \left|\psi_1(\vec{r}_1)\right|^2 \int_{-\infty}^{\infty} \left|\psi_1(\vec{r}_2)\right|^2\frac{1}{\|\vec{r}_{12}\|}d\vec{r}_2 d\vec{r}_1
+   \frac{1}{2}\int_{-\infty}^{\infty}\int_{-\infty}^{\infty} \psi_1^\ast(\vec{r}_1) \psi_1(\vec{r}_1) \frac{1}{\|\vec{r}_{12}\|} \psi_2^\ast(\vec{r}_2)\psi_2(\vec{r}_2) d\vec{r}_2d\vec{r}_1 \\
+   &\qquad + \frac{1}{2}\int_{-\infty}^{\infty}\int_{-\infty}^{\infty} \psi_1^\ast(\vec{r}_1) \psi_2(\vec{r}_1) \frac{1}{\|\vec{r}_{12}\|} \psi_2^\ast(\vec{r}_2)\psi_1(\vec{r}_2) d\vec{r}_2d\vec{r}_1  \\
 \end{align*}
 
 \begin{align*}
-  E_{o(H_2)} &= 2\int_{-\infty}^{\infty}\psi_1^\ast(\vec{r}_1) \left[ -\frac{1}{2}\nabla_1^2 - \frac{1}{\|\vec{r}_{1 A}\|} - \frac{1}{\|\vec{r}_{1 B}\|} \right] \psi_1(\vec{r}_1) d\vec{r}_1 + 2\int_{-\infty}^{\infty} \psi_1^\ast(\vec{r}_1) \int_{-\infty}^{\infty} \left|\psi_1(\vec{r}_2)\right|^2\frac{1}{\|\vec{r}_{12}\|}d\vec{r}_2 \psi_1(\vec{r}_1) d\vec{r}_1 \\
-  &= 2\int_{-\infty}^{\infty} \left|\psi_1(\vec{r}_1)\right|^2 \left[ -\frac{1}{2}\nabla_1^2 - \frac{1}{\|\vec{r}_{1 A}\|} - \frac{1}{\|\vec{r}_{1 B}\|} \right] d\vec{r}_1 + 2\int_{-\infty}^{\infty} \left|\psi_1(\vec{r}_1)\right|^2 \int_{-\infty}^{\infty} \left|\psi_1(\vec{r}_2)\right|^2\frac{1}{\|\vec{r}_{12}\|}d\vec{r}_2 d\vec{r}_1
+  E_{o(H_2)} &= 2\int_{-\infty}^{\infty}\psi_1^\ast(\vec{r}_1) \left[ -\frac{1}{2}\nabla_1^2 - \frac{1}{\|\vec{r}_{1 A}\|} - \frac{1}{\|\vec{r}_{1 B}\|} \right] \psi_1(\vec{r}_1) d\vec{r}_1 +
+   \frac{1}{2}\int_{-\infty}^{\infty}\int_{-\infty}^{\infty} \psi_1^\ast(\vec{r}_1) \psi_1(\vec{r}_1) \frac{1}{\|\vec{r}_{12}\|} \psi_2^\ast(\vec{r}_2)\psi_2(\vec{r}_2) d\vec{r}_2d\vec{r}_1 \\
+   &\qquad + \frac{1}{2}\int_{-\infty}^{\infty}\int_{-\infty}^{\infty} \psi_1^\ast(\vec{r}_1) \psi_2(\vec{r}_1) \frac{1}{\|\vec{r}_{12}\|} \psi_2^\ast(\vec{r}_2)\psi_1(\vec{r}_2) d\vec{r}_2d\vec{r}_1  \\
 \end{align*}
 
 
@@ -292,7 +293,7 @@ A Windows batch file was created to more easily construct simulation runs for ex
     \includegraphics[scale=0.75]{he_N28_l5.png}
   \end{center}
   \caption{Calculated orbitals for $He$ atom using limits of [-5,5]}
-  \label{he-plot}
+  \label{he-plot-l5}
 \end{figure}
 
 \begin{figure}[H]
@@ -300,7 +301,7 @@ A Windows batch file was created to more easily construct simulation runs for ex
     \includegraphics[scale=0.75]{h2_N28_l5.png}
   \end{center}
   \caption{Calculated orbitals for $H_2$ molecule using limits of [-5,5]}
-  \label{h2-plot}
+  \label{h2-plot-l5}
 \end{figure}
 
 \begin{figure}[H]
@@ -308,7 +309,7 @@ A Windows batch file was created to more easily construct simulation runs for ex
     \includegraphics[scale=0.75]{he_N28_l1.png}
   \end{center}
   \caption{Calculated orbitals for $He$ atom using limits of [-1,1]}
-  \label{he-plot}
+  \label{he-plot-l1}
 \end{figure}
 
 \begin{figure}[H]
@@ -316,7 +317,7 @@ A Windows batch file was created to more easily construct simulation runs for ex
     \includegraphics[scale=0.75]{h2_N28_l1.png}
   \end{center}
   \caption{Calculated orbitals for $H_2$ molecule using limits of [-1,1]}
-  \label{h2-plot}
+  \label{h2-plot-l1}
 \end{figure}
 
 \begin{table}[H]
@@ -327,7 +328,7 @@ $E_n$  & $-0.049968$  & $-0.049878$  & $-0.041970$  & $0.011558$  & $-0.007816$ 
 \end{tabular}
 \end{center}
   \caption{The first six orbital energy levels obtained from applying HF to the Helium atom using limits of [-5,5]}
-  \label{orbital-energies-he}
+  \label{orbital-energies-he-l5}
 \end{table}
 
 \begin{table}[H]
@@ -338,7 +339,7 @@ $E_n$  & $-0.054140$  & $-0.044237$  & $-0.040912$  & $-0.019278$  & $0.000325$ 
 \end{tabular}
 \end{center}
   \caption{The first six orbital energy levels obtained from applying HF to the Hydrogen molecule using limits of [-5,5]}
-  \label{orbital-energies-h2}
+  \label{orbital-energies-h2-l5}
 \end{table}
  
 \begin{table}[H]
@@ -349,7 +350,7 @@ $E_n$  & $0.007629$  & $3.942602$  & $3.942602$  & $3.942602$  & $7.489690$  & $
 \end{tabular}
 \end{center}
   \caption{The first six orbital energy levels obtained from applying HF to the Helium atom using limits of [-1,1]}
-  \label{orbital-energies-he}
+  \label{orbital-energies-he-l1}
 \end{table}
 
 \begin{table}[H]
@@ -360,7 +361,7 @@ $E_n$  & $1.005352$  & $4.004340$  & $4.510553$  & $4.510553$  & $7.648020$  & $
 \end{tabular}
 \end{center}
   \caption{The first six orbital energy levels obtained from applying HF to the Hydrogen molecule using limits of [-1,1]}
-  \label{orbital-energies-h2}
+  \label{orbital-energies-h2-l1}
 \end{table}
 
 \newpage
