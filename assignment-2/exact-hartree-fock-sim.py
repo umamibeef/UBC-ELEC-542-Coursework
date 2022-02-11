@@ -289,7 +289,8 @@ def main(cmd_args):
                 quit()
 
             # get (total_energy_levels) eigenvectors and eigenvalues and order them from smallest to largest
-            eigenvalues, eigenvectors = scipy.sparse.linalg.eigsh(fock_matrix, k=total_energy_levels, which='SM', maxiter=5000, tol=1e-2)
+            print('** Obtaining eigenvalues and eigenvectors...')
+            eigenvalues, eigenvectors = scipy.sparse.linalg.eigsh(fock_matrix, k=total_energy_levels, which='SM', maxiter=5000, tol=1e-3)
 
             # check percentage difference between previous and current eigenvalues
             total_energy = numpy.sum(eigenvalues)
@@ -348,8 +349,10 @@ def main(cmd_args):
 
     print('\n** Coordinates:\n')
     print(coords)
+
     print('\n** Eigenvalues:\n')
     print(eigenvalues)
+    
     print('\n** Orbital energies:\n')
     for n in range(len(eigenvalues)):
         print('\tn=%d orbital energy: %f' % (n, eigenvalues[n]))
@@ -357,10 +360,11 @@ def main(cmd_args):
         squared_eigenvector_3d = lambda x, y, z : numpy.square(eigenvector).reshape((N,N,N)).transpose()[x, y, z]
         expectation = integrate(squared_eigenvector_3d, coords)
         print('\t\tPsi_%d expectation value: %f' % (n, expectation))
-    print('\n** Total Energies:\n')
-    for n in range(len(eigenvalues)):
-        eigenvector = eigenvectors[:,n]
-        print('\tn=%d total energy: %f' % (n, calculate_total_energy(target_subject, eigenvector, coords)))
+
+    # print('\n** Total Energies:\n')
+    # for n in range(len(eigenvalues)):
+    #     eigenvector = eigenvectors[:,n]
+    #     print('\tn=%d total energy: %f' % (n, calculate_total_energy(target_subject, eigenvector, coords)))
 
     # plot data
     print('\n** Plotting data...\n')
@@ -386,7 +390,7 @@ def calculate_total_energy(target_subject, orbital_values, coords):
     # interpret a matrix as a function f(x,y,z)
     matrix_to_func = lambda matrix : lambda x, y, z : matrix[x, y, z]
 
-    # calcualte kinetic energy
+    # calculate kinetic energy
     diff_result = diff_2(matrix_to_func(orbital_values_squared), coords)
     kinetic_energy = -1.0*(integrate(matrix_to_func(diff_result), coords))
 
@@ -401,7 +405,10 @@ def calculate_total_energy(target_subject, orbital_values, coords):
 
     nuclear_attraction = 2*integrate(matrix_to_func(orbital_values_squared*attraction_vals), coords)
 
-    return kinetic_energy + nuclear_attraction
+    # calculate Coulomb/exchange contribution
+    two_electron_integration = two_electron_integration_calc(orbital_values_squared, coords)
+
+    return kinetic_energy + nuclear_attraction + two_electron_integration
 
 #
 # This functions returns whether or not the matrix is symmetric
@@ -544,6 +551,62 @@ def attraction_val_matrix_gen(attraction_func, coords):
                 solution_space[xi,yi,zi] = attraction_func((x, y, z), h)
 
     return solution_space
+
+#
+# This function generates an N*N*N matrix A with the inner result of the
+# integration term (combined Coulomb/exchange)
+#
+def inner_integration_val_matrix_gen(orbital_values_squared, coords):
+
+    # get partition size
+    h = coords[IDX_X][1] - coords[IDX_X][0]
+    # get number of partitions
+    N = len(coords[IDX_X])
+
+    # generate a solution space
+    solution_space = numpy.empty((N,N,N))
+
+    for xi in range(N):
+        for yi in range(N):
+            for zi in range(N):
+
+                x = coords[IDX_X][xi]
+                y = coords[IDX_Y][yi]
+                z = coords[IDX_Z][zi]
+
+                solution_space[xi,yi,zi] = integration_term_func_new(orbital_values_squared, (x, y, z), coords)
+
+    return solution_space
+
+#
+# This function calculates the Coulomb/exchange two electron integral
+# expectation value used in the total energy calculation.
+#
+def two_electron_integration_calc(orbital_values_squared, coords):
+
+    # get partition size
+    h = coords[IDX_X][1] - coords[IDX_X][0]
+    # get number of partitions
+    N = len(coords[IDX_X])
+
+    # calculate inner integral matrix
+    inner_integration_val_matrix = inner_integration_val_matrix_gen(orbital_values_squared, coords)
+
+    # running sum
+    sum = 0
+
+    # calculate the integration over the solution space of the specified psi squared
+    for xi in range(N):
+        for yi in range(N):
+            for zi in range(N):
+                # first integration weight is 0
+                if xi == 0 or yi == 0 or zi == 0:
+                    w = 0
+                else:
+                    w = h
+                sum = sum + w*(orbital_values_squared[xi, yi, zi]*inner_integration_val_matrix[xi, yi, zi])
+
+    return sum
 
 #
 # This function generates an attraction matrix with the specified attraction
@@ -804,18 +867,37 @@ def integration_term_func(eigenvectors, eigenvector_index, N, coords_1, all_coor
     return sum
 
 #
-# This function generates an N*N*N matrix A with the results of the two
-# electron integral. This matrix contains values that evaluates the two
-# electron integral function at the specified coordinates. Note that this is
-# different from the matrix generated by integration_matrix_gen, which is
-# used to solve a linear system of equations.
+# This function evaluates the integration function used by both the Helium
+# element and the Hydrogen molecule. This is a modified version from
+# integration_term_func to support the total energy calculation. It mostly
+# changes the way things are passed in.
 #
-def integration_val_matrix_gen(orbital_values, coords):
+def integration_term_func_new(orbital_values_squared, coords_1, all_coords):
+
+    # get partition size
+    h = all_coords[IDX_X][1] - all_coords[IDX_X][0]
+    # get number of partitions
+    N = len(all_coords[IDX_X])
+
+    # running sum
+    sum = 0
+
+    # calculate the integration over the solution space of the specified psi squared
+    for xi, x in enumerate(all_coords[IDX_X]):
+        for yi, y in enumerate(all_coords[IDX_Y]):
+            for zi, z in enumerate(all_coords[IDX_Z]):
+                # first integration weight is 0
+                if xi == 0 or yi == 0 or zi == 0:
+                    w = 0
+                else:
+                    w = h
+                matrix_index = xi + yi*N + zi*N*N
+                coords_2 = (x, y, z)
+                sum = sum + w*(orbital_values_squared[xi, yi, zi]*repulsion_func(coords_1, coords_2, h))
+
+    return sum
 
 
-    pass
-
-#
 # This function generates the the integration matrix
 #
 def integration_matrix_gen(eigenvectors, eigenvector_index, N, coords):
@@ -853,10 +935,10 @@ if __name__ == '__main__':
     parser.add_argument('-t', type=str, default='h2', dest='target_subject', action='store', choices=['h2', 'he'],
         help='target subject to run exact HF sim on')
 
-    parser.add_argument('-p', type=int, default=10, dest='num_partitions', action='store',
+    parser.add_argument('-p', type=int, default=14, dest='num_partitions', action='store',
         help='number of partitions to discretize the simulation')
 
-    parser.add_argument('-l', type=float, default=10, dest='limit', action='store',
+    parser.add_argument('-l', type=float, default=5, dest='limit', action='store',
         help='the x,y,z max limit, forming a cubic solution space')
 
     parser.add_argument('-c', type=float, default=1.0, dest='convergence_percentage', action='store',

@@ -259,12 +259,12 @@ Since we only calculate a single, real-valued, orbital using our program, it can
 
 \begin{align*}
   E_{o(He)} &= 2\int_{-\infty}^{\infty} \left|\psi_1(\vec{r}_1)\right|^2 \left[ -\frac{1}{2}\nabla_1^2 - \frac{2}{\|\vec{r}_{1 A}\|} \right] d\vec{r}_1 + 
-   \int_{-\infty}^{\infty}\int_{-\infty}^{\infty} \left|\psi_1(\vec{r}_1)\right|^2 \frac{1}{\|\vec{r}_{12}\|} \left|\psi_1(\vec{r}_2)\right|^2 d\vec{r}_2d\vec{r}_1
+   \int_{-\infty}^{\infty} \left|\psi_1(\vec{r}_1)\right|^2 \int_{-\infty}^{\infty} \frac{1}{\|\vec{r}_{12}\|} \left|\psi_1(\vec{r}_2)\right|^2 d\vec{r}_2d\vec{r}_1
 \end{align*}
 
 \begin{align*}
   E_{o(H_2)} &= 2\int_{-\infty}^{\infty} \left|\psi_1(\vec{r}_1)\right|^2 \left[ -\frac{1}{2}\nabla_1^2 - \frac{1}{\|\vec{r}_{1 A}\|} - \frac{1}{\|\vec{r}_{1 B}\|} \right] d\vec{r}_1 +
-   \int_{-\infty}^{\infty}\int_{-\infty}^{\infty} \left|\psi_1(\vec{r}_1)\right|^2 \frac{1}{\|\vec{r}_{12}\|} \left|\psi_1(\vec{r}_2)\right|^2 d\vec{r}_2d\vec{r}_1
+   \int_{-\infty}^{\infty} \left|\psi_1(\vec{r}_1)\right|^2 \int_{-\infty}^{\infty} \frac{1}{\|\vec{r}_{12}\|} \left|\psi_1(\vec{r}_2)\right|^2 d\vec{r}_2d\vec{r}_1
 \end{align*}
 
 The $\frac{1}{2}$ Coulomb and exchange terms become identical, which merges them into a single term.
