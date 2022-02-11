@@ -51,6 +51,7 @@ if False:
 
 # program constants
 H2_BOND_LENGTH_ATOMIC_UNITS = 1.39839733222307
+TINY_NUMBER = 1e-2
 IDX_X = 0
 IDX_Y = 1
 IDX_Z = 2
@@ -206,6 +207,9 @@ def main(cmd_args):
     # number of eigenvalues to calculate
     total_energy_levels = 6
 
+    # damping factor
+    damping_factor = 0.25
+
     # number of partitions in the solution
     N = args.num_partitions
 
@@ -267,8 +271,10 @@ def main(cmd_args):
                 print('** First iteration, zeros used as first guess')
                 first_iteration = False
             else:
-
                 print('** Iteration: %d' % iteration_count)
+                # Modify eigenvectors to help with convergence
+                print('** Modifying eigenvector values with damping factor of %f' % damping_factor)
+                eigenvectors = eigenvectors * damping_factor
 
             # create integration matrix
             integration_matrix = integration_matrix_gen(eigenvectors, energy_level, N, coords)
@@ -283,10 +289,10 @@ def main(cmd_args):
                 quit()
 
             # get (total_energy_levels) eigenvectors and eigenvalues and order them from smallest to largest
-            eigenvalues, eigenvectors = scipy.sparse.linalg.eigsh(fock_matrix, k=total_energy_levels, which='SM')
+            eigenvalues, eigenvectors = scipy.sparse.linalg.eigsh(fock_matrix, k=total_energy_levels, which='SM', maxiter=5000, tol=1e-2)
 
             # check percentage difference between previous and current eigenvalues
-            total_energy = numpy.sum(numpy.absolute(eigenvalues))
+            total_energy = numpy.sum(eigenvalues)
 
             # calculate total energy
             total_energy_percent_diff = abs(total_energy - last_total_energy)/((total_energy + last_total_energy) / 2)
@@ -310,7 +316,7 @@ def main(cmd_args):
             print(eigenvalues)
 
             # check if we meet convergence condition
-            if total_energy_percent_diff < (convergence_percentage/100.0):
+            if abs(total_energy_percent_diff) < (convergence_percentage/100.0):
                 break
 
         # append total time
@@ -372,27 +378,28 @@ def calculate_total_energy(target_subject, orbital_values, coords):
     h = coords[IDX_X][1] - coords[IDX_X][0]
 
     # turn orbital values into 3d array
-    orbital_values_squared_3d = numpy.square(orbital_values.reshape((N,N,N)).transpose())
+    orbital_values_squared = numpy.square(orbital_values.reshape((N,N,N)).transpose())
 
     # calculate kinetic energy
-    orbital_values_squared_3d_func = lambda x, y, z : orbital_values_squared_3d[x, y, z]
-    orbital_values_squared_diff_2_3d = diff_2(orbital_values_squared_3d_func, coords)
-    orbital_values_squared_diff_2_3d_func = lambda x, y, z, : orbital_values_squared_diff_2_3d[x, y, z]
-    kinetic_energy = -1.0*(integrate(orbital_values_squared_diff_2_3d_func, coords))
 
-    orbital_values_squared_3d_times_helium_nuclear_attraction_func = lambda x, y, z : orbital_values_squared_3d_func(x, y, z)*attraction_func_helium()
-    orbital_values_squared_3d_times_hydrogen_nuclear_attraction_func
+    # helper lambdas
+    # interpret a matrix as a function f(x,y,z)
+    matrix_to_func = lambda matrix : lambda x, y, z : matrix[x, y, z]
+
+    # calcualte kinetic energy
+    diff_result = diff_2(matrix_to_func(orbital_values_squared), coords)
+    kinetic_energy = -1.0*(integrate(matrix_to_func(diff_result), coords))
 
     # calculate nuclear attraction
     if target_subject == 'he':
-
-        nuclear_attraction = 2.0*attraction_func_helium()
-
+        attraction_vals = attraction_val_matrix_gen(attraction_func_helium, coords)
     elif target_subject == 'h2':
-        pass
+        attraction_vals = attraction_val_matrix_gen(attraction_func_hydrogen, coords)
     else:
         print('Fatal error, exiting.')
         quit()
+
+    nuclear_attraction = 2*integrate(matrix_to_func(orbital_values_squared*attraction_vals), coords)
 
     return kinetic_energy + nuclear_attraction
 
@@ -466,7 +473,7 @@ def attraction_func_helium(coords, h):
     y = coords[IDX_Y]
     z = coords[IDX_Z]
 
-    tiny_number = 0.1
+    tiny_number = TINY_NUMBER
 
     denominator = math.sqrt(x**2 + y**2 + z**2)
 
@@ -483,7 +490,7 @@ def attraction_func_hydrogen(coords, h):
     y = coords[IDX_Y]
     z = coords[IDX_Z]
 
-    tiny_number = 0.1
+    tiny_number = TINY_NUMBER
 
     denominator_1 = math.sqrt(((H2_BOND_LENGTH_ATOMIC_UNITS/2) - x)**2 + y**2 + z**2)
     denominator_2 = math.sqrt(((-H2_BOND_LENGTH_ATOMIC_UNITS/2) - x)**2 + y**2 + z**2)
@@ -505,11 +512,38 @@ def repulsion_func(coords_1, coords_2, h):
     y2 = coords_2[IDX_Y]
     z2 = coords_2[IDX_Z]
 
-    TINY_NUMBER = 0.1
+    tiny_number = TINY_NUMBER
 
     denominator = math.sqrt((x2 - x1)**2 + (y2 - y1)**2 + (z2 - z1)**2)
 
-    return ((1.0/(TINY_NUMBER + denominator)))
+    return ((1.0/(tiny_number + denominator)))
+
+# This function generates an N*N*N matrix A with the specified attraction
+# function. This matrix contains values that evaluates the attraction
+# function at the specified coordinates. i.e, A[x,y,z] = attraction_func
+# (x,y,z) Note that this is different from the matrix generated by
+# attraction_matrix_gen, which is used to solve a linear system of equations.
+def attraction_val_matrix_gen(attraction_func, coords):
+
+    # get partition size
+    h = coords[IDX_X][1] - coords[IDX_X][0]
+    # get number of partitions
+    N = len(coords[IDX_X])
+
+    # generate a solution space
+    solution_space = numpy.empty((N,N,N))
+
+    for xi in range(N):
+        for yi in range(N):
+            for zi in range(N):
+
+                x = coords[IDX_X][xi]
+                y = coords[IDX_Y][yi]
+                z = coords[IDX_Z][zi]
+
+                solution_space[xi,yi,zi] = attraction_func((x, y, z), h)
+
+    return solution_space
 
 #
 # This function generates an attraction matrix with the specified attraction
@@ -770,6 +804,18 @@ def integration_term_func(eigenvectors, eigenvector_index, N, coords_1, all_coor
     return sum
 
 #
+# This function generates an N*N*N matrix A with the results of the two
+# electron integral. This matrix contains values that evaluates the two
+# electron integral function at the specified coordinates. Note that this is
+# different from the matrix generated by integration_matrix_gen, which is
+# used to solve a linear system of equations.
+#
+def integration_val_matrix_gen(orbital_values, coords):
+
+
+    pass
+
+#
 # This function generates the the integration matrix
 #
 def integration_matrix_gen(eigenvectors, eigenvector_index, N, coords):
@@ -807,10 +853,10 @@ if __name__ == '__main__':
     parser.add_argument('-t', type=str, default='h2', dest='target_subject', action='store', choices=['h2', 'he'],
         help='target subject to run exact HF sim on')
 
-    parser.add_argument('-p', type=int, default=12, dest='num_partitions', action='store',
+    parser.add_argument('-p', type=int, default=10, dest='num_partitions', action='store',
         help='number of partitions to discretize the simulation')
 
-    parser.add_argument('-l', type=float, default=1, dest='limit', action='store',
+    parser.add_argument('-l', type=float, default=10, dest='limit', action='store',
         help='the x,y,z max limit, forming a cubic solution space')
 
     parser.add_argument('-c', type=float, default=1.0, dest='convergence_percentage', action='store',
