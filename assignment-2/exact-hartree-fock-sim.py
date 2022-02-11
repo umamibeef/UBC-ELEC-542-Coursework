@@ -181,6 +181,8 @@ def main(cmd_args):
         results.load(input_file)
         args = results.args
         args.input_file = input_file
+        eigenvectors = results.eigenvectors
+        eigenvalues = results.eigenvalues
     else:
         args = cmd_args
 
@@ -278,7 +280,7 @@ def main(cmd_args):
                 fock_matrix = kinetic_energy_matrix + attraction_matrix_helium + integration_matrix
             else:
                 print('Fatal error, exiting.')
-                return
+                quit()
 
             # get (total_energy_levels) eigenvectors and eigenvalues and order them from smallest to largest
             eigenvalues, eigenvectors = scipy.sparse.linalg.eigsh(fock_matrix, k=total_energy_levels, which='SM')
@@ -341,18 +343,58 @@ def main(cmd_args):
     print('\n** Coordinates:\n')
     print(coords)
     print('\n** Eigenvalues:\n')
-    print(results.eigenvalues)
+    print(eigenvalues)
     print('\n** Orbital energies:\n')
-    for n in range(len(results.eigenvalues)):
-        print('\tn=%d orbital energy: %f' % (n, results.eigenvalues[n]))
-        eigenvector = results.eigenvectors[:,n]
-        squared_eigenvector = numpy.square(eigenvector)
-        expectation = integrate(squared_eigenvector, coords)
+    for n in range(len(eigenvalues)):
+        print('\tn=%d orbital energy: %f' % (n, eigenvalues[n]))
+        eigenvector = eigenvectors[:,n]
+        squared_eigenvector_3d = lambda x, y, z : numpy.square(eigenvector).reshape((N,N,N)).transpose()[x, y, z]
+        expectation = integrate(squared_eigenvector_3d, coords)
         print('\t\tPsi_%d expectation value: %f' % (n, expectation))
+    print('\n** Total Energies:\n')
+    for n in range(len(eigenvalues)):
+        eigenvector = eigenvectors[:,n]
+        print('\tn=%d total energy: %f' % (n, calculate_total_energy(target_subject, eigenvector, coords)))
 
     # plot data
     print('\n** Plotting data...\n')
     make_plots(results)
+
+#
+# This function calculates the total energy of the system
+#
+def calculate_total_energy(target_subject, orbital_values, coords):
+
+    # extract N
+    N = int(numpy.cbrt(len(orbital_values)))
+
+    # extract h
+    h = coords[IDX_X][1] - coords[IDX_X][0]
+
+    # turn orbital values into 3d array
+    orbital_values_squared_3d = numpy.square(orbital_values.reshape((N,N,N)).transpose())
+
+    # calculate kinetic energy
+    orbital_values_squared_3d_func = lambda x, y, z : orbital_values_squared_3d[x, y, z]
+    orbital_values_squared_diff_2_3d = diff_2(orbital_values_squared_3d_func, coords)
+    orbital_values_squared_diff_2_3d_func = lambda x, y, z, : orbital_values_squared_diff_2_3d[x, y, z]
+    kinetic_energy = -1.0*(integrate(orbital_values_squared_diff_2_3d_func, coords))
+
+    orbital_values_squared_3d_times_helium_nuclear_attraction_func = lambda x, y, z : orbital_values_squared_3d_func(x, y, z)*attraction_func_helium()
+    orbital_values_squared_3d_times_hydrogen_nuclear_attraction_func
+
+    # calculate nuclear attraction
+    if target_subject == 'he':
+
+        nuclear_attraction = 2.0*attraction_func_helium()
+
+    elif target_subject == 'h2':
+        pass
+    else:
+        print('Fatal error, exiting.')
+        quit()
+
+    return kinetic_energy + nuclear_attraction
 
 #
 # This functions returns whether or not the matrix is symmetric
@@ -616,10 +658,68 @@ def second_order_laplacian_3d_sparse_matrix_gen(N):
     return scipy.sparse.bmat(block_lists)
 
 #
-# This is a generic numerical integration over the cubic 3D space covered by the
-# solution space
+# This is a generic numerical second-order central 3D differentiation (the same
+# used in the matrix solution)
 #
-def integrate(function_values_3d, coords):
+def diff_2(function, coords):
+
+    # get partition size
+    h = coords[IDX_X][1] - coords[IDX_X][0]
+    # get number of partitions
+    N = len(coords[IDX_X])
+
+    # generate a solution space
+    solution_space = numpy.empty((N,N,N))
+
+    for xi in range(N):
+        for yi in range(N):
+            for zi in range(N):
+
+                # central requires values from the past, if required, use 0
+                if xi == 0:
+                    x_past = 0
+                else:
+                    x_past = function(xi-1,yi,zi)
+
+                if yi == 0:
+                    y_past = 0
+                else:
+                    y_past = function(xi,yi-1,zi)
+
+                if zi == 0:
+                    z_past = 0
+                else:
+                    z_past = function(xi,yi,zi-1)
+
+                # we'll always have present values
+                present = function(xi,yi,zi)
+
+                # central requires values from the future, if required, use 0
+                if xi == (N-1):
+                    x_future = 0
+                else:
+                    x_future = function(xi+1,yi,zi)
+
+                if yi == (N-1):
+                    y_future = 0
+                else:
+                    y_future = function(xi,yi+1,zi)
+
+                if zi == (N-1):
+                    z_future = 0
+                else:
+                    z_future = function(xi,yi,zi+1)
+
+                # differentiate
+                solution_space[xi,yi,zi] = ((x_future + y_future + z_future - (6*present) + x_past + y_past + z_past)/(h**2))
+
+    return solution_space
+
+#
+# This is a generic numerical integration over the cubic 3D space covered by the
+# solution space.
+#
+def integrate(function, coords):
 
     # get partition size
     h = coords[IDX_X][1] - coords[IDX_X][0]
@@ -630,16 +730,17 @@ def integrate(function_values_3d, coords):
     sum = 0
 
     # calculate the integration over the solution space
-    for xi, x in enumerate(coords[IDX_X]):
-        for yi, y in enumerate(coords[IDX_Y]):
-            for zi, z in enumerate(coords[IDX_Z]):
+    for xi in range(N):
+        for yi in range(N):
+            for zi in range(N):
+
                 # first integration weight is 0
                 if xi == 0 or yi == 0 or zi == 0:
                     w = 0
                 else:
                     w = h
                 row_index = xi + yi*N + zi*N*N
-                sum = sum + w*function_values_3d[row_index]
+                sum = sum + w*function(xi, yi, zi)
 
     # return result
     return sum
@@ -664,7 +765,7 @@ def integration_term_func(eigenvectors, eigenvector_index, N, coords_1, all_coor
                     w = h
                 matrix_index = xi + yi*N + zi*N*N
                 coords_2 = (x, y, z)
-                sum = sum + w*(eigenvectors[:,eigenvector_index][matrix_index])**2*repulsion_func(coords_1, coords_2, h)
+                sum = sum + w*((eigenvectors[:,eigenvector_index][matrix_index])**2)*repulsion_func(coords_1, coords_2, h)
 
     return sum
 

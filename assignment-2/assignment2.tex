@@ -244,7 +244,7 @@ This implies that for the total energy, we can take the expectation value of the
 The total energy for the Helium molecule and Hydrogen atom in their ground states should then be equal to:
 
 \begin{align*}
-  E_{o(H_2)} &= 2\int_{-\infty}^{\infty}\psi_1^\ast(\vec{r}_1) \left[ -\frac{1}{2}\nabla_1^2 - \frac{2}{\|\vec{r}_{1 A}\|} \right] \psi_1(\vec{r}_1) d\vec{r}_1 + 
+  E_{o(He)} &= 2\int_{-\infty}^{\infty}\psi_1^\ast(\vec{r}_1) \left[ -\frac{1}{2}\nabla_1^2 - \frac{2}{\|\vec{r}_{1 A}\|} \right] \psi_1(\vec{r}_1) d\vec{r}_1 + 
    \frac{1}{2}\int_{-\infty}^{\infty}\int_{-\infty}^{\infty} \psi_1^\ast(\vec{r}_1) \psi_1(\vec{r}_1) \frac{1}{\|\vec{r}_{12}\|} \psi_2^\ast(\vec{r}_2)\psi_2(\vec{r}_2) d\vec{r}_2d\vec{r}_1 \\
    &\qquad + \frac{1}{2}\int_{-\infty}^{\infty}\int_{-\infty}^{\infty} \psi_1^\ast(\vec{r}_1) \psi_2(\vec{r}_1) \frac{1}{\|\vec{r}_{12}\|} \psi_2^\ast(\vec{r}_2)\psi_1(\vec{r}_2) d\vec{r}_2d\vec{r}_1  \\
 \end{align*}
@@ -255,20 +255,19 @@ The total energy for the Helium molecule and Hydrogen atom in their ground state
    &\qquad + \frac{1}{2}\int_{-\infty}^{\infty}\int_{-\infty}^{\infty} \psi_1^\ast(\vec{r}_1) \psi_2(\vec{r}_1) \frac{1}{\|\vec{r}_{12}\|} \psi_2^\ast(\vec{r}_2)\psi_1(\vec{r}_2) d\vec{r}_2d\vec{r}_1  \\
 \end{align*}
 
+Since we only calculate a single, real-valued, orbital using our program, it can then be assumed that $\psi_1^\ast(\vec{r}) = \psi_1(\vec{r}) = \psi_2^\ast(\vec{r}) = \psi_2(\vec{r})$. This simplifies the total energy equations as follows:
 
-% The total energy of the system is defined as follows:
+\begin{align*}
+  E_{o(He)} &= 2\int_{-\infty}^{\infty} \left|\psi_1(\vec{r}_1)\right|^2 \left[ -\frac{1}{2}\nabla_1^2 - \frac{2}{\|\vec{r}_{1 A}\|} \right] d\vec{r}_1 + 
+   \int_{-\infty}^{\infty}\int_{-\infty}^{\infty} \left|\psi_1(\vec{r}_1)\right|^2 \frac{1}{\|\vec{r}_{12}\|} \left|\psi_1(\vec{r}_2)\right|^2 d\vec{r}_2d\vec{r}_1
+\end{align*}
 
-% \begin{align*}
-%   E_o &= \sum_i^N\bra{i}\hat{h}\ket{i} + \frac{1}{2}\sum_i^N\sum_j^N\bra{ij}\ket{ij}
-% \end{align*}
+\begin{align*}
+  E_{o(H_2)} &= 2\int_{-\infty}^{\infty} \left|\psi_1(\vec{r}_1)\right|^2 \left[ -\frac{1}{2}\nabla_1^2 - \frac{1}{\|\vec{r}_{1 A}\|} - \frac{1}{\|\vec{r}_{1 B}\|} \right] d\vec{r}_1 +
+   \int_{-\infty}^{\infty}\int_{-\infty}^{\infty} \left|\psi_1(\vec{r}_1)\right|^2 \frac{1}{\|\vec{r}_{12}\|} \left|\psi_1(\vec{r}_2)\right|^2 d\vec{r}_2d\vec{r}_1
+\end{align*}
 
-% Since both electrons of the Helium atom and the Hydrogen molecule both fill a single orbital, the total energy can be expanded as follows for both:
-
-% \begin{align*}
-%   E_o &= \bra{1}\hat{h}\ket{1} + \bra{2}\hat{h}\ket{2} + \frac{1}{2}\bra{12}\ket{12}
-% \end{align*}
-
-%TODO energy level calculations
+The $\frac{1}{2}$ Coulomb and exchange terms become identical, which merges them into a single term.
 
 \newpage
 \section{Program Implementation}
