@@ -33,10 +33,9 @@ import math
 import functools
 import time
 import pickle
-import datetime
-import progress.bar
-import multiprocessing
-import tqdm
+import datetime # for timestamping
+import multiprocessing # for multiprocessing (MP) of matrix generation
+import tqdm # progress bar for MP
 
 numpy.set_printoptions(edgeitems=30, linewidth=100000, 
     formatter=dict(float=lambda x: '%.3g' % x))
@@ -54,13 +53,14 @@ if False:
 
 # program constants
 H2_BOND_LENGTH_ATOMIC_UNITS = 1.39839733222307
-TINY_NUMBER = 1e-2
+TINY_NUMBER = 0.1
 IDX_X = 0
 IDX_Y = 1
 IDX_Z = 2
 IDX_START = 0
 IDX_END = 1
 DATETIME_STR_FORMAT = '[%Y/%m/%d-%H:%M:%S]'
+ENABLE_MP = True # multiprocessing
 
 #
 # This object encapsulates the results for pickling/unpickling
@@ -298,7 +298,7 @@ def main(cmd_args):
 
             # get (total_energy_levels) eigenvectors and eigenvalues and order them from smallest to largest
             print('** Obtaining eigenvalues and eigenvectors...')
-            eigenvalues, eigenvectors = scipy.sparse.linalg.eigsh(fock_matrix, k=total_energy_levels, which='SM', maxiter=5000, tol=1e-3)
+            eigenvalues, eigenvectors = scipy.sparse.linalg.eigsh(fock_matrix, k=total_energy_levels, which='SM', maxiter=10000, tol=1e-3)
 
             # check percentage difference between previous and current eigenvalues
             total_energy = numpy.sum(eigenvalues)
@@ -927,15 +927,15 @@ def integration_matrix_gen(orbital_values_squared, N, coords):
     # generate coordinates
     coordinates = [coordinate_index_to_coordinates(matrix_index_to_coordinate_indices(i, N), coords) for i in range(N**3)]
 
-    # multiprocessing
-    with multiprocessing.Pool(processes = multiprocessing.cpu_count()-1, maxtasksperchild=1000) as pool:
-        func = functools.partial(integration_term_func, orbital_values_squared, coords)
-        # diagonal = pool.map(func, coordinates)
-        diagonal = list(tqdm.tqdm(pool.imap(func, coordinates), total=(N**3), ascii=True))
-
-    # use scipy sparse matrix generation
-    # create the diagonal
-    if False:
+    # this takes an extremely long time!!!
+    if ENABLE_MP:
+        # multiprocessing filling of the diagonal
+        with multiprocessing.Pool(processes = multiprocessing.cpu_count()-1, maxtasksperchild=1000) as pool:
+            func = functools.partial(integration_term_func, orbital_values_squared, coords)
+            # diagonal = pool.map(func, coordinates)
+            diagonal = list(tqdm.tqdm(pool.imap(func, coordinates), total=(N**3), ascii=True))
+    else:
+        # create the diagonal (no MP)
         progress_bar = progress.bar.ShadyBar('\tGenerating diagonal for matrix...', max=(N**3), suffix='%(index)d/%(max)d - %(percent).1f%%')
         diagonal = numpy.ndarray(N**3)
         for i in range(N**3):
