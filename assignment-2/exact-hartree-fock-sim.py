@@ -34,6 +34,8 @@ import functools
 import time
 import pickle
 import datetime
+import progress.bar
+import multiprocessing
 
 numpy.set_printoptions(edgeitems=30, linewidth=100000, 
     formatter=dict(float=lambda x: '%.3g' % x))
@@ -244,7 +246,7 @@ def main(cmd_args):
         kinetic_energy_matrix = (-1.0/(2.0*h**2))*laplacian_matrix
 
         # create base solution
-        eigenvectors = scipy.sparse.csr_matrix((N**3, total_energy_levels))
+        eigenvectors = numpy.ndarray(((N**3), total_energy_levels))
 
         # last eigenvalues
         last_total_energy = 0
@@ -268,16 +270,21 @@ def main(cmd_args):
             iteration_time_start = time.time()
 
             if first_iteration:
-                print('** First iteration, zeros used as first guess')
+                print('\n** First iteration, zeros used as first guess\n')
                 first_iteration = False
             else:
-                print('** Iteration: %d' % iteration_count)
-                # Modify eigenvectors to help with convergence
-                print('** Modifying eigenvector values with damping factor of %f' % damping_factor)
-                eigenvectors = eigenvectors * damping_factor
+                print('\n** Iteration: %d\n' % iteration_count)
+
+            # Modify eigenvectors to help with convergence
+            print('** Modifying eigenvector values with damping factor of %f' % damping_factor)
+            eigenvector = eigenvectors[:,energy_level] * damping_factor
 
             # create integration matrix
-            integration_matrix = integration_matrix_gen(eigenvectors, energy_level, N, coords)
+            print('** Generating integration matrix')
+            # turn our eigenvector into a square matrix and square all of the terms
+            orbital_values_squared = numpy.square(eigenvector).reshape((N,N,N)).transpose()
+
+            integration_matrix = integration_matrix_gen(orbital_values_squared, N, coords)
 
             # create Fock matrix
             if target_subject == 'h2':
@@ -298,7 +305,7 @@ def main(cmd_args):
             # calculate total energy
             total_energy_percent_diff = abs(total_energy - last_total_energy)/((total_energy + last_total_energy) / 2)
 
-            print('Total orbital energy %% diff: %.3f%%' % (total_energy_percent_diff * 100.0))
+            print('\n** Total orbital energy %% diff: %.3f%%\n' % (total_energy_percent_diff * 100.0))
 
             # update last value
             last_total_energy = total_energy
@@ -352,7 +359,7 @@ def main(cmd_args):
 
     print('\n** Eigenvalues:\n')
     print(eigenvalues)
-    
+
     print('\n** Orbital energies:\n')
     for n in range(len(eigenvalues)):
         print('\tn=%d orbital energy: %f' % (n, eigenvalues[n]))
@@ -426,6 +433,7 @@ def is_hermitian(A, tol=1e-8):
 # This function takes in a matrix index (row or column) and returns the
 # associated coordinate indices as a tuple.
 #
+@functools.cache
 def matrix_index_to_coordinate_indices(matrix_index, N):
 
     # Z is kind of like the MSB, as it changes less often, so we'll treat this
@@ -453,6 +461,7 @@ def coordinate_indices_to_matrix_index(coord_indices, N):
 # This function takes in coordinate indices and returns the coordinates
 # associated with them.
 #
+@functools.cache
 def coordinate_index_to_coordinates(coord_indices, coords):
 
     return (coords[IDX_X][coord_indices[IDX_X]], coords[IDX_Y][coord_indices[IDX_Y]], coords[IDX_Z][coord_indices[IDX_Z]])
@@ -463,9 +472,9 @@ def coordinate_index_to_coordinates(coord_indices, coords):
 #
 def generate_coordinates(minimum, maximum, N):
 
-    x = numpy.linspace(minimum, maximum, N)
-    y = numpy.linspace(minimum, maximum, N)
-    z = numpy.linspace(minimum, maximum, N)
+    x = tuple(numpy.linspace(minimum, maximum, N))
+    y = tuple(numpy.linspace(minimum, maximum, N))
+    z = tuple(numpy.linspace(minimum, maximum, N))
 
     return (x, y, z)
 
@@ -508,7 +517,7 @@ def attraction_func_hydrogen(coords, h):
 # This functions calculates the repulsion between two electrons. A small number
 # TINY_NUMBER is provided to prevent divide by zero scenarios.
 #
-@functools.lru_cache
+@functools.cache
 def repulsion_func(coords_1, coords_2, h):
 
     x1 = coords_1[IDX_X]
@@ -846,7 +855,12 @@ def integrate(function, coords):
 # This function evaluates the integration function used by both the Helium
 # element and the Hydrogen molecule.
 #
-def integration_term_func(eigenvectors, eigenvector_index, N, coords_1, all_coords, h):
+def integration_term_func(orbital_values_squared, all_coords, coords_1):
+
+    # get partition size
+    h = all_coords[IDX_X][1] - all_coords[IDX_X][0]
+    # get number of partitions
+    N = len(all_coords[IDX_X])
 
     # running sum
     sum = 0
@@ -862,7 +876,7 @@ def integration_term_func(eigenvectors, eigenvector_index, N, coords_1, all_coor
                     w = h
                 matrix_index = xi + yi*N + zi*N*N
                 coords_2 = (x, y, z)
-                sum = sum + w*((eigenvectors[:,eigenvector_index][matrix_index])**2)*repulsion_func(coords_1, coords_2, h)
+                sum = sum + w*orbital_values_squared[xi, yi, zi]*repulsion_func(coords_1, coords_2, h)
 
     return sum
 
@@ -900,18 +914,31 @@ def integration_term_func_new(orbital_values_squared, coords_1, all_coords):
 
 # This function generates the the integration matrix
 #
-def integration_matrix_gen(eigenvectors, eigenvector_index, N, coords):
+def integration_matrix_gen(orbital_values_squared, N, coords):
+
 
     # extract h from coordinates
     h = coords[IDX_X][1] - coords[IDX_X][0]
 
-    # turn eigenvectors into a normal array if necessary
-    if type(eigenvectors) != numpy.ndarray:
-        eigenvectors = eigenvectors.toarray()
+    # generate coordinates
+    coordinates = [coordinate_index_to_coordinates(matrix_index_to_coordinate_indices(i, N), coords) for i in range(N**3)]
+
+    # multiprocessing
+    with multiprocessing.Pool(processes = multiprocessing.cpu_count()) as pool:
+        func = functools.partial(integration_term_func, orbital_values_squared, coords)
+        diagonal = pool.map(func, coordinates)
 
     # use scipy sparse matrix generation
-    # create the diagonal 
-    diagonal = [integration_term_func(eigenvectors, eigenvector_index, N, coordinate_index_to_coordinates(matrix_index_to_coordinate_indices(i, N), coords), coords, h) for i in range(N**3)]
+    # create the diagonal
+    if False:
+        progress_bar = progress.bar.ShadyBar('\tGenerating diagonal for matrix...', max=(N**3), suffix='%(index)d/%(max)d - %(percent).1f%%')
+        diagonal = numpy.ndarray(N**3)
+        for i in range(N**3):
+            diagonal[i] = integration_term_func(orbital_values_squared, coords, coordinates[i])
+            progress_bar.next()
+
+    # add a new line after we're done progress
+    print()
 
     # now generate the matrix with the desired diagonal
     matrix = scipy.sparse.spdiags(data=diagonal, diags=0, m=N**3, n=N**3)
