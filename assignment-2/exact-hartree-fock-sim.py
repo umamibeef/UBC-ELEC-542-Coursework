@@ -36,6 +36,7 @@ import pickle
 import datetime
 import progress.bar
 import multiprocessing
+import tqdm
 
 numpy.set_printoptions(edgeitems=30, linewidth=100000, 
     formatter=dict(float=lambda x: '%.3g' % x))
@@ -433,7 +434,7 @@ def is_hermitian(A, tol=1e-8):
 # This function takes in a matrix index (row or column) and returns the
 # associated coordinate indices as a tuple.
 #
-@functools.cache
+@functools.lru_cache
 def matrix_index_to_coordinate_indices(matrix_index, N):
 
     # Z is kind of like the MSB, as it changes less often, so we'll treat this
@@ -461,7 +462,7 @@ def coordinate_indices_to_matrix_index(coord_indices, N):
 # This function takes in coordinate indices and returns the coordinates
 # associated with them.
 #
-@functools.cache
+@functools.lru_cache
 def coordinate_index_to_coordinates(coord_indices, coords):
 
     return (coords[IDX_X][coord_indices[IDX_X]], coords[IDX_Y][coord_indices[IDX_Y]], coords[IDX_Z][coord_indices[IDX_Z]])
@@ -517,7 +518,7 @@ def attraction_func_hydrogen(coords, h):
 # This functions calculates the repulsion between two electrons. A small number
 # TINY_NUMBER is provided to prevent divide by zero scenarios.
 #
-@functools.cache
+@functools.lru_cache(maxsize=8192)
 def repulsion_func(coords_1, coords_2, h):
 
     x1 = coords_1[IDX_X]
@@ -584,6 +585,9 @@ def inner_integration_val_matrix_gen(orbital_values_squared, coords):
                 z = coords[IDX_Z][zi]
 
                 solution_space[xi,yi,zi] = integration_term_func_new(orbital_values_squared, (x, y, z), coords)
+
+    # update progress bar
+
 
     return solution_space
 
@@ -924,9 +928,10 @@ def integration_matrix_gen(orbital_values_squared, N, coords):
     coordinates = [coordinate_index_to_coordinates(matrix_index_to_coordinate_indices(i, N), coords) for i in range(N**3)]
 
     # multiprocessing
-    with multiprocessing.Pool(processes = multiprocessing.cpu_count()) as pool:
+    with multiprocessing.Pool(processes = multiprocessing.cpu_count()-1, maxtasksperchild=1000) as pool:
         func = functools.partial(integration_term_func, orbital_values_squared, coords)
-        diagonal = pool.map(func, coordinates)
+        # diagonal = pool.map(func, coordinates)
+        diagonal = list(tqdm.tqdm(pool.imap(func, coordinates), total=(N**3), ascii=True))
 
     # use scipy sparse matrix generation
     # create the diagonal
@@ -935,7 +940,6 @@ def integration_matrix_gen(orbital_values_squared, N, coords):
         diagonal = numpy.ndarray(N**3)
         for i in range(N**3):
             diagonal[i] = integration_term_func(orbital_values_squared, coords, coordinates[i])
-            progress_bar.next()
 
     # add a new line after we're done progress
     print()
