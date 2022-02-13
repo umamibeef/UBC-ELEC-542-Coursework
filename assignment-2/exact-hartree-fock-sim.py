@@ -377,8 +377,8 @@ def main(cmd_args):
 
     # solution results display
 
-    console_print(' ** Coordinates:')
-    console_print(coords)
+    # console_print(' ** Coordinates:')
+    # console_print(coords)
 
     console_print(' ** Eigenvalues:')
     console_print(eigenvalues)
