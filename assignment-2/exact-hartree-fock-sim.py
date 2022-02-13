@@ -53,7 +53,7 @@ if False:
 
 # program constants
 H2_BOND_LENGTH_ATOMIC_UNITS = 1.39839733222307
-TINY_NUMBER = 0.1
+TINY_NUMBER = 1e-6
 IDX_X = 0
 IDX_Y = 1
 IDX_Z = 2
