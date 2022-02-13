@@ -53,7 +53,7 @@ if False:
 
 # program constants
 H2_BOND_LENGTH_ATOMIC_UNITS = 1.39839733222307
-TINY_NUMBER = 1e-6
+TINY_NUMBER = 0.001
 IDX_X = 0
 IDX_Y = 1
 IDX_Z = 2
@@ -74,6 +74,9 @@ class Results:
         self.args = args
         self.iteration_times = []
         self.total_time = None
+        # keep track of total energies and eigenvalues
+        self.historical_total_orbital_energies = []
+        self.historical_eigenvalues = []
 
     def load(self, input_file):
         with open(input_file, 'rb') as file:
@@ -87,8 +90,8 @@ class Results:
 
     def display_data(self):
         for key in self.__dict__:
-            print(key)
-            print(self.__dict__[key])
+            console_print(key)
+            console_print(self.__dict__[key])
 
 #
 # This function generates the plots
@@ -163,25 +166,37 @@ def make_plots(results):
     # plt.show()
 
 #
+# Console formatter
+#
+def console_print(string=''):
+
+    # get str representation
+    if not isinstance(string, str):
+        string = str(string)
+
+    datetime_now = datetime.datetime.now()
+    print(datetime_now.strftime(DATETIME_STR_FORMAT) + ' ' + string)
+
+#
 # This is the main function
 #
 def main(cmd_args):
 
-    print('\n** Exact Hartree-Fock simulator **\n')
+    console_print(' ** Exact Hartree-Fock simulator **')
 
     # results object
     results = Results()
 
     ## extract arguments
 
-    print('** Arguments:')
+    console_print(' ** Arguments:')
 
     # input file to process
     input_file = cmd_args.input_file
 
     # if we have an input file, it will have data and args, load them
     if input_file:
-        print('Input %s supplied, reading its data and arguments...' % input_file)
+        console_print('Input %s supplied, reading its data and arguments...' % input_file)
         results.load(input_file)
         args = results.args
         args.input_file = input_file
@@ -192,7 +207,7 @@ def main(cmd_args):
 
     # print args
     for arg in vars(args):
-        print('\t' + arg, getattr(args, arg))
+        console_print('\t' + arg + ' ' + str(getattr(args, arg)))
 
     # output file to save results to
     output_file = args.output_file
@@ -211,7 +226,7 @@ def main(cmd_args):
     total_energy_levels = 6
 
     # damping factor
-    damping_factor = 0.25
+    damping_factor = args.damping_factor
 
     # number of partitions in the solution
     N = args.num_partitions
@@ -227,9 +242,9 @@ def main(cmd_args):
 
     ## start program
 
-    print('\n** Program start!\n')
+    console_print(' ** Program start!')
 
-    print('\tPartition size: %f' % h)
+    console_print('\tPartition size: %f' % h)
 
     # check if we're simulating something new (no input file specified)
     if not input_file:
@@ -261,8 +276,7 @@ def main(cmd_args):
         # total time
         total_time_start = time.time()
 
-        datetime_now = datetime.datetime.now()
-        print('\n** Simulation start! %s\n' % datetime_now.strftime(DATETIME_STR_FORMAT))
+        console_print(' ** Simulation start! ')
 
         # main loop
         while True:
@@ -271,21 +285,21 @@ def main(cmd_args):
             iteration_time_start = time.time()
 
             if first_iteration:
-                print('\n** First iteration, zeros used as first guess\n')
+                console_print(' ** First iteration, zeros used as first guess')
                 first_iteration = False
             else:
-                print('\n** Iteration: %d\n' % iteration_count)
+                console_print(' ** Iteration: %d' % iteration_count)
 
             # Modify eigenvectors to help with convergence
-            print('** Modifying eigenvector values with damping factor of %f' % damping_factor)
+            console_print(' ** Modifying eigenvector values with damping factor of %f' % damping_factor)
             eigenvector = eigenvectors[:,energy_level] * damping_factor
 
             # create integration matrix
-            print('** Generating integration matrix')
+            console_print(' ** Generating integration matrix')
             # turn our eigenvector into a square matrix and square all of the terms
             orbital_values_squared = numpy.square(eigenvector).reshape((N,N,N)).transpose()
 
-            integration_matrix = integration_matrix_gen(orbital_values_squared, N, coords)
+            integration_matrix = integration_matrix_gen(orbital_values_squared, coords)
 
             # create Fock matrix
             if target_subject == 'h2':
@@ -293,20 +307,31 @@ def main(cmd_args):
             elif target_subject == 'he':
                 fock_matrix = kinetic_energy_matrix + attraction_matrix_helium + integration_matrix
             else:
-                print('Fatal error, exiting.')
+                console_print('Fatal error, exiting.')
                 quit()
 
             # get (total_energy_levels) eigenvectors and eigenvalues and order them from smallest to largest
-            print('** Obtaining eigenvalues and eigenvectors...')
-            eigenvalues, eigenvectors = scipy.sparse.linalg.eigsh(fock_matrix, k=total_energy_levels, which='SM', maxiter=10000, tol=1e-3)
+            console_print(' ** Obtaining eigenvalues and eigenvectors...')
+            try:
+                eigenvalues, eigenvectors = scipy.sparse.linalg.eigsh(fock_matrix, k=total_energy_levels, which='SM', maxiter=10000, tol=1e-4)
+            except ArpackNoConvergence:
+                console_print(' ** Fatal error! Couldn\'t converge!')
+                console_print(' ** Will apply damping factor again...')
+                continue
 
             # check percentage difference between previous and current eigenvalues
-            total_energy = numpy.sum(eigenvalues)
+            # total_energy = numpy.sum(eigenvalues)
+            # only compare the orbital we're trying to converge on
+            total_energy = eigenvalues[energy_level]
+
+            # record history
+            results.historical_eigenvalues.append(eigenvalues)
+            results.historical_total_orbital_energies.append(total_energy)
 
             # calculate total energy
             total_energy_percent_diff = abs(total_energy - last_total_energy)/((total_energy + last_total_energy) / 2)
 
-            print('\n** Total orbital energy %% diff: %.3f%%\n' % (total_energy_percent_diff * 100.0))
+            console_print(' ** Orbital %d energy %% diff: %.3f%%' % (energy_level, total_energy_percent_diff * 100.0))
 
             # update last value
             last_total_energy = total_energy
@@ -318,11 +343,9 @@ def main(cmd_args):
             iteration_time = time.time() - iteration_time_start
             results.iteration_times.append(iteration_time)
 
-            datetime_now = datetime.datetime.now()
-            print('\n** Iteration end! %s\n' % datetime_now.strftime(DATETIME_STR_FORMAT))
-            print('** Iteration time: %.3f seconds**' % iteration_time)
-            print('\n** Eigenvalues:\n')
-            print(eigenvalues)
+            console_print(' ** Iteration end! Iteration time: %.3f seconds**' % iteration_time)
+            console_print(' ** Eigenvalues:')
+            console_print(eigenvalues)
 
             # check if we meet convergence condition
             if abs(total_energy_percent_diff) < (convergence_percentage/100.0):
@@ -332,50 +355,49 @@ def main(cmd_args):
         total_time_end = time.time()
         total_time = total_time_end - total_time_start
         results.total_time = total_time
-        datetime_now = datetime.datetime.now()
-        print('\n** Simulation end! %s\n' % datetime_now.strftime(DATETIME_STR_FORMAT))
-        print('** Total time: %.3f seconds **' % results.total_time)
+        console_print(' ** Simulation end! ')
+        console_print(' ** Total time: %.3f seconds **' % results.total_time)
 
         # construct file name
         if not output_file:
             output_file = target_subject + '_N%d_l%d.xyzp' % (N, limits[IDX_END])
             args.output_file = output_file
 
-        print('** Saving results to ' + output_file)
+        console_print(' ** Saving results to ' + output_file)
         results.eigenvectors = eigenvectors
         results.eigenvalues = eigenvalues
         results.args = args
         results.save(output_file)
 
-    print('\n** Solution summary: **\n')
+    console_print(' ** Solution summary: **')
 
-    print('** Solution took %d iterations to converge with a convergence criteria of %.1f%% in %.3f seconds' % (len(results.iteration_times), results.args.convergence_percentage, results.total_time))
+    console_print(' ** Solution took %d iterations to converge with a convergence criteria of %.1f%% in %.3f seconds' % (len(results.iteration_times), results.args.convergence_percentage, results.total_time))
     for iteration, iteration_time in enumerate(results.iteration_times):
-        print('\tIteration %i took %.3f seconds' % (iteration, iteration_time))
+        console_print('\tIteration %i took %.3f seconds' % (iteration, iteration_time))
 
     # solution results display
 
-    print('\n** Coordinates:\n')
-    print(coords)
+    console_print(' ** Coordinates:')
+    console_print(coords)
 
-    print('\n** Eigenvalues:\n')
-    print(eigenvalues)
+    console_print(' ** Eigenvalues:')
+    console_print(eigenvalues)
 
-    print('\n** Orbital energies:\n')
+    console_print(' ** Orbital energies:')
     for n in range(len(eigenvalues)):
-        print('\tn=%d orbital energy: %f' % (n, eigenvalues[n]))
+        console_print('\tn=%d orbital energy: %f' % (n, eigenvalues[n]))
         eigenvector = eigenvectors[:,n]
         squared_eigenvector_3d = lambda x, y, z : numpy.square(eigenvector).reshape((N,N,N)).transpose()[x, y, z]
         expectation = integrate(squared_eigenvector_3d, coords)
-        print('\t\tPsi_%d expectation value: %f' % (n, expectation))
+        console_print('\t\tPsi_%d expectation value: %f' % (n, expectation))
 
-    # print('\n** Total Energies:\n')
-    # for n in range(len(eigenvalues)):
-    #     eigenvector = eigenvectors[:,n]
-    #     print('\tn=%d total energy: %f' % (n, calculate_total_energy(target_subject, eigenvector, coords)))
+    console_print(' ** Total Energies:')
+    for n in range(len(eigenvalues)):
+        eigenvector = eigenvectors[:,n]
+        console_print('\tn=%d total energy: %f' % (n, calculate_total_energy(target_subject, eigenvector, coords)))
 
     # plot data
-    print('\n** Plotting data...\n')
+    console_print(' ** Plotting data...')
     make_plots(results)
 
 #
@@ -408,7 +430,7 @@ def calculate_total_energy(target_subject, orbital_values, coords):
     elif target_subject == 'h2':
         attraction_vals = attraction_val_matrix_gen(attraction_func_hydrogen, coords)
     else:
-        print('Fatal error, exiting.')
+        console_print('Fatal error, exiting.')
         quit()
 
     nuclear_attraction = 2*integrate(matrix_to_func(orbital_values_squared*attraction_vals), coords)
@@ -573,21 +595,23 @@ def inner_integration_val_matrix_gen(orbital_values_squared, coords):
     # get number of partitions
     N = len(coords[IDX_X])
 
-    # generate a solution space
-    solution_space = numpy.empty((N,N,N))
-
+    # generate coordinates
+    coordinates = []
     for xi in range(N):
         for yi in range(N):
             for zi in range(N):
+                coordinates.append((coords[IDX_X][xi],coords[IDX_Y][yi],coords[IDX_Z][zi]))
 
-                x = coords[IDX_X][xi]
-                y = coords[IDX_Y][yi]
-                z = coords[IDX_Z][zi]
+    # this takes an extremely long time!!!
+    if ENABLE_MP:
+        # multiprocessing filling of the diagonal
+        with multiprocessing.Pool(processes = multiprocessing.cpu_count()-1, maxtasksperchild=1000) as pool:
+            func = functools.partial(integration_term_func, orbital_values_squared, coords)
+            # diagonal = pool.map(func, coordinates)
+            solution_space = list(tqdm.tqdm(pool.imap(func, coordinates), total=(N**3), ascii=True, smoothing=0.01))
 
-                solution_space[xi,yi,zi] = integration_term_func_new(orbital_values_squared, (x, y, z), coords)
-
-    # update progress bar
-
+    # reshape solution space
+    solution_space = numpy.array(solution_space).reshape((N,N,N)).transpose()
 
     return solution_space
 
@@ -603,6 +627,7 @@ def two_electron_integration_calc(orbital_values_squared, coords):
     N = len(coords[IDX_X])
 
     # calculate inner integral matrix
+    console_print(' ** Calculating inner two electron integral for all solution space...')
     inner_integration_val_matrix = inner_integration_val_matrix_gen(orbital_values_squared, coords)
 
     # running sum
@@ -884,45 +909,14 @@ def integration_term_func(orbital_values_squared, all_coords, coords_1):
 
     return sum
 
-#
-# This function evaluates the integration function used by both the Helium
-# element and the Hydrogen molecule. This is a modified version from
-# integration_term_func to support the total energy calculation. It mostly
-# changes the way things are passed in.
-#
-def integration_term_func_new(orbital_values_squared, coords_1, all_coords):
-
-    # get partition size
-    h = all_coords[IDX_X][1] - all_coords[IDX_X][0]
-    # get number of partitions
-    N = len(all_coords[IDX_X])
-
-    # running sum
-    sum = 0
-
-    # calculate the integration over the solution space of the specified psi squared
-    for xi, x in enumerate(all_coords[IDX_X]):
-        for yi, y in enumerate(all_coords[IDX_Y]):
-            for zi, z in enumerate(all_coords[IDX_Z]):
-                # first integration weight is 0
-                if xi == 0 or yi == 0 or zi == 0:
-                    w = 0
-                else:
-                    w = h
-                matrix_index = xi + yi*N + zi*N*N
-                coords_2 = (x, y, z)
-                sum = sum + w*(orbital_values_squared[xi, yi, zi]*repulsion_func(coords_1, coords_2, h))
-
-    return sum
-
-
 # This function generates the the integration matrix
 #
-def integration_matrix_gen(orbital_values_squared, N, coords):
-
+def integration_matrix_gen(orbital_values_squared, coords):
 
     # extract h from coordinates
     h = coords[IDX_X][1] - coords[IDX_X][0]
+    # get number of partitions
+    N = len(coords[IDX_X])
 
     # generate coordinates
     coordinates = [coordinate_index_to_coordinates(matrix_index_to_coordinate_indices(i, N), coords) for i in range(N**3)]
@@ -933,17 +927,15 @@ def integration_matrix_gen(orbital_values_squared, N, coords):
         with multiprocessing.Pool(processes = multiprocessing.cpu_count()-1, maxtasksperchild=1000) as pool:
             func = functools.partial(integration_term_func, orbital_values_squared, coords)
             # diagonal = pool.map(func, coordinates)
-            diagonal = list(tqdm.tqdm(pool.imap(func, coordinates), total=(N**3), ascii=True))
+            diagonal = list(tqdm.tqdm(pool.imap(func, coordinates), total=(N**3), ascii=True, smoothing=0.01))
     else:
         # create the diagonal (no MP)
-        progress_bar = progress.bar.ShadyBar('\tGenerating diagonal for matrix...', max=(N**3), suffix='%(index)d/%(max)d - %(percent).1f%%')
         diagonal = numpy.ndarray(N**3)
-        for i in range(N**3):
+        for i in tqdm.tqdm(range(N**3), ascii=True):
             diagonal[i] = integration_term_func(orbital_values_squared, coords, coordinates[i])
-
-    # add a new line after we're done progress
-    print()
-
+        # add a new line after we're done progress
+        console_print()
+ 
     # now generate the matrix with the desired diagonal
     matrix = scipy.sparse.spdiags(data=diagonal, diags=0, m=N**3, n=N**3)
 
@@ -974,6 +966,9 @@ if __name__ == '__main__':
 
     parser.add_argument('-c', type=float, default=1.0, dest='convergence_percentage', action='store',
         help='percent change threshold for convergence')
+
+    parser.add_argument('-d', type=float, default=0.1, dest='damping_factor', action='store',
+        help='damping factor to apply to orbital results between iterations')
 
     args = parser.parse_args()
 

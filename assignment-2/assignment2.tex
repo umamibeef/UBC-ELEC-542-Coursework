@@ -280,6 +280,8 @@ In order to optimize the calculations, sparse matrices provided by the SciPy pac
 
 Only the lowest six eigenvalues and eigenvectors are calculated for from the Fock matrix. These six eigenvalues are used for the convergence criteria. Their absolute value is summed up, and their percent change is compared from iteration to iteration. If the percent change between two iterations is less than what was specified, the simulation finishes.
 
+The simulation will split up the task of filling up certain matrices among the available CPUs on the host computer. After profiling the simulator program, it was discovered that the majority of the downtime was spent calculating integration matrices and filling them up. By distributing the workload among all of the available CPU resourses, a significant performance gain was observed.
+
 The matplotlib Python package is used to generate 4D plots of the resulting orbitals. A 3D scatter plot is used with a heatmap and a mask. The mask allows the plot to selectively ignore points which fall out of a certain range, which allows the plots to effectively illustrate the calculated orbitals. The orbitals are plotted from their lowest energy to the highest energy. Since the resulting waveform will have both negative and positive values, the eigenvector is squared so that the resulting waveform only has positive values. This corresponds to the probability density of the waveform.
 
 A Windows batch file was created to more easily construct simulation runs for execution and data retrieval. The batch file executes concurrent scripts which run in the background.
