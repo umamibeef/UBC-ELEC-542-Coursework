@@ -274,13 +274,13 @@ The $\frac{1}{2}$ Coulomb and exchange terms become identical, which merges them
 
 The program for this assignment was written in Python and the source can be viewed in Section \ref{code-listing-python}. It relies heavily on the SciPy package to perform the matrix algebra required to obtain the results. The program constructs the sparse matrices outlined in the previous section, obtains solutions based on convergence criteria, and outputs the plots and data for further analysis.
 
-The program features command line arguments for the user to set various runtime variables and features the ability to load and save the data in a specially formatted file. These files will also contain the configuration values for the simulation run as well as metrics to gauge how quickly each solution was able to converge to a final solution. The user can specify the number of partitions $N$ to use for the problem, resulting in an $N \times N \times N$ sized sparse matrix to calculate eigenvectors and eigenvalues from. Increasing the partition size has a severe impact on performance, so the user must be careful to pick a reasonable size.
+The program features command line arguments for the user to set various runtime variables and features the ability to load and save the data in a specially formatted file. These files will also contain the configuration values for the simulation run as well as metrics to gauge how quickly each solution was able to converge to a final solution. The user can specify the number of partitions $N$ to use for the problem, resulting in an $N \times N \times N$ sized sparse matrix to calculate eigenvectors and eigenvalues from. Increasing the partition size has a severe impact on performance, so the user must be careful to pick a reasonable size. The largest impact to performance was found to be the calculation of the various integrals and filling the respective matrices with the integration results.
 
-In order to optimize the calculations, sparse matrices provided by the SciPy package are used to reduce the memory footprint as well as enable more effective linear algebra operations. All of the sparse matrices are combined together into the Hermitian representing the Fock matrix, and the SciPy \texttt{scipy.sparse.linalg.eigsh} function is used to calculate the associated eigenvalues and eigenvectors. This eigenvalue solver does not fully utilize the capabilities of the computer, using very little CPU time.
+In order to optimize the calculations, sparse matrices provided by the SciPy package are used to reduce the memory footprint as well as enable more effective linear algebra operations. All of the sparse matrices are combined together into the Hermitian representing the Fock matrix, and the SciPy \texttt{scipy.sparse.linalg.eigsh} function is used to calculate the associated eigenvalues and eigenvectors. The solver was given a looser tolerance as well as an increased maximum limit of iterations to help converge on solutions as using the default settings would prevent the solver from converging at times.
 
-Only the lowest six eigenvalues and eigenvectors are calculated for from the Fock matrix. These six eigenvalues are used for the convergence criteria. Their absolute value is summed up, and their percent change is compared from iteration to iteration. If the percent change between two iterations is less than what was specified, the simulation finishes.
+Only the lowest six eigenvalues and eigenvectors are calculated for from the Fock matrix. The target energy level (the ground state which should be the lowest value) is used as the convergence criteria. If the percent change between two iterations for the selected orbital is less than what was specified, the simulation finishes.
 
-The simulation will split up the task of filling up certain matrices among the available CPUs on the host computer. After profiling the simulator program, it was discovered that the majority of the downtime was spent calculating integration matrices and filling them up. By distributing the workload among all of the available CPU resourses, a significant performance gain was observed.
+The simulation will split up the task of filling up certain matrices among the available CPUs on the host computer. After profiling the simulator program, it was discovered that the majority of the downtime was spent calculating integration matrices and filling them up. By distributing the workload among all of the available CPU resourses, a significant performance gain was observed. The two areas where multiprocessing is implemented is in the integration for the total system energy as well as filling up the integration matrix for the iterative solution.
 
 The matplotlib Python package is used to generate 4D plots of the resulting orbitals. A 3D scatter plot is used with a heatmap and a mask. The mask allows the plot to selectively ignore points which fall out of a certain range, which allows the plots to effectively illustrate the calculated orbitals. The orbitals are plotted from their lowest energy to the highest energy. Since the resulting waveform will have both negative and positive values, the eigenvector is squared so that the resulting waveform only has positive values. This corresponds to the probability density of the waveform.
 
@@ -291,23 +291,7 @@ A Windows batch file was created to more easily construct simulation runs for ex
 
 \begin{figure}[H]
   \begin{center}
-    \includegraphics[scale=0.75]{he_N28_l5.png}
-  \end{center}
-  \caption{Calculated orbitals for $He$ atom using limits of [-5,5]}
-  \label{he-plot-l5}
-\end{figure}
-
-\begin{figure}[H]
-  \begin{center}
-    \includegraphics[scale=0.75]{h2_N28_l5.png}
-  \end{center}
-  \caption{Calculated orbitals for $H_2$ molecule using limits of [-5,5]}
-  \label{h2-plot-l5}
-\end{figure}
-
-\begin{figure}[H]
-  \begin{center}
-    \includegraphics[scale=0.75]{he_N28_l1.png}
+    \includegraphics[scale=0.75]{he_N32_l1.png}
   \end{center}
   \caption{Calculated orbitals for $He$ atom using limits of [-1,1]}
   \label{he-plot-l1}
@@ -315,17 +299,74 @@ A Windows batch file was created to more easily construct simulation runs for ex
 
 \begin{figure}[H]
   \begin{center}
-    \includegraphics[scale=0.75]{h2_N28_l1.png}
+    \includegraphics[scale=0.75]{h2_N32_l1.png}
   \end{center}
   \caption{Calculated orbitals for $H_2$ molecule using limits of [-1,1]}
   \label{h2-plot-l1}
+\end{figure}
+
+\begin{figure}[H]
+  \begin{center}
+    \includegraphics[scale=0.75]{he_N32_l5.png}
+  \end{center}
+  \caption{Calculated orbitals for $He$ atom using limits of [-5,5]}
+  \label{he-plot-l5}
+\end{figure}
+
+\begin{figure}[H]
+  \begin{center}
+    \includegraphics[scale=0.75]{h2_N32_l5.png}
+  \end{center}
+  \caption{Calculated orbitals for $H_2$ molecule using limits of [-5,5]}
+  \label{h2-plot-l5}
+\end{figure}
+
+\begin{figure}[H]
+  \begin{center}
+    \includegraphics[scale=0.75]{he_N32_l10.png}
+  \end{center}
+  \caption{Calculated orbitals for $He$ atom using limits of [-10,10]}
+  \label{he-plot-l10}
+\end{figure}
+
+\begin{figure}[H]
+  \begin{center}
+    \includegraphics[scale=0.75]{h2_N32_l10.png}
+  \end{center}
+  \caption{Calculated orbitals for $H_2$ molecule using limits of [-10,10]}
+  \label{h2-plot-l10}
 \end{figure}
 
 \begin{table}[H]
 \begin{center}
 \begin{tabular}{l|llllll}\hline
 $n$    & $1$    & $2$     & $3$     & $4$      & $5$      & $6$      \\\hline
-$E_n$  & $-0.049968$  & $-0.049878$  & $-0.041970$  & $0.011558$  & $-0.007816$  & $0.065703$ \\\hline
+$E_n$  & $-1.235253$  & $3.503880$  & $7.280588$  & $7.298584$  & $9.161709$  & $10.836914$ \\\hline
+$E_{total}$ & \multicolumn{5}{c}{$0.078488$} \\\hline
+\end{tabular}
+\end{center}
+  \caption{The first six orbital energy levels and the total energy level obtained from applying HF to the Helium atom using limits of [-1,1]}
+  \label{orbital-energies-he-l1}
+\end{table}
+
+\begin{table}[H]
+\begin{center}
+\begin{tabular}{l|llllll}\hline
+$n$    & $1$    & $2$     & $3$     & $4$      & $5$      & $6$      \\\hline
+$E_n$  & $0.537510$  & $3.390950$  & $4.290782$  & $7.448408$  & $7.795215$  & $8.640438$ \\\hline
+$E_{total}$ & \multicolumn{5}{c}{$-0.265565$} \\\hline
+\end{tabular}
+\end{center}
+  \caption{The first six orbital energy levels obtained from applying HF to the Hydrogen molecule using limits of [-1,1]}
+  \label{orbital-energies-h2-l1}
+\end{table}
+
+\begin{table}[H]
+\begin{center}
+\begin{tabular}{l|llllll}\hline
+$n$    & $1$    & $2$     & $3$     & $4$      & $5$      & $6$      \\\hline
+$E_n$  & $-0.114483$  & $-0.051618$  & $-0.051522$  & $-0.051513$  & $0.034001$  & $0.065295$ \\\hline
+$E_{total}$ & \multicolumn{5}{c}{$-0.231081$} \\\hline
 \end{tabular}
 \end{center}
   \caption{The first six orbital energy levels obtained from applying HF to the Helium atom using limits of [-5,5]}
@@ -336,46 +377,50 @@ $E_n$  & $-0.049968$  & $-0.049878$  & $-0.041970$  & $0.011558$  & $-0.007816$ 
 \begin{center}
 \begin{tabular}{l|llllll}\hline
 $n$    & $1$    & $2$     & $3$     & $4$      & $5$      & $6$      \\\hline
-$E_n$  & $-0.054140$  & $-0.044237$  & $-0.040912$  & $-0.019278$  & $0.000325$  & $0.036600$ \\\hline
+$E_n$  & $-0.109023$  & $-0.101815$  & $-0.008226$  & $-0.008226$  & $0.065541$  & $0.115528$ \\\hline
+$E_{total}$ & \multicolumn{5}{c}{$-0.247352$} \\\hline
 \end{tabular}
 \end{center}
   \caption{The first six orbital energy levels obtained from applying HF to the Hydrogen molecule using limits of [-5,5]}
   \label{orbital-energies-h2-l5}
 \end{table}
- 
+
 \begin{table}[H]
 \begin{center}
 \begin{tabular}{l|llllll}\hline
 $n$    & $1$    & $2$     & $3$     & $4$      & $5$      & $6$      \\\hline
-$E_n$  & $0.007629$  & $3.942602$  & $3.942602$  & $3.942602$  & $7.489690$  & $7.489690$ \\\hline
+$E_n$  & $-0.003174$  & $0.000104$  & $0.013754$  & $0.013754$  & $0.016740$  & $0.016740$ \\\hline
+$E_{total}$ & \multicolumn{5}{c}{$-0.235931$} \\\hline
 \end{tabular}
 \end{center}
-  \caption{The first six orbital energy levels obtained from applying HF to the Helium atom using limits of [-1,1]}
-  \label{orbital-energies-he-l1}
+  \caption{The first six orbital energy levels obtained from applying HF to the Helium atom using limits of [-10,10]}
+  \label{orbital-energies-he-l10}
 \end{table}
 
 \begin{table}[H]
 \begin{center}
 \begin{tabular}{l|llllll}\hline
 $n$    & $1$    & $2$     & $3$     & $4$      & $5$      & $6$      \\\hline
-$E_n$  & $1.005352$  & $4.004340$  & $4.510553$  & $4.510553$  & $7.648020$  & $7.648020$ \\\hline
+$E_n$  & $-0.017581$  & $-0.003930$  & $0.011870$  & $0.012046$  & $0.015739$  & $0.016650$ \\\hline
+$E_{total}$ & \multicolumn{5}{c}{$-0.272178$} \\\hline
 \end{tabular}
 \end{center}
-  \caption{The first six orbital energy levels obtained from applying HF to the Hydrogen molecule using limits of [-1,1]}
-  \label{orbital-energies-h2-l1}
+  \caption{The first six orbital energy levels obtained from applying HF to the Hydrogen molecule using limits of [-10,10]}
+  \label{orbital-energies-h2-l10}
 \end{table}
+
 
 \newpage
 \section{Discussion}
 
 \begin{itemize}
-    \item Obtaining these final results took several hours, with each run taking approximately 1h15m to converge on a result. With a partition size of $N=28$, the sparse matrices were $N \times N \times N = 21,952$ in row and column length, for a total of $481,890,304$ entries. The solver took very long to chug through these numbers. Many more hours were spent in the development phase trying to tweak and debug the program. This was an incredible challenge.
-    \item Vastly different solutions were obtained when using smaller limits for the problem. This is likely tied to the problem being constrained into a virtual box of sorts where the electrons weren't free to orbit further. It is assumed that the more correct orbital results are those for when the limits are set to larger values.
-    \item There were repeated eigenvalues (of approximately the same value) with very similar shapes. This is likely the solver finding identical or similar orbitals in different orientations. It was reassuring to see some familiar shapes in the orbitals that were previously spotted as illustrations in textbooks.
-    \item As mentioned in the program implementation, the eigenvalue solver used in this program does not fully utilize the capabilities of the computer. Future improvements on this solver would likely involve a re-write in a compiled language like C and make use of matrix algebra packages that are optimized to run on multiple cores and make use of large memory pools. This would help decrease the iteration speed and increase the possible resolution of the simulator.
+    \item One of the major problems encountered with this implementation was the sensitivity to the small constant value used to prevent divide-by-zero conditions in the attraction and repulsion calculations. When the number was too small, the solver was often unable to find eigenvalues and eigenvectors for some iterations. A constant of 0.001 was experimentally found that enabled solution to converge properly. However, it is strongly suspected that this caused the system to become too "loose" to find the real solutions where the Coulomb attraction and repulsion wasn't being properly simulated.
+    \item Obtaining these final results took several hours to converge on a result. With a partition size of $N=32$, the sparse matrices were $N \times N \times N = $ 32,768 in row and column length, for a total of 1,073,741,824 entries. At first, it was suspected that finding eigenvalues and eigenvectors was taking the longest. However, as mentioned in the program section, the longest time spent is actually calculating the integrals and filling up matrices with their respective results. Many more hours were spent in the development phase trying to tweak and debug the program and only after profiling the program was it discovered where the computation time was being spent. This was an incredible challenge. In future implementations, the integrations will likely be implemented by a library to iron out their quirks.
+    \item The orbital energies and total energy for the system do not appear to be accurate when comparing them to literature. This suggests a major problem in this assignment's derivation of the equations and algorithm or perhaps an implementation problem in the program.
+    \item Vastly different solutions were obtained when using smaller limits of $[-1,1]$ and larger limits of $[-10,10]$ for the problem, with the sweet spot appearing to be limits of $[-5,5]$. This is likely tied to the problem being constrained into a virtual box of sorts where the electrons weren't free to orbit further. It is assumed that the more correct orbital results are those for when the limits are set to larger values. However, when the limits were set too large, very elaborate solutions started appearing where the electrons would fill intricate voids. The most reasonable results appears to have come from using limits of $[-5,5]$.
+    \item There were repeated eigenvalues (of approximately the same value) with very similar shapes. This is likely the solver finding identical or similar orbitals in different orientations. Perhaps this could be resolved using a finer partition size or somehow baking into the calculations that the space the entity occupies is actually infinite while only solving for a small window. It was reassuring to see some familiar shapes in the orbitals that were previously spotted as illustrations in textbooks.
     \item The current implementation does not treat the solution space as an infinite space and is more similar to a closed box. Either the limits need to be made large enough for the system or the implementation needs to simulate a larger space. The numerical integration, for example, may be able to extend its range, to allow the "other" electron to smear further.
     \item The solutions are extremely sensitive to partition size and the limits of the problem. Since the solver only reports the first six lowest eigenvalues, it's likely that similar solutions get moved in and out of these six slots as the parameters change.
-    \item Unfortunately, the theory behind the total energy and orbital energy was not understood well enough in time to include in the report. This is why the eigenvalues representing the orbital energies are left as they are without any units. This is also why they are used as-is as the convergence criteria for the algorithm instead of the total energy of the system. The orbital energies do not sum the Hartree-Fock energy. Koopman's theorem states that in restricted Hartree-Fock, the energies associated with occupied orbitals approximate the ionization energy of that orbital, and the energies associated with unoccupied orbitals approximate the energy required to place an electron into that orbital.
 \end{itemize}
 
 \newpage

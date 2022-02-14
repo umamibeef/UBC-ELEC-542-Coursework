@@ -388,13 +388,12 @@ def main(cmd_args):
         console_print('\tn=%d orbital energy: %f' % (n, eigenvalues[n]))
         eigenvector = eigenvectors[:,n]
         squared_eigenvector_3d = lambda x, y, z : numpy.square(eigenvector).reshape((N,N,N)).transpose()[x, y, z]
-        expectation = integrate(squared_eigenvector_3d, coords)
-        console_print('\t\tPsi_%d expectation value: %f' % (n, expectation))
+        # expectation = integrate(squared_eigenvector_3d, coords)
+        # console_print('\t\tPsi_%d expectation value: %f' % (n, expectation))
 
-    console_print(' ** Total Energies:')
-    for n in range(len(eigenvalues)):
-        eigenvector = eigenvectors[:,n]
-        console_print('\tn=%d total energy: %f' % (n, calculate_total_energy(target_subject, eigenvector, coords)))
+    console_print(' ** Total Energy:')
+    eigenvector = eigenvectors[:,n]
+    console_print('\tn=%d total energy: %f' % (energy_level, calculate_total_energy(target_subject, eigenvector, coords)))
 
     # plot data
     console_print(' ** Plotting data...')
