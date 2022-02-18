@@ -3,11 +3,7 @@ This is a direct follow-up to assignment 2. We are interested in solving the sam
 In this assignment, use the Roothaan equation. As basis functions, use two s-type, normalized Gaussian functions (with different values of α) centered on each atom. Note that you can choose whatever values of α you find most suitable for the two Gaussian functions on each atom. Play around with a few different α values to see which ones give you the most reasonable answers. If you are ambitious, include additional basis functions.
 
 a) [4 points] Describe your approach and show the steps of your derivation all the way to obtaining the matrix equation.
-
 b) [4 points] Write a computer code to implement what you built in part a.
-
 c) [4 points] Plot several molecular orbitals and give their associated energies for the helium atom. Also calculate the total energy of the system. Discuss your results.
-
 d) [4 points] Plot several molecular orbitals and give their associated energies for the hydrogen molecule. Also calculate the total energy of the system (not including the nucleus-nucleus interaction). Discuss your results.
-
 e) [4 points] Compare your results of both the above exercise and what you obtained in assignment 2 together and also with values available from the literature, and what you obtain using a commercial program such as Gaussian (run through ABACUS, for example).
