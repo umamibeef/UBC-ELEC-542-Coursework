@@ -41,7 +41,7 @@
 \setcounter{MaxMatrixCols}{32} % increase the maximum number of matrix columns
 
 \title{Assignment 3}
-\author{Calculating Electronic Structures \\ of the Helium atom and Hydrogen Molecule using Basis Functions}
+\author{Calculating Electronic Structures of the \\ Helium atom and Hydrogen Molecule using \\Hartree-Fock and Roothaan Equations}
 \date{Due: 2022/03/04}
 
 \pagestyle{fancy}
@@ -87,15 +87,77 @@ Where $\hat{F}(\vec{r})$ is the Fock operator which is defined as follows:
 
 In the previous assignment, the wave equation $\psi_n(\vec{r})$ was obtained by discretizing the solution of the wave equation into a three-dimensional grid partition of size $N \times N \times N$ where each dimension was partitioned into $N$ elements. The Hartree-Fock equation was manipulated to create a matrix eigenvector/eigenvalue problem out of the wave equation to be solved iteratively by a computer program over this space. The largest computational load in the previous assignment's program turned out to be the integration that needed to be performed for every iteration. The exchange term has an integral to calculate over the $N \times N \times N$ space of the matrix. This meant that for every element in the $N \times N \times N$ space, the integration had to be performed over a space of $N \times N \times N$. This integral alone resulted in $N^6$ calculations during every iteration of the Hartree-Fock algorithm. Multiprocessing helped alleviate some of this load by spreading it across multple processing units, but the problem was still very taxing to a modern computer with a modest number of spatial partitions.
 
-This assignment aims to simplify the Hartree-Fock procedure by introducing the concept of basis functions. Known as the Roothaan-Hall equations, the Hartree-Fock equation is augmented by using a combination of non-orthonormal spatial basis functions. The Hartree-Fock procedure is now modified to converge on the coefficients of these basis functions which linearly combine to approximate the electron orbitals. These functions are chosen very carefully to approximate the orbital that the electrons should exist in, which allows a small combination of them to simulate a real system with high accuracy. Likely more accurate and more stable than what was implemented in the previous assignment. Since there are only a few coefficients to solve for in this basis set of functions, the Hartree-Fock procedure is greatly simplified when put into a matrix eigenvector/eigenvalue problem. The basis functions can be described as follows:
+This assignment aims to simplify the Hartree-Fock procedure by introducing the concept of basis functions. The following derivations are presented in Szabo and Ostlund (referenced at the end of this assignment) and are summarized in the following paragraphs. Known as the Roothaan equations, the Hartree-Fock equation is augmented by using a combination of non-orthonormal spatial basis functions. The Hartree-Fock procedure is now modified to converge on the coefficients of these basis functions which linearly combine to approximate the electron orbitals. These functions are chosen very carefully to approximate the orbital that the electrons should exist in, which allows a small combination of them to simulate a real system with high accuracy. Likely more accurate and more stable than what was implemented in the previous assignment. Since there are only a few coefficients to solve for in this basis set of functions, the Hartree-Fock procedure is greatly simplified when put into a matrix eigenvector/eigenvalue problem. The basis functions can be described as follows:
 
 \begin{align*}
   \psi_n(\vec{r}) &= \sum_{\mu = 1}^K C_{\mu n}\phi_\mu(\vec{r}) \qquad n = 1, 2, ... , K
 \end{align*}
 
-A complete set of functions $\phi_\mu$ could exactly represent a system; however, for computational practicality much less can be used, as is evident by this assignment only asking for two or more. Specifically, normalized gaussian functions are to be used in this assignment. When combined, two or more gaussian functions can better approximate the shape of an atomic orbital as a single gaussian function alone does not match the shape of an atomic orbital very well, which have a pointed asymptotic shape in the middle. By adding a combination of gaussian functions together, the pointed shape is better approximated. An advantage of using a combination of gaussian functions is that they are easily integrated. Since integration is a common operation in Hartree-Fock, this lends well to a rapid calculations towards a convergence.
+A complete set of functions $\phi_\mu$ could exactly represent a system; however, for computational practicality much less can be used, as is evident by this assignment only asking for two or more of these functions. Specifically, normalized gaussian functions are to be used in this assignment. When combined, two or more gaussian functions can better approximate the shape of an atomic orbital as a single gaussian function alone does not match the shape of an atomic orbital very well. A real orbital function will have a pointed asymptotic shape in the middle where the nucleus is present, wheras a gaussian function has a rounded shape at its maximum. By adding a combination of gaussian functions together, the pointed shape is better approximated. An advantage of using a combination of gaussian functions is that they are easily integrated. Since integration is a common operation in Hartree-Fock, this lends well to a rapid calculations towards a convergence.
 
-% Looks like we'll use STO-2G or STO-3G basis sets for this problem.
+By substituting the linear combination of functions of $\phi_\mu$ in the place of $\psi_n$ in the Hartree-Fock equation, we obtain the following:
+
+\begin{align*}
+  \hat{F}(\vec{r})\sum_{\mu = 1}^K C_{\mu n}\phi_\mu(\vec{r}) &= \epsilon_n\sum_{\mu = 1}^K C_{\mu n}\phi_\mu(\vec{r})
+\end{align*}
+
+We can then multiply both sides by $\phi_v^\ast(\vec{r})$ and integrate to obtain the following result:
+
+\begin{align*}
+  \sum_{\mu = 1}^K C_{\mu n} \int_{-\infty}^{\infty} \phi_v^\ast(\vec{r}) \hat{F}(\vec{r}) \phi_\mu(\vec{r})d\vec{r} &= \epsilon_n\sum_{\mu = 1}^K C_{\mu n}\int_{-\infty}^{\infty}\phi_v^\ast(\vec{r})\phi_\mu(\vec{r})d\vec{r}
+\end{align*}
+
+This allows the Hartree-Fock equation to be turned into a matrix equation containing the overlap matrix $\bm{S}$ containing $K \times K$ elements $S_{v\mu}$:
+
+\begin{align*}
+S_{v\mu} &= \int_{-\infty}^{\infty}\phi_v^\ast(\vec{r})\phi_\mu(\vec{r})d\vec{r}
+\end{align*}
+
+and the Fock matrix $\bm{F}$ containing $K \times K$ elements $F_{v\mu}$:
+
+\begin{align*}
+F_{v\mu} &= \int_{-\infty}^{\infty} \phi_v^\ast(\vec{r}) \hat{F}(\vec{r}) \phi_\mu(\vec{r})d\vec{r}
+\end{align*}
+
+Bringing these back into the Hartree-Fock equation, we obtain the following equation, known as the Roothan equations:
+
+\begin{align*}
+\sum_{\mu = 1}^K F_{v\mu} C_{\mu n} &= \epsilon_n\sum_{\mu = 1}^K S_{v\mu} C_{\mu n}
+\end{align*}
+
+or more concisely:
+
+\begin{align*}
+\bm{F}\bm{C} &= \bm{S}\bm{C}\bm{\epsilon}
+\end{align*}
+
+The matrix $\bm{C}$ is a $K \times K$ square matrix of the expansion coefficients $C_{\mu n}$:
+
+\begin{align*}
+\bm{C} =
+\begin{bmatrix}
+ C_{11} & C_{12} & \hdots & C_{1K}\\
+ C_{21} & C_{22} & \hdots & C_{2K}\\
+ \vdots & \vdots &        & \vdots \\
+ C_{K1} & C_{K2} & \hdots & C_{KK}\\
+\end{bmatrix}
+\end{align*}
+
+and $\bm{\epsilon}$ is a diagonal matrix of the orbital energies $\epsilon_n$:
+
+\begin{align*}
+\bm{\epsilon} =
+\begin{bmatrix}
+ \epsilon_1 &            &        & \\
+            & \epsilon_2 &        & \\
+            &            & \ddots & \\
+            &            &        & \epsilon_K\\
+\end{bmatrix}
+\end{align*}
+
+% Continue explaining the density matrix. p138 in Szabo
+
+% For this assignment, the STO-2G and STO-3G basis sets will be used which use two and three linear combinations of gaussian functions respectively to approximate atomic orbitals. 
 
 \newpage
 \section{Program Implementation}
@@ -141,9 +203,8 @@ The following is the code written in Python to generate the solutions and plots 
 \newpage
 \section{References}
 
-These aren't citing anything, but they were useful in helping me figure out this assignment.
-
 \begin{itemize}
+  \item A. Szabo and N. S. Ostlund, Modern Quantum Chemistry (Dover, 1996).
   \item \url{https://chem.libretexts.org/Courses/Pacific_Union_College/Quantum_Chemistry/11%3A_Computational_Quantum_Chemistry/11.02%3A_Gaussian_Basis_Sets} % Gaussian Basis Sets
   \item \url{https://adambaskerville.github.io/posts/HartreeFockGuide/}
   % Other not relevant
