@@ -87,6 +87,8 @@ Where $\hat{F}(\vec{r})$ is the Fock operator which is defined as follows:
 
 In the previous assignment, the wave equation $\psi_n(\vec{r})$ was obtained by discretizing the solution of the wave equation into a three-dimensional grid partition of size $N \times N \times N$ where each dimension was partitioned into $N$ elements. The Hartree-Fock equation was manipulated to create a matrix eigenvector/eigenvalue problem out of the wave equation to be solved iteratively by a computer program over this space. The largest computational load in the previous assignment's program turned out to be the integration that needed to be performed for every iteration. The exchange term has an integral to calculate over the $N \times N \times N$ space of the matrix. This meant that for every element in the $N \times N \times N$ space, the integration had to be performed over a space of $N \times N \times N$. This integral alone resulted in $N^6$ calculations during every iteration of the Hartree-Fock algorithm. Multiprocessing helped alleviate some of this load by spreading it across multple processing units, but the problem was still very taxing to a modern computer with a modest number of spatial partitions.
 
+\subsection{Introducing Basis through the Roothaan Equations}
+
 This assignment aims to simplify the Hartree-Fock procedure by introducing the concept of basis functions. The following derivations are presented in Szabo and Ostlund (referenced at the end of this assignment) and are summarized in the following paragraphs. Known as the Roothaan equations, the Hartree-Fock equation is augmented by using a combination of non-orthonormal spatial basis functions. The Hartree-Fock procedure is now modified to converge on the coefficients of these basis functions which linearly combine to approximate the electron orbitals. These functions are chosen very carefully to approximate the orbital that the electrons should exist in, which allows a small combination of them to simulate a real system with high accuracy. Likely more accurate and more stable than what was implemented in the previous assignment. Since there are only a few coefficients to solve for in this basis set of functions, the Hartree-Fock procedure is greatly simplified when put into a matrix eigenvector/eigenvalue problem. The basis functions can be described as follows:
 
 \begin{align*}
@@ -155,15 +157,70 @@ and $\bm{\epsilon}$ is a diagonal matrix of the orbital energies $\epsilon_n$:
 \end{bmatrix}
 \end{align*}
 
+\subsection{Charge Density Matrix}
+
 In order to calculate the Fock matrix $\bm{F}$, we have to introduce the concept of a charge density matrix. This matrix describes the probability distribution of finding an electron in a given space described by the wave function $\psi_n(\vec{r})$. In a closed-shell system described by a single wave function occupied by two electrons (as in this assignment), the total charge density $\rho(\vec{r})$ is equal to:
 
 \begin{align*}
 \rho(\vec{r}) &= 2 \sum_{n}^{N/2}\left|\psi_n(\vec{r})\right|^2
 \end{align*}
 
-% Continue explaining the density matrix. p138 in Szabo
+We can then substitue the basis function expansion performed above to derive what is known as the density matrix $\bm{P}$:
 
-% For this assignment, the STO-2G and STO-3G basis sets will be used which use two and three linear combinations of gaussian functions respectively to approximate atomic orbitals. 
+\begin{align*}
+\rho(\vec{r}) &= 2 \sum_{n}^{N/2}\psi_n^\ast(\vec{r})\psi_n(\vec{r}) \\
+\rho(\vec{r}) &= 2 \sum_{n}^{N/2}\sum_{v = 1}^K C_{v n}^\ast\phi_v^\ast(\vec{r})\sum_{\mu = 1}^K C_{\mu n}\phi_\mu(\vec{r}) \\
+\rho(\vec{r}) &= \sum_{v = 1}^K\sum_{\mu = 1}^K \left[ 2 \sum_{n}^{N/2} C_{v n}^\ast C_{\mu n} \right] \phi_v^\ast(\vec{r}) \phi_\mu(\vec{r}) \\
+\rho(\vec{r}) &= \sum_{v = 1}^K\sum_{\mu = 1}^K P_{v\mu} \phi_v^\ast(\vec{r})\phi_\mu(\vec{r}) \\
+P_{v\mu} &= 2 \sum_{n}^{N/2} C_{v n}^\ast C_{\mu n}
+\end{align*}
+
+The density matrix is composed of the coefficients of the basis functions, and it describes the charge density $\rho(\vec{r})$ for the electrons in the system.
+
+Now we have all the pieces to expand the Fock operator into its new basis function matrix form:
+
+\begin{align*}
+  F_{v\mu} &= \int_{-\infty}^{\infty} \phi_v^\ast(\vec{r}) \hat{F}(\vec{r}) \phi_\mu(\vec{r})d\vec{r} \\
+  F_{v\mu} &= \int_{-\infty}^{\infty} \phi_v^\ast(\vec{r}) \hat{H}(\vec{r}) \phi_\mu(\vec{r})d\vec{r} + \sum_{n=1}^{N/2} \int_{-\infty}^{\infty} \phi_v^\ast(\vec{r}) \left[2J_n(\vec{r}) - K_n(\vec{r})\right] \phi_\mu(\vec{r})d\vec{r} \\
+  F_{v\mu} &= H_{v\mu}^{core} + \sum_{n=1}^{N/2} 2(v\mu|aa) - (va|\mu a)
+\end{align*}
+
+The core Hamiltonian matrix element $H_{v\mu}^{core}$ can be further expanded into the kinetic energy integrals $T_{v\mu}$ and nuclear attraction integrals $V_{v\mu}$:
+
+\begin{align*}
+  T_{v\mu} &= \int_{-\infty}^{\infty} \phi_v^\ast(\vec{r}) \left[ -\frac{1}{2}\nabla^2 \right] \phi_\mu(\vec{r})d\vec{r} \\
+  V_{v\mu} &= \int_{-\infty}^{\infty} \phi_v^\ast(\vec{r}) \left[ -\sum_{A=1}^{M}\frac{Z_A}{\vec{r} - \vec{R}_A} \right] \phi_\mu(\vec{r})d\vec{r} \\
+  H_{v\mu}^{core} &= T_{v\mu} + V_{v\mu}
+\end{align*}
+
+Interesting to note here is that the Hamiltonian matrix does not depend on the coefficients, which are the elements being iteratively solved in the algorithm. Therefore, the Hamiltonian matrix only needs to be evaluated once during the process. This is unlike the previous assignment, where the Hamiltonian needed to be evaluated at every iteration.
+
+The last piece of the puzzle is to introduce the linear expansion into the two-electron integral using the work derived above for the density matrix $\bm{P}$:
+
+\begin{align*}
+  F_{v\mu} &= H_{v\mu}^{core} + \sum_{n=1}^{N/2} \sum_{\lambda = 1}^K\sum_{\sigma = 1}^K C_{\lambda n}^\ast C_{\sigma n} \left[ 2(v\mu|\sigma\lambda) - (v\lambda|\sigma\mu) \right] \\
+  P_{\lambda\sigma} &= 2 \sum_{n}^{N/2} C_{\lambda n}^\ast C_{\sigma n} \\
+  F_{v\mu} &= H_{v\mu}^{core} + \sum_{\lambda = 1}^K\sum_{\sigma = 1}^K P_{\lambda\sigma} \left[ (v\mu|\sigma\lambda) - \frac{1}{2}(v\lambda|\sigma\mu) \right] \\
+  F_{v\mu} &= H_{v\mu}^{core} + G_{v\mu}
+\end{align*}
+
+The two-electron intergrals expand as follows:
+
+\begin{align*}
+  (v\mu|\sigma\lambda) &= \int_{-\infty}^{\infty}\int_{-\infty}^{\infty}  \phi_v^\ast(\vec{r}_1)\phi_\mu(\vec{r}_1) \frac{1}{\|\vec{r}_{12}\|}  \phi_\sigma^\ast(\vec{r}_2)\phi_\lambda(\vec{r}_2)  d\vec{r}_1d\vec{r}_2
+\end{align*}
+
+For every iteration of the Hartree-Fock algorithm, the matrix $\bm{G}$ will need to be recalculated which is reliant on the density matrix $\bm{P}$.
+
+\subsection{Orthogonalization of the Basis}
+
+\subsection{Choosing the Basis}
+
+% For this assignment, the STO-2G and STO-3G basis sets will be used which use two and three linear combinations of gaussian functions respectively to approximate atomic orbitals.
+
+\subsection{Precalculating the Integrals}
+
+
 
 \newpage
 \section{Program Implementation}
