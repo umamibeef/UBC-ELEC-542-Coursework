@@ -214,6 +214,20 @@ For every iteration of the Hartree-Fock algorithm, the matrix $\bm{G}$ will need
 
 \subsection{Orthogonalization of the Basis}
 
+In order to solve the eigenvalue problem, it will be necessary to reconfigure the matrix Fock equation from:
+
+\begin{align*}
+\bm{F}\bm{C} &= \bm{S}\bm{C}\bm{\epsilon}
+\end{align*}
+
+to:
+
+\begin{align*}
+\bm{F}'\bm{C}' &= \bm{C}'\bm{\epsilon}
+\end{align*}
+
+Which is a form where the modified Fock matrix $\bm{F}'$ can be diagonalized to solve for $\bm{C}'$ which in turn is converted back into $\bm{C}$. In this modified equation, the overlap matrix $\bm{S}$ disappears as a transformation is applied to orthonormalize the basis functions. Note that the overlap matrix $\bm{S}$ is present because the basis functions chosen are not normally orthonormal.
+
 \subsection{Choosing the Basis}
 
 % For this assignment, the STO-2G and STO-3G basis sets will be used which use two and three linear combinations of gaussian functions respectively to approximate atomic orbitals.
