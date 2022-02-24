@@ -214,7 +214,7 @@ For every iteration of the Hartree-Fock algorithm, the matrix $\bm{G}$ will need
 
 \subsection{Orthogonalization of the Basis}
 
-In order to solve the eigenvalue problem, it will be necessary to reconfigure the matrix Fock equation from:
+In order to solve an eigenvalue problem on every iteration, it will be necessary to reconfigure the matrix Fock equation from:
 
 \begin{align*}
 \bm{F}\bm{C} &= \bm{S}\bm{C}\bm{\epsilon}
@@ -227,6 +227,30 @@ to:
 \end{align*}
 
 Which is a form where the modified Fock matrix $\bm{F}'$ can be diagonalized to solve for $\bm{C}'$ which in turn is converted back into $\bm{C}$. In this modified equation, the overlap matrix $\bm{S}$ disappears as a transformation is applied to orthonormalize the basis functions. Note that the overlap matrix $\bm{S}$ is present because the basis functions chosen are not normally orthonormal.
+
+A matrix $\bm{X}$ needs to be found to satisfy the following condition:
+
+\begin{align*}
+\bm{X}^\dagger\bm{S}\bm{X} &= 1
+\end{align*}
+
+This assignment will using symmetric orthogonolization, which uses the inverse square root of $\bm{S}$ as $\bm{X}$:
+
+\begin{align*}
+\bm{X} &= \bm{S}^{-\frac{1}{2}}
+\end{align*}
+
+The expansion coefficient matrix $\bm{C}$ can then be transformed to and from its modified state using $\bm{X}$ as follows:
+
+\begin{align*}
+\bm{C}' &= \bm{X}^{-1}\bm{C} & \bm{C} &= \bm{X}\bm{C}'
+\end{align*}
+
+Similarly, the modified Fock matrix $\bm{F}'$ can be obtained as follows:
+
+\begin{align*}
+\bm{F}' &= \bm{X}^\dagger\bm{F}\bm{X}
+\end{align*}
 
 \subsection{Choosing the Basis}
 
