@@ -253,22 +253,20 @@ Similarly, the modified Fock matrix $\bm{F}'$ can be obtained as follows:
 
 \subsection{Choosing the Basis}
 
-For this assignment, the STO-1G basis sets will be used for the basis functions. STO-1G are Gaussian approximations of the more realistic Slater functions for orbitals (hence the namesake Slater-Type Orbital: STO). These basis sets represent a 1s atomic orbital approximated by a single Gaussian function each and have the following generic form:
+For this assignment, the STO-1G basis sets will be used for the basis functions. STO-1G are Gaussian approximations of the more realistic Slater functions for orbitals (hence the namesake Slater-Type Orbital: STO) \cite{chem-libretext-gaussian-basis-sets}. These basis sets represent a 1s atomic orbital approximated by a single Gaussian function each and have the following generic form:
 
 \begin{align*}
 \phi &= ae^{-b\vec{r}^2}
 \end{align*}
 
-Tuned STO-1G basis functions were found in Chemistry and Materials Science, Computational Chemistry, p214 for both the 1s orbital of the Hydrogen atom as well as the Helium atom with values for $a$ and $b$ as follows:
+Tuned STO-1G basis functions were found in \cite{errol-comp-chem-text}\cite{hartree-fock-in-100-lines} for both the 1s orbital of the Hydrogen atom as well as the Helium atom with values for $a$ and $b$ as follows:
 
 \begin{align*}
 \phi_{H} &= 0.3696e^{-0.4166\left|\vec{r} - \vec{R}\right|} \\
 \phi_{He} &= 0.5881e^{-0.7739\left|\vec{r} - \vec{R}\right|}
 \end{align*}
 
-%TODO, add proper citation.
-
-% For this assignment, STO-1G basis set will be used, and with time permitting the STO-2G will be explored.
+For the Helium atom, two of the Helium 1s orbital STO-1G basis functions will be centered on the nucleus, which exists at the origin of the problem. For the Hydrogen molecule, two of the the Hyrogen 1s orbital STO-1G basis functions will be centere on each nucleus, for a total of four basis functions. As calculated in the previous assignment, the distance between the two Hydrogen nuclei is $\frac{0.74 \times 0.1\times10^{-9}}{5.29177210903\times10^{-11}} = 1.39839733222307$ atomic units of length. The Hydrogen molecule nuclei will be placed on the $x$ axis.
 
 \subsection{Precalculating the Integrals}
 
@@ -315,23 +313,11 @@ $E_n$  & $-0.049968$  & $-0.049878$  & $-0.041970$  & $0.011558$  & $-0.007816$ 
 The following is the code written in Python to generate the solutions and plots used in this report.
 % \lstinputlisting[language=Python]{exact-hartree-fock-sim.py}
 
-\newpage
-\section{References}
+\nocite{*}
 
-\begin{itemize}
-  \item A. Szabo and N. S. Ostlund, Modern Quantum Chemistry (Dover, 1996).
-  \item E. Lewars and SpringerLink ebooks - Chemistry and Materials Science, Computational Chemistry: Introduction to the Theory and Applications of Molecular and Quantum Mechanics. (2nd;2; ed.) 2011;2016;2010;. DOI: 10.1007/978-90-481-3862-3.
-  \item \url{https://chem.libretexts.org/Courses/Pacific_Union_College/Quantum_Chemistry/11%3A_Computational_Quantum_Chemistry/11.02%3A_Gaussian_Basis_Sets} % Gaussian Basis Sets
-  \item \url{https://adambaskerville.github.io/posts/HartreeFockGuide/}
-  % Other not relevant
-  % \item https://physics.stackexchange.com/questions/20703/why-does-iteratively-solving-the-hartree-fock-equations-result-in-convergence
-  % \item https://scicomp.stackexchange.com/questions/1297/why-does-iteratively-solving-the-hartree-fock-equations-result-in-convergence
-  % \item https://nznano.blogspot.com/2018/03/simple-quantum-chemistry-hartree-fock.html % basis
-  % \item https://github.com/CrawfordGroup/ProgrammingProjects
-  % \item https://github.com/aromanro/HartreeFock
-  % \item https://github.com/ipudu/SCFpy % solves using a basis set, can't use
-  % \item https://medium.com/analytics-vidhya/practical-introduction-to-hartree-fock-448fc64c107b % solves using a basis set, can't use
-\end{itemize}
+\newpage
+\bibliographystyle{IEEEtran}
+\bibliography{IEEEabrv, refs}
 
 \end{document}
 
