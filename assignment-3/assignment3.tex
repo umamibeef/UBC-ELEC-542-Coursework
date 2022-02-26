@@ -259,7 +259,7 @@ For this assignment, the STO-1G basis sets will be used for the basis functions.
 \phi &= ae^{-b\vec{r}^2}
 \end{align*}
 
-Tuned STO-1G basis functions were found in \cite{errol-comp-chem-text}\cite{hartree-fock-in-100-lines} for both the 1s orbital of the Hydrogen atom as well as the Helium atom with values for $a$ and $b$ as follows:
+Tuned STO-1G basis functions were found in \cite[p.~216]{errol-comp-chem-text}\cite{hartree-fock-in-100-lines} for both the 1s orbital of the Hydrogen atom as well as the Helium atom with values for $a$ and $b$ as follows:
 
 \begin{align*}
 \phi_{H} &= 0.3696e^{-0.4166\left|\vec{r} - \vec{R}\right|} \\
@@ -270,6 +270,13 @@ For the Helium atom, two of the Helium 1s orbital STO-1G basis functions will be
 
 \subsection{Precalculating the Integrals}
 
+An advantage of this technique is that many of the integrals required for the resulting matrices can be pre-computed as they do not alter between iterations. For the one-electron integrals, one must calculate the kinetic energy integral for every entry in the kinetic energy matrix and the potential energy integral for the potential energy matrix. These two matrices make up the core Hamiltonian matrix which is composed of one-electron integrals. Similarly, one must calculate the two-electron integrals, however this piece is more complicated and more computationally involved. The result of these two-electron integrals will make up the \bm{G} matrix mentioned previously, which consists of the density matrix \bm{P} multiplied by the Coulomb repulsion two-electron integral and the exchange operator two-electron integral. Only the density matrix will be modified, so the two-electron integrals that the density matrix elements will be multipliying can be precomputed.
+
+\subsubsection{Helium Atom}
+
+
+
+\subsubsection{Hydrogen Molecule}
 
 
 \newpage
