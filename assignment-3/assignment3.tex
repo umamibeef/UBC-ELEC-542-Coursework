@@ -227,7 +227,7 @@ to:
 
 Which is a form where the modified Fock matrix $\bm{F}'$ can be diagonalized to solve for $\bm{C}'$ which in turn is converted back into $\bm{C}$. In this modified equation, the overlap matrix $\bm{S}$ disappears as a transformation is applied to orthonormalize the basis functions. Note that the overlap matrix $\bm{S}$ is present because the basis functions chosen are not normally orthonormal.
 
-A matrix $\bm{X}$ needs to be found to satisfy the following condition:
+A transformation matrix $\bm{X}$ needs to be found to satisfy the following condition:
 
 \begin{align*}
 \bm{X}^\dagger\bm{S}\bm{X} &= 1
@@ -266,22 +266,44 @@ Tuned STO-1G basis functions were found in \cite[p.~216]{errol-comp-chem-text}\c
 \phi_{He} &= 0.5881e^{-0.7739\left|\vec{r} - \vec{R}\right|}
 \end{align*}
 
-For the Helium atom, two of the Helium 1s orbital STO-1G basis functions will be centered on the nucleus, which exists at the origin of the problem. For the Hydrogen molecule, two of the the Hyrogen 1s orbital STO-1G basis functions will be centere on each nucleus, for a total of four basis functions. As calculated in the previous assignment, the distance between the two Hydrogen nuclei is $\frac{0.74 \times 0.1\times10^{-9}}{5.29177210903\times10^{-11}} = 1.39839733222307$ atomic units of length. The Hydrogen molecule nuclei will be placed on the $x$ axis.
+For the Helium atom, two of the Helium 1s orbital STO-1G basis functions will be centered on the nucleus, which exists at the origin of the problem. For the Hydrogen molecule, two of the the Hydrogen 1s orbital STO-1G basis functions will be center on each nucleus, for a total of four basis functions. As calculated in the previous assignment, the distance between the two Hydrogen nuclei is $\frac{0.74 \times 0.1\times10^{-9}}{5.29177210903\times10^{-11}} = 1.39839733222307$ atomic units of length. The Hydrogen molecule nuclei will be placed on the $x$ axis.
 
 \subsection{Precalculating the Integrals}
 
-An advantage of this technique is that many of the integrals required for the resulting matrices can be pre-computed as they do not alter between iterations. For the one-electron integrals, one must calculate the kinetic energy integral for every entry in the kinetic energy matrix and the potential energy integral for the potential energy matrix. These two matrices make up the core Hamiltonian matrix which is composed of one-electron integrals. Similarly, one must calculate the two-electron integrals, however this piece is more complicated and more computationally involved. The result of these two-electron integrals will make up the \bm{G} matrix mentioned previously, which consists of the density matrix \bm{P} multiplied by the Coulomb repulsion two-electron integral and the exchange operator two-electron integral. Only the density matrix will be modified, so the two-electron integrals that the density matrix elements will be multipliying can be precomputed.
+An advantage of this technique is that many of the integrals required for the resulting matrices can be pre-computed as they do not alter between iterations. For the one-electron integrals, one must calculate the kinetic energy integral for every entry in the kinetic energy matrix and the potential energy integral for the potential energy matrix. These two matrices make up the core Hamiltonian matrix which is composed of one-electron integrals. Similarly, one must calculate the two-electron integrals, however this piece is more complicated and more computationally involved. The result of these two-electron integrals will make up the $\bm{G}$ matrix mentioned previously, which consists of the density matrix $\bm{P}$ multiplied by the Coulomb repulsion two-electron integral and the exchange operator two-electron integral. Only the density matrix will be modified, so the two-electron integrals that the density matrix elements will be multiplying can be precomputed.
 
-\subsubsection{Helium Atom}
+\subsection{Calculating the Total Energy}
 
+The total energy of the system can be obtained by 
 
+\subsection{Final Recipe}
 
-\subsubsection{Hydrogen Molecule}
+We now have all of the background required to implement our solution. The following steps outline what is required for this simulation to run:
 
+\begin{enumerate}
+    \item Prepare $K \times K$ matrices where $K$ corresponds to the number of basis functions
+    \item Pre-calculate one and two-electron integrals using the specified basis set chosen
+      \begin{itemize}
+        \item Overlap matrix $\bm{S}$ containing one electron integrals $S_{v\mu}$
+        \item Kinetic $\bm{T}$ energy matrix one electron integrals $T_{v\mu}$
+        \item Nuclear attraction $\bm{V}$ matrix one electron integrals $V_{v\mu}$
+        \item $\bm{G}$ matrix Coulomb repulsion and exchange two-electron integrals
+      \end{itemize}
+    \item Obtain the transformation matrix $\bm{X}$ by through the inverse square root of $\bm{S}$: $\bm{X} = \bm{S}^{-\frac{1}{2}}$
+    \item Calculate the $\bm{G}$ matrix using the current density matrix $\bm{P}$ (zero on the first iteration) and the two-electron integrals
+    \item Calculate the $\bm{F}$ Fock matrix using $\bm{T} + \bm{V} + \bm{G}$
+    \item Apply the transformation matrix $\bm{X}$ to obtain the orthonormalized Fock matrix $\bm{F}' = \bm{X}^\dagger\bm{F}\bm{X}$:
+    \item Diagonalize the orthonormalized Fock matrix $\bm{F}'$ to obtain the orthonormalized coefficient matrix $\bm{C}'$
+    \item Convert the orthonormalized coefficient matrix $\bm{C}'$ to the regular coefficient matrix $\bm{C}$: $\bm{C} = \bm{X}\bm{C}'$
+    \item Extract the coefficients from $\bm{C}$ to obtain a new version of the $\bm{P}$ matrix
+    \item Compare this new density matrix $\bm{P}$ with the one we started with, if the difference between the two is not within a specified threshold, repeat the process from 4. If the difference between both $\bm{P}$ is within the threshold, the algorithm is complete.
+
+\end{enumerate}
 
 \newpage
 \section{Program Implementation}
 
+Precalculating the integrals will be performed by the program on startup and saved as comma-separated-value (CSV) file for easy lookup. Subsequent runs will load this data file and use the values and skip this step.
 
 \newpage
 \section{Results}

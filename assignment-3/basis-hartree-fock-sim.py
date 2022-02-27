@@ -22,6 +22,22 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
+import argparse
+import matplotlib
+import matplotlib.pyplot as plt
+import numpy
+import scipy
+import scipy.sparse
+import scipy.sparse.linalg
+import scipy.integrate
+import math
+import functools
+import time
+import pickle
+import datetime # for timestamping
+import multiprocessing # for multiprocessing (MP) of matrix generation
+import tqdm # progress bar for MP
+
 numpy.set_printoptions(edgeitems=30, linewidth=100000, 
     formatter=dict(float=lambda x: '%.3g' % x))
 
