@@ -68,6 +68,18 @@ DATETIME_STR_FORMAT = '[%Y/%m/%d-%H:%M:%S]'
 ENABLE_MP = True # multiprocessing
 
 #
+# Console formatter
+#
+def console_print(string=''):
+
+    # get str representation
+    if not isinstance(string, str):
+        string = str(string)
+
+    datetime_now = datetime.datetime.now()
+    print(datetime_now.strftime(DATETIME_STR_FORMAT) + ' ' + string)
+
+#
 # This is the main function
 #
 def main(cmd_args):
@@ -98,44 +110,92 @@ def precalculate_integrals():
     R = sympy.vector.CoordSys3D('R')
     x, y, z = sympy.symbols('x y z')
 
-    func = sto_1g_helium_func(R.z, R.y, R.x)*sympy.vector.Laplacian(sto_1g_helium_func(R.z, R.y, R.x)).doit()
-    func_num = sympy.lambdify([R.z, R.y, R.x], func, 'scipy')
-    print(scipy.integrate.tplquad(func_num, -1000, 1000, lambda x: -1000, lambda x: 1000, lambda x, y: -1000, lambda x, y: 1000))
+    # func = sto_1g_helium_func(R.z, R.y, R.x)*sympy.vector.Laplacian(sto_1g_helium_func(R.z, R.y, R.x)).doit()
+    # func_num = sympy.lambdify([R.z, R.y, R.x], func, 'scipy')
+    # print(scipy.integrate.tplquad(func_num, -scipy.inf, scipy.inf, lambda x: -scipy.inf, lambda x: scipy.inf, lambda x, y: -scipy.inf, lambda x, y: scipy.inf))
 
-    # cartesian product for all combinations
-    combinations = itertools.product([0,1],repeat=2)
-    # unique combinations
-    combinations = itertools.combinations_with_replacement([0,1],2)
-    for combination in combinations:
-        print(combination)
-    # check for combination
-    set_0 = [1,0]
-    set_1 = [0,1]
-    # sort and compare
-    print(sorted(set_0) == sorted(set_1))
-    # hash for lookup
-    # take care of negative hash
-    mask = (1<<sys.hash_info.width) - 1
-    print('%X' % (hash(tuple(sorted(set_0))) & mask))
+    # # cartesian product for all combinations
+    # combinations = itertools.product([0,1],repeat=2)
 
-    # print(sympy.integrate(sympy.exp(-R.x**2 - R.y**2), (R.x, -sympy.oo, sympy.oo), (R.y, -sympy.oo, sympy.oo)).doit())
-    # sympy.integrate(sto_1g_helium_func(R.x, R.y, R.z), (R.x, -sympy.oo, sympy.oo), (R.y, -sympy.oo, sympy.oo), (R.z, -sympy.oo, sympy.oo))
+    # for combination in combinations:
+    #     print(combination)
+    # # check for combination
+    # set_0 = [1,0]
+    # set_1 = [0,1]
+    # # sort and compare
+    # print(sorted(set_0) == sorted(set_1))
+    # # hash for lookup
+    # # take care of negative hash
+    # mask = (1<<sys.hash_info.width) - 1
+    # print('%X' % (hash(tuple(sorted(set_0))) & mask))
 
-    # one-electron integral
+
+    # one-electron integrals
+
+    # Helium uses the same basis function twice, so the integrals end up being
+    # identical four all four entries 11 = 12 = 21 = 22
 
     he_overlap_ints = {}
+    if False:
+        console_print('Calculating Helium overlap integrals...')
+        # symbolic version of the integrand
+        he_overlap_intgd_sym = sto_1g_helium_func(z, y, x)*sto_1g_helium_func(z, y, x)
+        # numerical version of the integrand
+        he_overlap_intgd_num = sympy.lambdify([z, y, x], he_overlap_intgd_sym, 'scipy')
+        # integrate (first index of tuple contains result)
+        he_overlap_int_val = scipy.integrate.tplquad(he_overlap_intgd_num, -scipy.inf, scipy.inf, lambda x: -scipy.inf, lambda x: scipy.inf, lambda x, y: -scipy.inf, lambda x, y: scipy.inf)[0]
+        # add integration results to dictionary
+        for combination in combinations:
+            he_overlap_ints[combination] = he_overlap_int_val
+
     he_kinetic_energy_ints = {}
+    if False:
+        console_print('Calculating Helium kinetic energy integrals...')
+        # symbolic version of the integrand
+        he_kinetic_energy_intgd_sym = sto_1g_helium_func(R.z, R.y, R.x)*(-1/2)*sympy.vector.Laplacian(sto_1g_helium_func(R.z, R.y, R.x)).doit()
+        # numerical version of the integrand
+        he_kinetic_energy_intgd_num = sympy.lambdify([R.z, R.y, R.x], he_kinetic_energy_intgd_sym, 'scipy')
+        # integrate (first index of tuple contains result)
+        he_kinetic_energy_int_val = scipy.integrate.tplquad(he_kinetic_energy_intgd_num, -scipy.inf, scipy.inf, lambda x: -scipy.inf, lambda x: scipy.inf, lambda x, y: -scipy.inf, lambda x, y: scipy.inf)[0]
+        # add integration results to dictionary
+        for combination in combinations:
+            he_kinetic_energy_ints[combination] = he_kinetic_energy_int_val
+
     he_nuclear_attraction_ints = {}
+    if False:
+        console_print('Calculating Helium nuclear attraction integrals')
+        # symbolic version of the integrand
+        he_nuclear_attraction_intgd_sym = sto_1g_helium_func(z, y, x) * (-2/sympy.sqrt(x**2 + y**2 + z**2)) * sto_1g_helium_func(z, y, x)
+        # numerical version of the integrand
+        he_nuclear_attraction_intgd_num = sympy.lambdify([z, y, x], he_nuclear_attraction_intgd_sym, 'scipy')
+        # integrate (first index of tuple contains result)
+        he_nuclear_attraction_int_val = scipy.integrate.tplquad(he_nuclear_attraction_intgd_num, -scipy.inf, scipy.inf, lambda x: -scipy.inf, lambda x: scipy.inf, lambda x, y: -scipy.inf, lambda x, y: scipy.inf)[0]
+        # add integration results to dictionary
+        for combination in combinations:
+            he_nuclear_attraction_ints[combination] = he_nuclear_attraction_int_val
+
+    # Hydrogen has two basis functions centered on each nuclei, for a total of
+    # four basis function (only two are unique). They will need to be
+    # combined to form the matrices, so we'll have to find unique combinations
 
     h_overlap_ints = {}
     h_kinetic_energy_ints = {}
     h_nuclear_attraction_ints = {}
 
+    # basis function lookup table
+    h_basis_func_lut = (sto_1g_hydrogen_0_func, sto_1g_hydrogen_0_func, sto_1g_hydrogen_1_func, sto_1g_hydrogen_1_func)
+
+    # generate unique combinations
+    combinations = itertools.combinations_with_replacement([0,1,2,3],2)
+    for combination in combinations:
+        console_print('Calculating Helium overlap integral (%d,%d)...' % (combination[0], combination[1]))
+
+
     # two-electron integrals
 
     # coulomb repulsion and exchange integrals
 
-    pass
+    console_print('Finished calculating integrals!')
 
 if __name__ == '__main__':
     # the following sets up the argument parser for the program
