@@ -259,11 +259,11 @@ For this assignment, the STO-1G basis sets will be used for the basis functions.
 \phi &= ae^{-b\vec{r}^2}
 \end{align*}
 
-Tuned STO-1G basis functions were found in \cite[p.~216]{errol-comp-chem-text}\cite{hartree-fock-in-100-lines} for both the 1s orbital of the Hydrogen atom as well as the Helium atom with values for $a$ and $b$ as follows:
+Tuned STO-1G basis functions were found in \cite[p.~214]{errol-comp-chem-text}\cite{hartree-fock-in-100-lines} for both the 1s orbital of the Hydrogen atom as well as the Helium atom with values for $a$ and $b$ as follows:
 
 \begin{align*}
-\phi_{H} &= 0.3696e^{-0.4166\left|\vec{r} - \vec{R}\right|} \\
-\phi_{He} &= 0.5881e^{-0.7739\left|\vec{r} - \vec{R}\right|}
+\phi_{H} &= 0.3696e^{-0.4166\left|\vec{r} - \vec{R}\right|^2} \\
+\phi_{He} &= 0.5881e^{-0.7739\left|\vec{r} - \vec{R}\right|^2}
 \end{align*}
 
 For the Helium atom, two of the Helium 1s orbital STO-1G basis functions will be centered on the nucleus, which exists at the origin of the problem. For the Hydrogen molecule, two of the the Hydrogen 1s orbital STO-1G basis functions will be center on each nucleus, for a total of four basis functions. As calculated in the previous assignment, the distance between the two Hydrogen nuclei is $\frac{0.74 \times 0.1\times10^{-9}}{5.29177210903\times10^{-11}} = 1.39839733222307$ atomic units of length. The Hydrogen molecule nuclei will be placed on the $x$ axis.

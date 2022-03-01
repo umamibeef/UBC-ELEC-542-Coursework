@@ -30,13 +30,17 @@ import scipy
 import scipy.sparse
 import scipy.sparse.linalg
 import scipy.integrate
+import sympy
+import sympy.vector
 import math
 import functools
+import itertools
 import time
 import pickle
 import datetime # for timestamping
 import multiprocessing # for multiprocessing (MP) of matrix generation
 import tqdm # progress bar for MP
+import sys
 
 numpy.set_printoptions(edgeitems=30, linewidth=100000, 
     formatter=dict(float=lambda x: '%.3g' % x))
@@ -67,7 +71,71 @@ ENABLE_MP = True # multiprocessing
 # This is the main function
 #
 def main(cmd_args):
-	pass
+
+    precalculate_integrals()
+
+#
+# Helium STO-1G basis function (centered around origin)
+#
+sto_1g_helium_func = lambda z, y, x: 0.5881*sympy.exp(-0.7739*(sympy.sqrt(x**2+y**2+z**2))**2)
+
+#
+# Hydrogen STO-1G basis function (centered around Hydrogen nucleus 0)
+#
+sto_1g_hydrogen_0_func = lambda z, y, x: 0.3696*sympy.exp(-0.4166*(sympy.sqrt((x - (-H2_BOND_LENGTH_ATOMIC_UNITS/2.0))**2+y**2+z**2))**2)
+
+#
+# Hydrogen STO-1G basis function (centered around Hydrogen nucleus 1)
+#
+sto_1g_hydrogen_1_func = lambda z, y, x: 0.3696*sympy.exp(-0.4166*(sympy.sqrt((x - (H2_BOND_LENGTH_ATOMIC_UNITS/2.0))**2+y**2+z**2))**2)
+
+#
+# Pre-calculate integrals
+#
+def precalculate_integrals():
+
+    # sympy 3D x,y,z, coordinate system
+    R = sympy.vector.CoordSys3D('R')
+    x, y, z = sympy.symbols('x y z')
+
+    func = sto_1g_helium_func(R.z, R.y, R.x)*sympy.vector.Laplacian(sto_1g_helium_func(R.z, R.y, R.x)).doit()
+    func_num = sympy.lambdify([R.z, R.y, R.x], func, 'scipy')
+    print(scipy.integrate.tplquad(func_num, -1000, 1000, lambda x: -1000, lambda x: 1000, lambda x, y: -1000, lambda x, y: 1000))
+
+    # cartesian product for all combinations
+    combinations = itertools.product([0,1],repeat=2)
+    # unique combinations
+    combinations = itertools.combinations_with_replacement([0,1],2)
+    for combination in combinations:
+        print(combination)
+    # check for combination
+    set_0 = [1,0]
+    set_1 = [0,1]
+    # sort and compare
+    print(sorted(set_0) == sorted(set_1))
+    # hash for lookup
+    # take care of negative hash
+    mask = (1<<sys.hash_info.width) - 1
+    print('%X' % (hash(tuple(sorted(set_0))) & mask))
+
+    # print(sympy.integrate(sympy.exp(-R.x**2 - R.y**2), (R.x, -sympy.oo, sympy.oo), (R.y, -sympy.oo, sympy.oo)).doit())
+    # sympy.integrate(sto_1g_helium_func(R.x, R.y, R.z), (R.x, -sympy.oo, sympy.oo), (R.y, -sympy.oo, sympy.oo), (R.z, -sympy.oo, sympy.oo))
+
+    # one-electron integral
+
+    he_overlap_ints = {}
+    he_kinetic_energy_ints = {}
+    he_nuclear_attraction_ints = {}
+
+    h_overlap_ints = {}
+    h_kinetic_energy_ints = {}
+    h_nuclear_attraction_ints = {}
+
+    # two-electron integrals
+
+    # coulomb repulsion and exchange integrals
+
+    pass
 
 if __name__ == '__main__':
     # the following sets up the argument parser for the program
