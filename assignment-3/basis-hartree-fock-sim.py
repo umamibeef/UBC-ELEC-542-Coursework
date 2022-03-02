@@ -42,6 +42,7 @@ import multiprocessing # for multiprocessing (MP) of matrix generation
 import tqdm # progress bar for MP
 import sys
 import json
+import signal
 
 numpy.set_printoptions(edgeitems=30, linewidth=100000, 
     formatter=dict(float=lambda x: '%.3g' % x))
@@ -59,7 +60,7 @@ if False:
 
 # program constants
 H2_BOND_LENGTH_ATOMIC_UNITS = 1.39839733222307
-TINY_NUMBER = 0.001
+TINY_NUMBER = 1e-9
 IDX_X = 0
 IDX_Y = 1
 IDX_Z = 2
@@ -76,6 +77,13 @@ OVERLAP = 'overlap'
 KINETIC = 'kinetic'
 ATTRACTION = 'attraction'
 EXCHANGE = 'exchange'
+
+#
+# Initializer for child processes to respect SIGINT
+#
+def initializer():
+    #Ignore SIGINT in child workers
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
 
 #
 # Console formatter
@@ -99,20 +107,18 @@ def main(cmd_args):
 #
 # Helium STO-1G basis function (centered around origin)
 #
-# sto_1g_helium_func = lambda z, y, x: 0.5881*sympy.exp(-0.7739*(sympy.sqrt(x**2+y**2+z**2))**2)
 def sto_1g_helium_func(z, y, x):
     return 0.5881*sympy.exp(-0.7739*(sympy.sqrt(x**2+y**2+z**2))**2)
 
 #
 # Hydrogen STO-1G basis function (centered around Hydrogen nucleus 0)
 #
-# sto_1g_hydrogen_0_func = lambda z, y, x: 0.3696*sympy.exp(-0.4166*(sympy.sqrt((x - (-H2_BOND_LENGTH_ATOMIC_UNITS/2.0))**2+y**2+z**2))**2)
 def sto_1g_hydrogen_0_func(z, y, x):
     return 0.3696*sympy.exp(-0.4166*(sympy.sqrt((x - (-H2_BOND_LENGTH_ATOMIC_UNITS/2.0))**2+y**2+z**2))**2)
+
 #
 # Hydrogen STO-1G basis function (centered around Hydrogen nucleus 1)
 #
-# sto_1g_hydrogen_1_func = lambda z, y, x: 0.3696*sympy.exp(-0.4166*(sympy.sqrt((x - (H2_BOND_LENGTH_ATOMIC_UNITS/2.0))**2+y**2+z**2))**2)
 def sto_1g_hydrogen_1_func(z, y, x):
     return 0.3696*sympy.exp(-0.4166*(sympy.sqrt((x - (H2_BOND_LENGTH_ATOMIC_UNITS/2.0))**2+y**2+z**2))**2)    
 
@@ -181,9 +187,8 @@ def calculate_coulomb_repulsion_and_exchange_integrals(funcs):
     x, y, z = sympy.symbols('x y z')
     u, v, w = sympy.symbols('u v w')
 
-    console_print('Calculating Coulomb repulsion and exchange integrals (%d%d|%d%d)...' % (combination[0], combination[1], combination[2], combination[3]))
     # symbolic version of the integrand
-    coulomb_repulsion_and_exchange_intgd_sym = funcs[0](z, y, x) * funcs[1](z, y, x) * (1/sympy.sqrt((u-x)**2 + (v-y)**2 + (w-z)**2)) * funcs[2](w, v, u) * funcs[3](w, v, u)
+    coulomb_repulsion_and_exchange_intgd_sym = funcs[0](z, y, x) * funcs[1](z, y, x) * (1/sympy.sqrt(TINY_NUMBER + (u-x)**2 + (v-y)**2 + (w-z)**2)) * funcs[2](w, v, u) * funcs[3](w, v, u)
     # numerical version of the integrand
     coulomb_repulsion_and_exchange_intgd_num = sympy.lambdify([z, y, x, w, v, u], coulomb_repulsion_and_exchange_intgd_sym, 'scipy')
     # integrate (first index of tuple contains result)
@@ -233,6 +238,8 @@ def get_two_electron_combinations(num_basis_functions):
     for combination in combinations:
         console_print('    (%d, %d, %d, %d)' % (combination[0], combination[1], combination[2], combination[3]))
 
+    return combinations
+
 #
 # Integral calculator wrapper
 #
@@ -240,30 +247,30 @@ def do_integrals(subject_name, basis_functions):
 
     integrals = {}
 
-    console_print('** Calculating %s one-electron integrals...' % subject_name)
-    combinations = get_one_electron_combinations(len(basis_functions))
-    function_combinations = [(basis_functions[combination[0]], basis_functions[combination[1]]) for combination in combinations]
+    # generate combinations for the one and two electron integral calculations
+    one_electron_combinations = get_one_electron_combinations(len(basis_functions))
+    one_electron_function_combinations = [(basis_functions[combination[0]], basis_functions[combination[1]]) for combination in one_electron_combinations]
+    two_electron_combinations = get_two_electron_combinations(len(basis_functions))
+    two_electron_function_combinations = [(basis_functions[combination[0]], basis_functions[combination[1]], basis_functions[combination[2]], basis_functions[combination[3]]) for combination in two_electron_combinations]
 
-    with multiprocessing.Pool(processes = multiprocessing.cpu_count()-1, maxtasksperchild=1000) as pool:
+    with multiprocessing.Pool(processes = multiprocessing.cpu_count()-2, initializer=initializer) as pool:
 
-        results = list(tqdm.tqdm(pool.imap(calculate_overlap_integrals, function_combinations), total=len(function_combinations), ascii=True, smoothing=0.01))
-        integrals[OVERLAP] = dict(zip(combinations, results))
+        console_print('** Calculating %s overlap integrals...' % subject_name)
+        results = list(tqdm.tqdm(pool.imap(calculate_overlap_integrals, one_electron_function_combinations), total=len(one_electron_function_combinations), ascii=True, smoothing=0.01))
+        integrals[OVERLAP] = dict(zip(one_electron_combinations, results))
 
-        results = list(tqdm.tqdm(pool.imap(calculate_kinetic_energy_integrals, function_combinations), total=len(function_combinations), ascii=True, smoothing=0.01))
-        integrals[KINETIC] = dict(zip(combinations, results))
+        console_print('** Calculating %s kinetic energy integrals...' % subject_name)
+        results = list(tqdm.tqdm(pool.imap(calculate_kinetic_energy_integrals, one_electron_function_combinations), total=len(one_electron_function_combinations), ascii=True, smoothing=0.01))
+        integrals[KINETIC] = dict(zip(one_electron_combinations, results))
 
+        console_print('** Calculating %s nuclear attraction integrals...' % subject_name)
         func = functools.partial(calculate_nuclear_attraction_integrals, subject_name.lower())
-        results = list(tqdm.tqdm(pool.imap(func, function_combinations), total=len(function_combinations), ascii=True, smoothing=0.01))
-        integrals[ATTRACTION] = dict(zip(combinations, results))
+        results = list(tqdm.tqdm(pool.imap(func, one_electron_function_combinations), total=len(one_electron_function_combinations), ascii=True, smoothing=0.01))
+        integrals[ATTRACTION] = dict(zip(one_electron_combinations, results))
 
-    console_print('** Calculating %s two-electron integrals...' % subject_name)
-    combinations = get_two_electron_combinations(len(basis_functions))
-    function_combinations = [(basis_functions[combination[0]], basis_functions[combination[1]], basis_functions[combination[2]], basis_functions[combination[3]]) for combination in combinations]
-
-    with multiprocessing.Pool(processes = multiprocessing.cpu_count()-1, maxtasksperchild=1000) as pool:
-
-        results = list(tqdm.tqdm(pool.imap(calculate_coulomb_repulsion_and_exchange_integrals, function_combinations), total=len(function_combinations), ascii=True, smoothing=0.01))
-        integrals[EXCHANGE] = dict(zip(combinations, results))
+        console_print('** Calculating %s repulsion and exchange integrals...' % subject_name)
+        results = list(tqdm.tqdm(pool.imap(calculate_coulomb_repulsion_and_exchange_integrals, two_electron_function_combinations), total=len(two_electron_function_combinations), ascii=True, smoothing=0.01))
+        integrals[EXCHANGE] = dict(zip(two_electron_combinations, results))
 
     console_print('** Finished calculating %s atom integrals!' % subject_name)
 
