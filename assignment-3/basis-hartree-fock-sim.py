@@ -66,18 +66,20 @@ IDX_START = 0
 IDX_END = 1
 DATETIME_STR_FORMAT = '[%Y/%m/%d-%H:%M:%S]'
 ENABLE_MP = True # multiprocessing
+HE_NUM_BASIS_FUNCTIONS = 2
+H2_NUM_BASIS_FUNCTIONS = 4
 
 #
 # Console formatter
 #
-def console_print(string=''):
+def console_print(string='', end='\n'):
 
     # get str representation
     if not isinstance(string, str):
         string = str(string)
 
     datetime_now = datetime.datetime.now()
-    print(datetime_now.strftime(DATETIME_STR_FORMAT) + ' ' + string)
+    print(datetime_now.strftime(DATETIME_STR_FORMAT) + ' ' + string, end=end)
 
 #
 # This is the main function
@@ -102,6 +104,36 @@ sto_1g_hydrogen_0_func = lambda z, y, x: 0.3696*sympy.exp(-0.4166*(sympy.sqrt((x
 sto_1g_hydrogen_1_func = lambda z, y, x: 0.3696*sympy.exp(-0.4166*(sympy.sqrt((x - (H2_BOND_LENGTH_ATOMIC_UNITS/2.0))**2+y**2+z**2))**2)
 
 #
+# Generate two electron integral combinations
+#
+def get_two_electron_combinations(num_basis_functions):
+    # generate combinations
+    # G_{row/v,col/u}
+    combinations = []
+    for v in range(num_basis_functions):
+        for mu in range(num_basis_functions):
+            for lambda_ in range(num_basis_functions):
+                for sigma in range(num_basis_functions):
+                    # Coulomb attraction two-electron integral
+                    coulomb = [v,mu,sigma,lambda_]
+                    # Exchange two-electron integral
+                    exchange = [v,lambda_,sigma,mu]
+                    # Avoid calculating identical integrals
+                    # (rs|tu) = (rs|ut) = (sr|tu) = (sr|ut) = (tu|rs) = (tu|sr) = (ut|rs) = (ut|sr)
+                    coulomb = tuple(sorted(coulomb[0:2]) + sorted(coulomb[2:4]))
+                    exchange = tuple(sorted(exchange[0:2]) + sorted(exchange[2:4]))
+                    coulomb_swapped = tuple(coulomb[2:4] + coulomb[0:2])
+                    exchange_swapped = tuple(exchange[2:4] + coulomb[0:2])
+                    if coulomb not in combinations and coulomb_swapped not in combinations:
+                        combinations.append(coulomb)
+                    if exchange not in combinations and exchange_swapped not in combinations:
+                        combinations.append(exchange)
+
+    console_print('  Two-Electron Integral Combinations (total=%d):' % len(combinations))
+    for combination in combinations:
+        console_print('    (%d, %d, %d, %d)' % (combination[0], combination[1], combination[2], combination[3]))
+
+#
 # Pre-calculate integrals
 #
 def precalculate_integrals():
@@ -110,19 +142,27 @@ def precalculate_integrals():
     R = sympy.vector.CoordSys3D('R')
     # sympy regular symboluc variables
     x, y, z = sympy.symbols('x y z')
+    u, v, w = sympy.symbols('u v w')
 
     # *******************
     # *** HELIUM ATOM ***
     # *******************
 
-    # one-electron integrals
+    console_print('** Starting Helium atom integral calculations')
 
     # Helium uses the same basis function twice, so the integrals end up being
     # identical four all four entries 11 = 12 = 21 = 22
 
     he_overlap_ints = {}
+    he_kinetic_energy_ints = {}
+    he_nuclear_attraction_ints = {}
+    he_repulsion_exchange_ints = {}
+
+    # basis function lookup table
+    he_basis_func_lut = (sto_1g_helium_func, sto_1g_helium_func)
+
     if False:
-        console_print('Calculating Helium overlap integrals...')
+        console_print('  Calculating Helium atom overlap integrals...')
         # symbolic version of the integrand
         he_overlap_intgd_sym = sto_1g_helium_func(z, y, x)*sto_1g_helium_func(z, y, x)
         # numerical version of the integrand
@@ -133,9 +173,8 @@ def precalculate_integrals():
         for combination in combinations:
             he_overlap_ints[combination] = he_overlap_int_val
 
-    he_kinetic_energy_ints = {}
     if False:
-        console_print('Calculating Helium kinetic energy integrals...')
+        console_print('  Calculating Helium atom kinetic energy integrals...')
         # symbolic version of the integrand
         he_kinetic_energy_intgd_sym = sto_1g_helium_func(R.z, R.y, R.x)*(-1/2)*sympy.vector.Laplacian(sto_1g_helium_func(R.z, R.y, R.x)).doit()
         # numerical version of the integrand
@@ -146,9 +185,8 @@ def precalculate_integrals():
         for combination in combinations:
             he_kinetic_energy_ints[combination] = he_kinetic_energy_int_val
 
-    he_nuclear_attraction_ints = {}
     if False:
-        console_print('Calculating Helium nuclear attraction integrals...')
+        console_print('  Calculating Helium atom nuclear attraction integrals...')
         # symbolic version of the integrand
         he_nuclear_attraction_intgd_sym = sto_1g_helium_func(z, y, x) * (-2/sympy.sqrt(x**2 + y**2 + z**2)) * sto_1g_helium_func(z, y, x)
         # numerical version of the integrand
@@ -159,62 +197,72 @@ def precalculate_integrals():
         for combination in combinations:
             he_nuclear_attraction_ints[combination] = he_nuclear_attraction_int_val
 
+    console_print('  Calculating Helium atom repulsion and exchange integrals...')
+
+    combinations = get_two_electron_combinations(HE_NUM_BASIS_FUNCTIONS)
+
+
     # *************************
     # *** HYDROGEN MOLECULE ***
     # *************************
 
-    # Hydrogen has two basis functions centered on each nuclei, for a total of
-    # four basis function (only two are unique). They will need to be
-    # combined to form the matrices, so we'll have to find unique combinations
+    console_print('** Starting Hydrogen molecule integral calculations')
 
-    h_overlap_ints = {}
-    h_kinetic_energy_ints = {}
-    h_nuclear_attraction_ints = {}
+    # Hydrogen molecule has two basis functions centered on each nuclei, for a
+    # total of four basis function (only two are unique). They will need to
+    # be combined to form the matrices, so we'll have to find unique
+    # combinations
+
+    h2_overlap_ints = {}
+    h2_kinetic_energy_ints = {}
+    h2_nuclear_attraction_ints = {}
+    h2_repulsion_exchange_ints = {}
 
     # basis function lookup table
-    h_basis_func_lut = (sto_1g_hydrogen_0_func, sto_1g_hydrogen_0_func, sto_1g_hydrogen_1_func, sto_1g_hydrogen_1_func)
+    h2_basis_func_lut = (sto_1g_hydrogen_0_func, sto_1g_hydrogen_0_func, sto_1g_hydrogen_1_func, sto_1g_hydrogen_1_func)
 
-    if True:
-        # generate unique combinations
-        combinations = itertools.combinations_with_replacement([0,1,2,3],2)
+    # generate unique combinations
+    combinations = list(itertools.combinations_with_replacement([0,1,2,3],2))
 
+    if False:
         for combination in combinations:
-
-            console_print('Calculating Hydrogen overlap integral (%d,%d)...' % (combination[0], combination[1]))
+            console_print('  Calculating Hydrogen molecule overlap integral (%d,%d)...' % (combination[0], combination[1]))
             # symbolic version of the integrand
-            h_overlap_intgd_sym = h_basis_func_lut[combination[0]](z, y, x)*h_basis_func_lut[combination[1]](z, y, x)
+            h2_overlap_intgd_sym = h2_basis_func_lut[combination[0]](z, y, x)*h_basis_func_lut[combination[1]](z, y, x)
             # numerical version of the integrand
-            h_overlap_intgd_num = sympy.lambdify([z, y, x], h_overlap_intgd_sym, 'scipy')
+            h2_overlap_intgd_num = sympy.lambdify([z, y, x], h2_overlap_intgd_sym, 'scipy')
             # integrate (first index of tuple contains result)
-            h_overlap_int_val = scipy.integrate.tplquad(h_overlap_intgd_num, -scipy.inf, scipy.inf, lambda x: -scipy.inf, lambda x: scipy.inf, lambda x, y: -scipy.inf, lambda x, y: scipy.inf)[0]
+            h2_overlap_int_val = scipy.integrate.tplquad(h_overlap_intgd_num, -scipy.inf, scipy.inf, lambda x: -scipy.inf, lambda x: scipy.inf, lambda x, y: -scipy.inf, lambda x, y: scipy.inf)[0]
             # add integration results to dictionary
-            h_overlap_ints[combination] = h_overlap_int_val
+            h2_overlap_ints[combination] = h2_overlap_int_val
 
-            console_print('Calculating Hydrogen kinetic energy integral (%d,%d)...' % (combination[0], combination[1]))
+            console_print('  Calculating Hydrogen molecule kinetic energy integral (%d,%d)...' % (combination[0], combination[1]))
             # symbolic version of the integrand
-            h_kinetic_energy_intgd_sym = h_basis_func_lut[combination[0]](R.z, R.y, R.x)*(-1/2)*sympy.vector.Laplacian(h_basis_func_lut[combination[1]](R.z, R.y, R.x)).doit()
+            h2_kinetic_energy_intgd_sym = h2_basis_func_lut[combination[0]](R.z, R.y, R.x)*(-1/2)*sympy.vector.Laplacian(h_basis_func_lut[combination[1]](R.z, R.y, R.x)).doit()
             # numerical version of the integrand
-            h_kinetic_energy_intgd_num = sympy.lambdify([R.z, R.y, R.x], h_kinetic_energy_intgd_sym, 'scipy')
+            h2_kinetic_energy_intgd_num = sympy.lambdify([R.z, R.y, R.x], h2_kinetic_energy_intgd_sym, 'scipy')
             # integrate (first index of tuple contains result)
-            h_kinetic_energy_int_val = scipy.integrate.tplquad(h_kinetic_energy_intgd_num, -scipy.inf, scipy.inf, lambda x: -scipy.inf, lambda x: scipy.inf, lambda x, y: -scipy.inf, lambda x, y: scipy.inf)[0]
+            h2_kinetic_energy_int_val = scipy.integrate.tplquad(h_kinetic_energy_intgd_num, -scipy.inf, scipy.inf, lambda x: -scipy.inf, lambda x: scipy.inf, lambda x, y: -scipy.inf, lambda x, y: scipy.inf)[0]
             # add integration results to dictionary
-            h_kinetic_energy_ints[combination] = h_kinetic_energy_int_val
+            h2_kinetic_energy_ints[combination] = h2_kinetic_energy_int_val
 
-            console_print('Calculating Hydrogen kinetic energy integral (%d,%d)...' % (combination[0], combination[1]))
+            console_print('  Calculating Hydrogen molecule kinetic energy integral (%d,%d)...' % (combination[0], combination[1]))
             # symbolic version of the integrand
-            h_nuclear_attraction_intgd_sym = h_basis_func_lut[combination[0]](z, y, x) * (-2/sympy.sqrt(x**2 + y**2 + z**2)) * h_basis_func_lut[combination[1]](z, y, x)
+            h2_nuclear_attraction_intgd_sym = h2_basis_func_lut[combination[0]](z, y, x) * (-2/sympy.sqrt(x**2 + y**2 + z**2)) * h2_basis_func_lut[combination[1]](z, y, x)
             # numerical version of the integrand
-            h_nuclear_attraction_intgd_num = sympy.lambdify([z, y, x], h_nuclear_attraction_intgd_sym, 'scipy')
+            h2_nuclear_attraction_intgd_num = sympy.lambdify([z, y, x], h2_nuclear_attraction_intgd_sym, 'scipy')
             # integrate (first index of tuple contains result)
-            h_nuclear_attraction_int_val = scipy.integrate.tplquad(h_nuclear_attraction_intgd_num, -scipy.inf, scipy.inf, lambda x: -scipy.inf, lambda x: scipy.inf, lambda x, y: -scipy.inf, lambda x, y: scipy.inf)[0]
+            h2_nuclear_attraction_int_val = scipy.integrate.tplquad(h_nuclear_attraction_intgd_num, -scipy.inf, scipy.inf, lambda x: -scipy.inf, lambda x: scipy.inf, lambda x, y: -scipy.inf, lambda x, y: scipy.inf)[0]
             # add integration results to dictionary
-            h_nuclear_attraction_ints[combination] = h_nuclear_attraction_int_val
+            h2_nuclear_attraction_ints[combination] = h2_nuclear_attraction_int_val
 
-    # two-electron integrals
+    console_print('  Calculating Hydrogen molecule repulsion and exchange integrals...')
+
+    combinations = get_two_electron_combinations(H2_NUM_BASIS_FUNCTIONS)
 
     # coulomb repulsion and exchange integrals
 
-    console_print('Finished calculating integrals!')
+    console_print('** Finished calculating integrals!')
 
 if __name__ == '__main__':
     # the following sets up the argument parser for the program
