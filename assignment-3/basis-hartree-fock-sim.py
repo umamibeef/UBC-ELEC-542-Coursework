@@ -104,6 +104,39 @@ sto_1g_hydrogen_0_func = lambda z, y, x: 0.3696*sympy.exp(-0.4166*(sympy.sqrt((x
 sto_1g_hydrogen_1_func = lambda z, y, x: 0.3696*sympy.exp(-0.4166*(sympy.sqrt((x - (H2_BOND_LENGTH_ATOMIC_UNITS/2.0))**2+y**2+z**2))**2)
 
 #
+# Calculate the overlap integrals given the function lookup table and the desired combinations
+#
+def calculate_overlap_integrals(func_lut, comb):
+    pass
+
+#
+# Calculate the kinetic energy integrals given the function lookup table and the desired combinations
+#
+def calculate_kinetic_energy_integrals(func_lut, comb):
+    pass
+
+#
+# Calculate the nuclear attraction integrals given the function lookup table and the desired combinations
+#
+def calculate_nuclear_attraction_integrals(func_lut, comb):
+    pass
+
+#
+# Calculate the Coulomb repulsion and exchange integrals given the function lookup table and the desired combinations
+#
+def calculate_coulomb_repulsion_and_exchange_integrals(func_lut, comb):
+    pass
+
+#
+# Generate 
+#
+def get_one_electron_combinations(num_basis_functions):
+    combinations = list(itertools.combinations_with_replacement(list(range(num_basis_functions)),2))
+    console_print('  One-Electron Integral Combinations (total=%d):' % len(combinations))
+    for combination in combinations:
+        console_print('    (%d, %d)' % (combination[0], combination[1]))
+
+#
 # Generate two electron integral combinations
 #
 def get_two_electron_combinations(num_basis_functions):
@@ -157,6 +190,8 @@ def precalculate_integrals():
     he_kinetic_energy_ints = {}
     he_nuclear_attraction_ints = {}
     he_repulsion_exchange_ints = {}
+
+    combinations = get_one_electron_combinations(HE_NUM_BASIS_FUNCTIONS)
 
     # basis function lookup table
     he_basis_func_lut = (sto_1g_helium_func, sto_1g_helium_func)
@@ -222,7 +257,7 @@ def precalculate_integrals():
     h2_basis_func_lut = (sto_1g_hydrogen_0_func, sto_1g_hydrogen_0_func, sto_1g_hydrogen_1_func, sto_1g_hydrogen_1_func)
 
     # generate unique combinations
-    combinations = list(itertools.combinations_with_replacement([0,1,2,3],2))
+    combinations = get_one_electron_combinations(H2_NUM_BASIS_FUNCTIONS)
 
     if False:
         for combination in combinations:
