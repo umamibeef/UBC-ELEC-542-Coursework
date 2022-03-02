@@ -142,7 +142,7 @@ def calculate_kinetic_energy_integrals(func_lut, combinations):
     for combination in combinations:
         console_print('Calculating kinetic energy integral (%d,%d)...' % (combination[0], combination[1]))
         # symbolic version of the integrand
-        kinetic_energy_intgd_sym = func_lut[combination[0]](R.z, R.y, R.x)*(-1/2)*sympy.vector.Laplacian(h_func_lut[combination[1]](R.z, R.y, R.x)).doit()
+        kinetic_energy_intgd_sym = func_lut[combination[0]](R.z, R.y, R.x)*(-1/2)*sympy.vector.Laplacian(func_lut[combination[1]](R.z, R.y, R.x)).doit()
         # numerical version of the integrand
         kinetic_energy_intgd_num = sympy.lambdify([R.z, R.y, R.x], kinetic_energy_intgd_sym, 'scipy')
         # integrate (first index of tuple contains result)
