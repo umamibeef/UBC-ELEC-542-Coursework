@@ -43,6 +43,7 @@ import tqdm # progress bar for MP
 import sys
 import json
 import signal
+import pyscf
 
 numpy.set_printoptions(edgeitems=30, linewidth=100000, 
     formatter=dict(float=lambda x: '%.3g' % x))
@@ -187,14 +188,19 @@ def calculate_coulomb_repulsion_and_exchange_integrals(funcs):
     x, y, z = sympy.symbols('x y z')
     u, v, w = sympy.symbols('u v w')
 
+    # nquad parameters
+    limits = 1e3
+    err = 1e-3
+
     # symbolic version of the integrand
-    coulomb_repulsion_and_exchange_intgd_sym = funcs[0](z, y, x) * funcs[1](z, y, x) * (1/sympy.sqrt(TINY_NUMBER + (u-x)**2 + (v-y)**2 + (w-z)**2)) * funcs[2](w, v, u) * funcs[3](w, v, u)
+    coulomb_repulsion_and_exchange_intgd_sym = sympy.simplify(funcs[0](z, y, x) * funcs[1](z, y, x) * (1/sympy.sqrt(TINY_NUMBER + (u-x)**2 + (v-y)**2 + (w-z)**2)) * funcs[2](w, v, u) * funcs[3](w, v, u))
     # numerical version of the integrand
     coulomb_repulsion_and_exchange_intgd_num = sympy.lambdify([z, y, x, w, v, u], coulomb_repulsion_and_exchange_intgd_sym, 'scipy')
     # integrate (first index of tuple contains result)
-    coulomb_repulsion_and_exchange_int_val = scipy.integrate.nquad(coulomb_repulsion_and_exchange_intgd_num, [[-scipy.inf, scipy.inf], [-scipy.inf, scipy.inf], [-scipy.inf, scipy.inf], [-scipy.inf, scipy.inf], [-scipy.inf, scipy.inf], [-scipy.inf, scipy.inf]])[0]
+    coulomb_repulsion_and_exchange_int_val = scipy.integrate.nquad(coulomb_repulsion_and_exchange_intgd_num, [[-limits, limits]]*6, opts={'epsabs':err, 'epsrel':err}, full_output=True)
+    print(coulomb_repulsion_and_exchange_int_val)
 
-    return coulomb_repulsion_and_exchange_int_val
+    return coulomb_repulsion_and_exchange_int_val[0]
 
 #
 # Generate 
@@ -255,18 +261,18 @@ def do_integrals(subject_name, basis_functions):
 
     with multiprocessing.Pool(processes = multiprocessing.cpu_count()-2, initializer=initializer) as pool:
 
-        console_print('** Calculating %s overlap integrals...' % subject_name)
-        results = list(tqdm.tqdm(pool.imap(calculate_overlap_integrals, one_electron_function_combinations), ascii=True))
-        integrals[OVERLAP] = dict(zip(one_electron_combinations, results))
+        # console_print('** Calculating %s overlap integrals...' % subject_name)
+        # results = list(tqdm.tqdm(pool.imap(calculate_overlap_integrals, one_electron_function_combinations), ascii=True))
+        # integrals[OVERLAP] = dict(zip(one_electron_combinations, results))
 
-        console_print('** Calculating %s kinetic energy integrals...' % subject_name)
-        results = list(tqdm.tqdm(pool.imap(calculate_kinetic_energy_integrals, one_electron_function_combinations), ascii=True))
-        integrals[KINETIC] = dict(zip(one_electron_combinations, results))
+        # console_print('** Calculating %s kinetic energy integrals...' % subject_name)
+        # results = list(tqdm.tqdm(pool.imap(calculate_kinetic_energy_integrals, one_electron_function_combinations), ascii=True))
+        # integrals[KINETIC] = dict(zip(one_electron_combinations, results))
 
-        console_print('** Calculating %s nuclear attraction integrals...' % subject_name)
-        func = functools.partial(calculate_nuclear_attraction_integrals, subject_name.lower())
-        results = list(tqdm.tqdm(pool.imap(func, one_electron_function_combinations), ascii=True))
-        integrals[ATTRACTION] = dict(zip(one_electron_combinations, results))
+        # console_print('** Calculating %s nuclear attraction integrals...' % subject_name)
+        # func = functools.partial(calculate_nuclear_attraction_integrals, subject_name.lower())
+        # results = list(tqdm.tqdm(pool.imap(func, one_electron_function_combinations), ascii=True))
+        # integrals[ATTRACTION] = dict(zip(one_electron_combinations, results))
 
         console_print('** Calculating %s repulsion and exchange integrals...' % subject_name)
         results = list(tqdm.tqdm(pool.imap(calculate_coulomb_repulsion_and_exchange_integrals, two_electron_function_combinations), ascii=True))
