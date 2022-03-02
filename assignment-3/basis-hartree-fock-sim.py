@@ -256,23 +256,36 @@ def do_integrals(subject_name, basis_functions):
     with multiprocessing.Pool(processes = multiprocessing.cpu_count()-2, initializer=initializer) as pool:
 
         console_print('** Calculating %s overlap integrals...' % subject_name)
-        results = list(tqdm.tqdm(pool.imap(calculate_overlap_integrals, one_electron_function_combinations), total=len(one_electron_function_combinations), ascii=True, smoothing=0.01))
+        results = list(tqdm.tqdm(pool.imap(calculate_overlap_integrals, one_electron_function_combinations), ascii=True))
         integrals[OVERLAP] = dict(zip(one_electron_combinations, results))
 
         console_print('** Calculating %s kinetic energy integrals...' % subject_name)
-        results = list(tqdm.tqdm(pool.imap(calculate_kinetic_energy_integrals, one_electron_function_combinations), total=len(one_electron_function_combinations), ascii=True, smoothing=0.01))
+        results = list(tqdm.tqdm(pool.imap(calculate_kinetic_energy_integrals, one_electron_function_combinations), ascii=True))
         integrals[KINETIC] = dict(zip(one_electron_combinations, results))
 
         console_print('** Calculating %s nuclear attraction integrals...' % subject_name)
         func = functools.partial(calculate_nuclear_attraction_integrals, subject_name.lower())
-        results = list(tqdm.tqdm(pool.imap(func, one_electron_function_combinations), total=len(one_electron_function_combinations), ascii=True, smoothing=0.01))
+        results = list(tqdm.tqdm(pool.imap(func, one_electron_function_combinations), ascii=True))
         integrals[ATTRACTION] = dict(zip(one_electron_combinations, results))
 
         console_print('** Calculating %s repulsion and exchange integrals...' % subject_name)
-        results = list(tqdm.tqdm(pool.imap(calculate_coulomb_repulsion_and_exchange_integrals, two_electron_function_combinations), total=len(two_electron_function_combinations), ascii=True, smoothing=0.01))
+        results = list(tqdm.tqdm(pool.imap(calculate_coulomb_repulsion_and_exchange_integrals, two_electron_function_combinations), ascii=True))
         integrals[EXCHANGE] = dict(zip(two_electron_combinations, results))
 
     console_print('** Finished calculating %s atom integrals!' % subject_name)
+
+    return integrals
+
+#
+# Pre-process the integral dictionary for jsonification by converting tuples to strings
+#
+def preprocess_dict_for_json(integral_dict):
+
+    for integral_type_key in list(integral_dict.keys()):
+        for combination_key in list(integral_dict[integral_type_key]):
+            integral_dict[integral_type_key][str(combination_key)] = integral_dict[integral_type_key].pop(combination_key)
+
+    return integral_dict
 
 #
 # Pre-calculate integrals
@@ -285,6 +298,7 @@ def precalculate_integrals():
     try:
         with open(HE_INTEGRALS_FILENAME) as he_integrals_json_file:
             he_integrals = json.load(he_integrals_json_file)
+            # todo, convert string tuples to real tuples
             console_print('** HE integrals loaded from %s' % (HE_INTEGRALS_FILENAME))
     except:
         console_print('** Unable to load He integrals file, will recalculate')
@@ -293,14 +307,11 @@ def precalculate_integrals():
     try:
         with open(H2_INTEGRALS_FILENAME) as h2_integrals_json_file:
             h2_integrals = json.load(h2_integrals_json_file)
+            # todo, convert string tuples to real tuples
             console_print('** H2 integrals loaded from %s' % (H2_INTEGRALS_FILENAME))
     except:
         console_print('** Unable to load H2 integrals file, will recalculate')
         do_h2_integrals = True
-
-    # setup integral dictionaries
-    he_integrals = {}
-    h2_integrals = {}
 
     # *******************
     # *** HELIUM ATOM ***
@@ -321,7 +332,9 @@ def precalculate_integrals():
         # write out integrals
         console_print('** Saving Helium atom integrals to %s...' % (HE_INTEGRALS_FILENAME))
         with open(HE_INTEGRALS_FILENAME, 'w') as he_integrals_json_file:
-            json.dumps(he_integrals, indent=4)
+            he_integrals = preprocess_dict_for_json(he_integrals)
+            print(he_integrals)
+            json.dump(he_integrals, he_integrals_json_file, indent=4)
 
     # *************************
     # *** HYDROGEN MOLECULE ***
@@ -344,7 +357,8 @@ def precalculate_integrals():
         # write out integrals
         console_print('** Saving H2 molecule integrals to %s...' % (H2_INTEGRALS_FILENAME))
         with open(H2_INTEGRALS_FILENAME, 'w') as h2_integrals_json_file:
-            json.dumps(h2_integrals, indent=4)
+            h2_integrals = preprocess_dict_for_json(h2_integrals)
+            json.dump(h2_integrals, h2_integrals_json_file,  indent=4)
 
         console_print('** Finished calculating H2 molecule integrals!')
 
