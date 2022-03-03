@@ -43,7 +43,6 @@ import tqdm # progress bar for MP
 import sys
 import json
 import signal
-import pyscf
 
 numpy.set_printoptions(edgeitems=30, linewidth=100000, 
     formatter=dict(float=lambda x: '%.3g' % x))
@@ -105,12 +104,29 @@ def main(cmd_args):
 
     precalculate_integrals()
 
+STO_1G_HE_ALPHA = 0.7739
+STO_1G_HE_K = 0.5881
+STO_1G_HE_CENTER = (0,0,0)
+
 #
 # Helium STO-1G basis function (centered around origin)
 #
 def sto_1g_helium_func(z, y, x):
     return 0.5881*sympy.exp(-0.7739*(sympy.sqrt(x**2+y**2+z**2))**2)
 
+#
+# Helium STO-1G basis function class
+#
+class sto_1g_helium_class:
+
+    k = 0.5881
+    alpha = 0.7739
+
+    def __init__(self, center=(0,0,0)):
+        self.center = center
+
+    def eval(self, z, y, x):
+        return self.k*sympy.exp(-self.alpha*(sympy.sqrt(((x - self.center[0])**2 + (y - self.center[1])**2 + (z - self.center[2])**2))**2))
 #
 # Hydrogen STO-1G basis function (centered around Hydrogen nucleus 0)
 #
@@ -122,6 +138,20 @@ def sto_1g_hydrogen_0_func(z, y, x):
 #
 def sto_1g_hydrogen_1_func(z, y, x):
     return 0.3696*sympy.exp(-0.4166*(sympy.sqrt((x - (H2_BOND_LENGTH_ATOMIC_UNITS/2.0))**2+y**2+z**2))**2)    
+
+#
+# Hydrogen STO-1G basis function class
+#
+class sto_1g_hydrogen_class:
+    
+    k = 0.3696
+    alpha = 0.4166
+
+    def __init__(self, center=(0,0,0)):
+        self.center = center
+
+    def eval(self, z, y, x):
+        return self.k*sympy.exp(-self.alpha*(sympy.sqrt(((x - self.center[0])**2 + (y - self.center[1])**2 + (z - self.center[2])**2))**2))
 
 #
 # Calculate the overlap integrals given the function lookup table and the desired combinations
@@ -180,9 +210,11 @@ def calculate_nuclear_attraction_integrals(subject, funcs):
     return nuclear_attraction_int_val
 
 #
-# Calculate the Coulomb repulsion and exchange integrals given the function lookup table and the desired combinations
+# Calculate the Coulomb repulsion and exchange integrals given the function
+# lookup table and the desired combinations. This is the naive version with
+# no optimizations to the integrand.
 #
-def calculate_coulomb_repulsion_and_exchange_integrals(funcs):
+def calculate_coulomb_repulsion_and_exchange_integrals_naive(funcs):
 
     # sympy regular symbolic variables
     x, y, z = sympy.symbols('x y z')
@@ -203,7 +235,64 @@ def calculate_coulomb_repulsion_and_exchange_integrals(funcs):
     return coulomb_repulsion_and_exchange_int_val[0]
 
 #
-# Generate 
+# Calculate the Coulomb repulsion and exchange integrals given the function
+# lookup table and the desired combinations. This is the optimized version to
+# help speed up calculations.
+#
+def calculate_coulomb_repulsion_and_exchange_integrals_optimized(func_objs):
+
+    # sympy regular symbolic variables
+    u = sympy.symbols('u')
+
+    # values is packed with the basis function values K and alpha for all four basis functions
+
+    # combine the outer K coefficients into a single one that will multiply the final result
+    k_all = func_objs[0].k * func_objs[1].k * func_objs[2].k * func_objs[3].k
+
+    # get the four different function alphas
+    alpha = func_objs[0].alpha
+    beta = func_objs[1].alpha
+    gamma = func_objs[2].alpha
+    delta = func_objs[3].alpha
+
+    # get the four different centers, A, B, C, D
+    center_a = scipy.array(func_objs[0].center)
+    center_b = scipy.array(func_objs[1].center)
+    center_c = scipy.array(func_objs[2].center)
+    center_d = scipy.array(func_objs[3].center)
+
+    # calculate the G coefficients
+    g_ab = scipy.exp(((-alpha * beta)/(alpha + beta))*(calculate_distance(center_a, center_b)**2))
+    g_cd = scipy.exp(((-gamma * delta)/(gamma + delta))*(calculate_distance(center_c, center_d)**2))
+
+    # calculate zeta and eta
+    zeta = alpha + beta
+    eta = gamma + delta
+
+    # calculate new centers Q and P
+    center_p = (((alpha)/(alpha + beta)) * center_a) + (((beta)/(alpha + beta)) * center_b)
+    center_q = (((gamma)/(gamma + delta)) * center_c) + (((delta)/(gamma + delta)) * center_d)
+
+    # calculate fancy v**2
+    v_squared = ((zeta*eta)/(zeta + eta))
+
+    # calculate T
+    t = v_squared * calculate_distance(center_q, center_p)
+
+    # combined constant
+    coeff = (k_all*g_ab*g_cd)*((2*scipy.pi**(5/2))/(zeta*eta*scipy.sqrt(zeta + eta)))
+
+    # symbolic version of the integrand
+    coulomb_repulsion_and_exchange_intgd_sym = coeff*sympy.exp(-t*u**2)
+    # numerical version of the integrand
+    coulomb_repulsion_and_exchange_intgd_num = sympy.lambdify([u], coulomb_repulsion_and_exchange_intgd_sym, 'scipy')
+    # integrate (first index of tuple contains result)
+    coulomb_repulsion_and_exchange_int_val = scipy.integrate.nquad(coulomb_repulsion_and_exchange_intgd_num, [[0, 1]])
+
+    return coulomb_repulsion_and_exchange_int_val[0]
+
+#
+# Generate one-electron integral combinations
 #
 def get_one_electron_combinations(num_basis_functions):
 
@@ -215,7 +304,7 @@ def get_one_electron_combinations(num_basis_functions):
     return combinations
 
 #
-# Generate two electron integral combinations
+# Generate two-electron integral combinations
 #
 def get_two_electron_combinations(num_basis_functions):
     # generate combinations
@@ -247,35 +336,44 @@ def get_two_electron_combinations(num_basis_functions):
     return combinations
 
 #
+# Distance between two 3D vectors
+#
+def calculate_distance(vector_0, vector_1):
+
+    return scipy.sqrt((vector_1[0] - vector_0[0])**2 + (vector_1[1] - vector_0[1])**2 + (vector_1[2] - vector_0[2])**2)
+
+#
 # Integral calculator wrapper
 #
-def do_integrals(subject_name, basis_functions):
+def do_integrals(subject_name, basis_function_objs):
 
     integrals = {}
 
     # generate combinations for the one and two electron integral calculations
-    one_electron_combinations = get_one_electron_combinations(len(basis_functions))
-    one_electron_function_combinations = [(basis_functions[combination[0]], basis_functions[combination[1]]) for combination in one_electron_combinations]
-    two_electron_combinations = get_two_electron_combinations(len(basis_functions))
-    two_electron_function_combinations = [(basis_functions[combination[0]], basis_functions[combination[1]], basis_functions[combination[2]], basis_functions[combination[3]]) for combination in two_electron_combinations]
+    # for the one-electron integrals, we use naive functions and scipy to evaluate the integrals as they are because they're simple
+    one_electron_combinations = get_one_electron_combinations(len(basis_function_objs))
+    one_electron_function_combinations = [(basis_function_objs[combination[0]].eval, basis_function_objs[combination[1]].eval) for combination in one_electron_combinations]
+    # for the two-electron integrals, we use optimized functions which only have a single integral to evaluate as they are too complex to evaluate naively
+    two_electron_combinations = get_two_electron_combinations(len(basis_function_objs))
+    two_electron_function_combinations = [(basis_function_objs[combination[0]], basis_function_objs[combination[1]], basis_function_objs[combination[2]], basis_function_objs[combination[3]]) for combination in two_electron_combinations]
 
     with multiprocessing.Pool(processes = multiprocessing.cpu_count()-2, initializer=initializer) as pool:
 
-        # console_print('** Calculating %s overlap integrals...' % subject_name)
-        # results = list(tqdm.tqdm(pool.imap(calculate_overlap_integrals, one_electron_function_combinations), ascii=True))
-        # integrals[OVERLAP] = dict(zip(one_electron_combinations, results))
+        console_print('** Calculating %s overlap integrals...' % subject_name)
+        results = list(tqdm.tqdm(pool.imap(calculate_overlap_integrals, one_electron_function_combinations), ascii=True))
+        integrals[OVERLAP] = dict(zip(one_electron_combinations, results))
 
-        # console_print('** Calculating %s kinetic energy integrals...' % subject_name)
-        # results = list(tqdm.tqdm(pool.imap(calculate_kinetic_energy_integrals, one_electron_function_combinations), ascii=True))
-        # integrals[KINETIC] = dict(zip(one_electron_combinations, results))
+        console_print('** Calculating %s kinetic energy integrals...' % subject_name)
+        results = list(tqdm.tqdm(pool.imap(calculate_kinetic_energy_integrals, one_electron_function_combinations), ascii=True))
+        integrals[KINETIC] = dict(zip(one_electron_combinations, results))
 
-        # console_print('** Calculating %s nuclear attraction integrals...' % subject_name)
-        # func = functools.partial(calculate_nuclear_attraction_integrals, subject_name.lower())
-        # results = list(tqdm.tqdm(pool.imap(func, one_electron_function_combinations), ascii=True))
-        # integrals[ATTRACTION] = dict(zip(one_electron_combinations, results))
+        console_print('** Calculating %s nuclear attraction integrals...' % subject_name)
+        func = functools.partial(calculate_nuclear_attraction_integrals, subject_name.lower())
+        results = list(tqdm.tqdm(pool.imap(func, one_electron_function_combinations), ascii=True))
+        integrals[ATTRACTION] = dict(zip(one_electron_combinations, results))
 
         console_print('** Calculating %s repulsion and exchange integrals...' % subject_name)
-        results = list(tqdm.tqdm(pool.imap(calculate_coulomb_repulsion_and_exchange_integrals, two_electron_function_combinations), ascii=True))
+        results = list(tqdm.tqdm(pool.imap(calculate_coulomb_repulsion_and_exchange_integrals_optimized, two_electron_function_combinations), ascii=True))
         integrals[EXCHANGE] = dict(zip(two_electron_combinations, results))
 
     console_print('** Finished calculating %s atom integrals!' % subject_name)
@@ -319,6 +417,11 @@ def precalculate_integrals():
         console_print('** Unable to load H2 integrals file, will recalculate')
         do_h2_integrals = True
 
+    # instantiate basis function classes for integral calculations
+    sto_1g_helium_obj = sto_1g_helium_class((0,0,0))
+    sto_1g_hydrogen_0_obj = sto_1g_helium_class(((-H2_BOND_LENGTH_ATOMIC_UNITS/2.0),0,0))
+    sto_1g_hydrogen_1_obj = sto_1g_helium_class(((H2_BOND_LENGTH_ATOMIC_UNITS/2.0),0,0))
+
     # *******************
     # *** HELIUM ATOM ***
     # *******************
@@ -331,7 +434,7 @@ def precalculate_integrals():
         # identical four all four entries 11 = 12 = 21 = 22
 
         # basis function lookup table
-        he_basis_func_lut = (sto_1g_helium_func, sto_1g_helium_func)
+        he_basis_func_lut = (sto_1g_helium_obj, sto_1g_helium_obj)
 
         he_integrals = do_integrals('He', he_basis_func_lut)
 
@@ -356,7 +459,7 @@ def precalculate_integrals():
         # combinations
 
         # basis function lookup table
-        h2_basis_func_lut = (sto_1g_hydrogen_0_func, sto_1g_hydrogen_0_func, sto_1g_hydrogen_1_func, sto_1g_hydrogen_1_func)
+        h2_basis_func_lut = (sto_1g_hydrogen_0_obj, sto_1g_hydrogen_0_obj, sto_1g_hydrogen_1_obj, sto_1g_hydrogen_1_obj)
 
         h2_integrals = do_integrals('H2', h2_basis_func_lut)
 
