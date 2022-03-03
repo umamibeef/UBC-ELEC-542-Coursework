@@ -315,34 +315,33 @@ We now have all of the background required to implement our solution. The follow
 
 \begin{itemize}
   \item On startup, the program searches for two JSON files containing pre-calculated integrals for both the Helium atom and the Hydrogen molecule. These files include all of the combinations that produce a unique integration result provided that the basis functions are different. If the files are not found, then the program precalculates the integrals and saved the result in these files. Multiprocessing is used to calculate an integral per available CPU core, helping to parallelize the workload.
-  \item The combinations for the one electron and two electron integrals attempt to reduce the amount of integrations performed by the program. For the one-electron integrals, the combinations will exclude those whose flipped indices are already accounted for as they produce the same results. For the two electron integrals, a similar process is performed on the pairs of indices on either side of the repulsion term where flipped indices are discarded. The symmetry where the two functions are swapped at the same time on either side is also respeted. This can be summarized as follows: $(rs|t\mu) = (rs|\mut) = (sr|t\mu) = (sr|\mut) = (t\mu|rs) = (t\mu|sr) = (\mut|rs) = (\mut|sr)$ \cite{hartree-fock-in-100-lines}.
+  \item The combinations for the one electron and two electron integrals attempt to reduce the amount of integrations performed by the program. For the one-electron integrals, the combinations will exclude those whose flipped indices are already accounted for as they produce the same results. For the two electron integrals, a similar process is performed on the pairs of indices on either side of the repulsion term where flipped indices are discarded. The symmetry where the two functions are swapped at the same time on either side is also respeted. This can be summarized as follows:
+  $(rs|t\mu) = (rs|\mu t) = (sr|t\mu) = (sr|\mu t) = (t\mu|rs) = (t\mu|sr) = (\mu t|rs) = (\mu t|sr)$ \cite{hartree-fock-in-100-lines}.
   \item Classes are defined for each basis function which provides the ability to extract the two coefficients of the basis function, define where the basis function is centered, and evaluate the function as a member function of the class. Since the program uses both naive and optimized equations for the integration, the naive version uses the full function defined in the class and the optimized version uses the coefficients of the Gaussian functions.
-  \item The \texttt{sympy} library is used to symbolically define the functions, which is helpful in perform operations such as the Laplacian in the kinetic energy integrand. The resulting symbolic representation of each naive integrand is then converted into a Python lambda function to be numerically evaluated through the \textt{scipy} package.
+  \item The \texttt{sympy} library is used to symbolically define the functions, which is helpful in perform operations such as the Laplacian in the kinetic energy integrand. The resulting symbolic representation of each naive integrand is then converted into a Python lambda function to be numerically evaluated through the \texttt{scipy} package.
 \end{itemize}
 
-Precalculating the integrals will be performed by the program on startup and saved as comma-separated-value (CSV) file for easy lookup. Subsequent runs will load this data file and use the values and skip this step.
+% \newpage
+% \section{Results}
 
-\newpage
-\section{Results}
+% \begin{figure}[H]
+%   \begin{center}
+%     % \includegraphics[scale=0.75]{he_N28_l5.png}
+%   \end{center}
+%   \caption{Calculated orbitals for $He$ atom using limits of [-5,5]}
+%   \label{he-plot}
+% \end{figure}
 
-\begin{figure}[H]
-  \begin{center}
-    % \includegraphics[scale=0.75]{he_N28_l5.png}
-  \end{center}
-  \caption{Calculated orbitals for $He$ atom using limits of [-5,5]}
-  \label{he-plot}
-\end{figure}
-
-\begin{table}[H]
-\begin{center}
-\begin{tabular}{l|llllll}\hline
-$n$    & $1$    & $2$     & $3$     & $4$      & $5$      & $6$      \\\hline
-$E_n$  & $-0.049968$  & $-0.049878$  & $-0.041970$  & $0.011558$  & $-0.007816$  & $0.065703$ \\\hline
-\end{tabular}
-\end{center}
-  \caption{The first six orbital energy levels obtained from applying HF to the Helium atom using limits of [-5,5]}
-  \label{orbital-energies-he}
-\end{table}
+% \begin{table}[H]
+% \begin{center}
+% \begin{tabular}{l|llllll}\hline
+% $n$    & $1$    & $2$     & $3$     & $4$      & $5$      & $6$      \\\hline
+% $E_n$  & $-0.049968$  & $-0.049878$  & $-0.041970$  & $0.011558$  & $-0.007816$  & $0.065703$ \\\hline
+% \end{tabular}
+% \end{center}
+%   \caption{The first six orbital energy levels obtained from applying HF to the Helium atom using limits of [-5,5]}
+%   \label{orbital-energies-he}
+% \end{table}
 
 \newpage
 \section{Discussion}

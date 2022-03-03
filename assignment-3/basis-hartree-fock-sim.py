@@ -261,11 +261,11 @@ def calculate_nuclear_attraction_integrals_naive(subject, funcs):
     if subject == 'he':
         nuclear_attraction_intgd_sym = sympy.simplify(funcs[0](z, y, x) * (-2/sympy.sqrt(x**2 + y**2 + z**2)) * funcs[1](z, y, x))
     elif subject == 'h2':
-        nuclear_attraction_intgd_sym = sympy.simplify(funcs[0](z, y, x) * (-1/sympy.sqrt((x - (-H2_BOND_LENGTH_ATOMIC_UNITS/2.0))**2 + y**2 + z**2)) - (-1/sympy.sqrt((x - (H2_BOND_LENGTH_ATOMIC_UNITS/2.0))**2 + y**2 + z**2)) * funcs[1](z, y, x))
+        nuclear_attraction_intgd_sym = sympy.simplify(funcs[0](z, y, x) * (-1/sympy.sqrt((x - (-H2_BOND_LENGTH_ATOMIC_UNITS/2.0))**2 + y**2 + z**2)) + (-1/sympy.sqrt((x - (H2_BOND_LENGTH_ATOMIC_UNITS/2.0))**2 + y**2 + z**2)) * funcs[1](z, y, x))
     # numerical version of the integrand
     nuclear_attraction_intgd_num = sympy.lambdify([z, y, x], nuclear_attraction_intgd_sym, 'scipy')
     # integrate (first index of tuple contains result)
-    nuclear_attraction_int_val = scipy.integrate.nquad(nuclear_attraction_intgd_num, [[-scipy.inf, scipy.inf], [-scipy.inf, scipy.inf], [-scipy.inf, scipy.inf]], opts={'points':[(-H2_BOND_LENGTH_ATOMIC_UNITS/2.0), (H2_BOND_LENGTH_ATOMIC_UNITS/2.0)]})[0]
+    nuclear_attraction_int_val = scipy.integrate.nquad(nuclear_attraction_intgd_num, [[-scipy.inf, scipy.inf], [-scipy.inf, scipy.inf], [-scipy.inf, scipy.inf]])[0]
 
     return nuclear_attraction_int_val
 
@@ -322,7 +322,7 @@ def calculate_nuclear_attraction_integrals_optimized(subject, func_objs):
     t_h2_1 = v_squared * calculate_distance(center_q_h2_1, center_p)
 
     # combined constant
-    coeff_he = (k_all*g_ab*g_cd)*((2*scipy.pi**(5/2))/(zeta*eta*scipy.sqrt(zeta + eta)))
+    coeff = (k_all*g_ab*g_cd)*((2*scipy.pi**(5/2))/(zeta*eta*scipy.sqrt(zeta + eta)))
 
     # symbolic version of the integrand
     fundamental_electron_repulsion_he_intgd_sym = coeff*sympy.exp(-t_he*u**2)
@@ -508,8 +508,8 @@ def do_integrals(subject_name, basis_function_objs):
         integrals[KINETIC] = dict(zip(one_electron_combinations, results))
 
         console_print('** Calculating %s nuclear attraction integrals...' % subject_name)
-        func = functools.partial(calculate_nuclear_attraction_integrals_optimized, subject_name.lower())
-        results = list(tqdm.tqdm(pool.imap(func, one_electron_function_combinations_obj), total=len(one_electron_function_combinations_obj), ascii=True))
+        func = functools.partial(calculate_nuclear_attraction_integrals_naive, subject_name.lower())
+        results = list(tqdm.tqdm(pool.imap(func, one_electron_function_combinations), total=len(one_electron_function_combinations), ascii=True))
         integrals[ATTRACTION] = dict(zip(one_electron_combinations, results))
 
         console_print('** Calculating %s repulsion and exchange integrals...' % subject_name)
