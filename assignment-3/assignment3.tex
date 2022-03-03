@@ -275,19 +275,22 @@ An advantage of using basis functions is that many of the integrals required for
 In order to ease the burden of integrating the two-electron integrals, they will be simplified by invoking the Gaussian product rule since Gaussian functions are used as the basis functions. This transforms the integrand from four centers ($\bm{A}$, $\bm{B}$, $\bm{C}$, $\bm{D}$) to two ($\bm{P}$, $\bm{Q}$). The integral is further simplified by replacing the factors of the resulting integrand with their Fourier transforms, which eventually collapses into a single integration. The full derivation can be found in \cite[p.~153-155,157]{molecular-integrals-over-gaussian-basis-functions}. This will simplify the two-electron integral to the following equivalent:
 
 \begin{align*}
-  (v\mu|\sigma\lambda) &= \int_{-\infty}^{\infty}\int_{-\infty}^{\infty}  \phi_v^\ast(\vec{r}_1)\phi_\mu(\vec{r}_1) \frac{1}{\|\vec{r}_{12}\|}  \phi_\sigma^\ast(\vec{r}_2)\phi_\lambda(\vec{r}_2)  d\vec{r}_1d\vec{r}_2
+  (v\mu|\sigma\lambda) &= \int_{-\infty}^{\infty}\int_{-\infty}^{\infty}  \phi_v^\ast(\vec{r}_1)\phi_\mu(\vec{r}_1) \frac{1}{\|\vec{r}_{12}\|}  \phi_\sigma^\ast(\vec{r}_2)\phi_\lambda(\vec{r}_2)  d\vec{r}_1d\vec{r}_2 \\
+  &= G_{AB}G_{CD}\frac{2\pi^{\frac{5}{2}}}{\zeta\eta(\zeta + \eta)^{\frac{1}{2}}} \int_{0}^{1}e^{-Tu^2}du
 \end{align*}
+
+This single variable integral is evaluated very quickly, saving a lot of time in the two-electron integral step. If time permitted, the same simplifications would have been applied to the other one-electron integrals as well.
 
 \subsection{Calculating the Total Energy}
 
-The total energy of the system can be obtained by 
+The total energy of the system can be obtained by multiplying the density matrix $\bm{P}$ by the core hamiltonian $\bm{H}$ plus the resulting Fock matrix $\bm{F}$.
 
 \subsection{Final Recipe}
 
 We now have all of the background required to implement our solution. The following steps outline what is required for this simulation to run:
 
 \begin{enumerate}
-    \item Prepare $K \times K$ matrices where $K$ corresponds to the number of basis functions
+    \item Prepare $K \times K$ empty matrices where $K$ corresponds to the number of basis functions
     \item Pre-calculate one and two-electron integrals using the specified basis set chosen
       \begin{itemize}
         \item Overlap matrix $\bm{S}$ containing one electron integrals $S_{v\mu}$
@@ -295,6 +298,7 @@ We now have all of the background required to implement our solution. The follow
         \item Nuclear attraction $\bm{V}$ matrix one electron integrals $V_{v\mu}$
         \item $\bm{G}$ matrix Coulomb repulsion and exchange two-electron integrals
       \end{itemize}
+    \item Fill in $\bm{T}$ and $\bm{V}$ matrices using one-electron integrals
     \item Obtain the transformation matrix $\bm{X}$ by through the inverse square root of $\bm{S}$: $\bm{X} = \bm{S}^{-\frac{1}{2}}$
     \item Calculate the $\bm{G}$ matrix using the current density matrix $\bm{P}$ (zero on the first iteration) and the two-electron integrals
     \item Calculate the $\bm{F}$ Fock matrix using $\bm{T} + \bm{V} + \bm{G}$
@@ -307,7 +311,14 @@ We now have all of the background required to implement our solution. The follow
 \end{enumerate}
 
 \newpage
-\section{Program Implementation}
+\section{Program Implementation Details}
+
+\begin{itemize}
+  \item On startup, the program searches for two JSON files containing pre-calculated integrals for both the Helium atom and the Hydrogen molecule. These files include all of the combinations that produce a unique integration result provided that the basis functions are different. If the files are not found, then the program precalculates the integrals and saved the result in these files. Multiprocessing is used to calculate an integral per available CPU core, helping to parallelize the workload.
+  \item The combinations for the one electron and two electron integrals attempt to reduce the amount of integrations performed by the program. For the one-electron integrals, the combinations will exclude those whose flipped indices are already accounted for as they produce the same results. For the two electron integrals, a similar process is performed on the pairs of indices on either side of the repulsion term where flipped indices are discarded. The symmetry where the two functions are swapped at the same time on either side is also respeted. This can be summarized as follows: $(rs|t\mu) = (rs|\mut) = (sr|t\mu) = (sr|\mut) = (t\mu|rs) = (t\mu|sr) = (\mut|rs) = (\mut|sr)$ \cite{hartree-fock-in-100-lines}.
+  \item Classes are defined for each basis function which provides the ability to extract the two coefficients of the basis function, define where the basis function is centered, and evaluate the function as a member function of the class. Since the program uses both naive and optimized equations for the integration, the naive version uses the full function defined in the class and the optimized version uses the coefficients of the Gaussian functions.
+  \item The \texttt{sympy} library is used to symbolically define the functions, which is helpful in perform operations such as the Laplacian in the kinetic energy integrand. The resulting symbolic representation of each naive integrand is then converted into a Python lambda function to be numerically evaluated through the \textt{scipy} package.
+\end{itemize}
 
 Precalculating the integrals will be performed by the program on startup and saved as comma-separated-value (CSV) file for easy lookup. Subsequent runs will load this data file and use the values and skip this step.
 
@@ -337,7 +348,7 @@ $E_n$  & $-0.049968$  & $-0.049878$  & $-0.041970$  & $0.011558$  & $-0.007816$ 
 \section{Discussion}
 
 \begin{itemize}
-    \item 
+    \item If time permitted, the simplified integrals outlined in \cite{molecular-integrals-over-gaussian-basis-functions} would have been applied to the other, one-electron integrals in this assignment as well. The amount of time saved is phenomenal. Unfortunately, the resource was discovered too late in the game.
 \end{itemize}
 
 \newpage
@@ -355,4 +366,5 @@ The following is the code written in Python to generate the solutions and plots 
 \bibliography{IEEEabrv, refs}
 
 \end{document}
+
 

@@ -79,6 +79,75 @@ ATTRACTION = 'attraction'
 EXCHANGE = 'exchange'
 
 #
+# This is the main function
+#
+def main(cmd_args):
+
+    # prepare matrices P, S, T, V, G, F
+    he_p_matrix = numpy.empty((HE_NUM_BASIS_FUNCTIONS,HE_NUM_BASIS_FUNCTIONS))
+    he_s_matrix = numpy.empty((HE_NUM_BASIS_FUNCTIONS,HE_NUM_BASIS_FUNCTIONS))
+    he_t_matrix = numpy.empty((HE_NUM_BASIS_FUNCTIONS,HE_NUM_BASIS_FUNCTIONS))
+    he_v_matrix = numpy.empty((HE_NUM_BASIS_FUNCTIONS,HE_NUM_BASIS_FUNCTIONS))
+    he_g_matrix = numpy.empty((HE_NUM_BASIS_FUNCTIONS,HE_NUM_BASIS_FUNCTIONS))
+    he_f_matrix = numpy.empty((HE_NUM_BASIS_FUNCTIONS,HE_NUM_BASIS_FUNCTIONS))
+
+    h2_p_matrix = numpy.empty((H2_NUM_BASIS_FUNCTIONS,H2_NUM_BASIS_FUNCTIONS))
+    h2_s_matrix = numpy.empty((H2_NUM_BASIS_FUNCTIONS,H2_NUM_BASIS_FUNCTIONS))
+    h2_t_matrix = numpy.empty((H2_NUM_BASIS_FUNCTIONS,H2_NUM_BASIS_FUNCTIONS))
+    h2_v_matrix = numpy.empty((H2_NUM_BASIS_FUNCTIONS,H2_NUM_BASIS_FUNCTIONS))
+    h2_g_matrix = numpy.empty((H2_NUM_BASIS_FUNCTIONS,H2_NUM_BASIS_FUNCTIONS))
+    h2_f_matrix = numpy.empty((H2_NUM_BASIS_FUNCTIONS,H2_NUM_BASIS_FUNCTIONS))
+
+    # read from file or pre-calculate one-electron and two-electron integrals
+    he_integrals, h2_integrals = precalculate_integrals()
+
+    # fill up S matrix
+    for u in range(HE_NUM_BASIS_FUNCTIONS):
+        for v in range(HE_NUM_BASIS_FUNCTIONS):
+            # sort the combination to obtain the unique integral result
+            combination = tuple(sorted([u,v]))
+            he_s_matrix[u,v] = he_integrals[OVERLAP][combination]
+    for u in range(H2_NUM_BASIS_FUNCTIONS):
+        for v in range(H2_NUM_BASIS_FUNCTIONS):
+            # sort the combination to obtain the unique integral result
+            combination = tuple(sorted([u,v]))
+            h2_s_matrix[u,v] = h2_integrals[OVERLAP][combination]
+
+    # fill up T matrix
+    for u in range(HE_NUM_BASIS_FUNCTIONS):
+        for v in range(HE_NUM_BASIS_FUNCTIONS):
+            # sort the combination to obtain the unique integral result
+            combination = tuple(sorted([u,v]))
+            he_t_matrix[u,v] = he_integrals[KINETIC][combination]
+    for u in range(H2_NUM_BASIS_FUNCTIONS):
+        for v in range(H2_NUM_BASIS_FUNCTIONS):
+            # sort the combination to obtain the unique integral result
+            combination = tuple(sorted([u,v]))
+            h2_t_matrix[u,v] = h2_integrals[KINETIC][combination]
+
+    # fill up V matrix
+    for u in range(HE_NUM_BASIS_FUNCTIONS):
+        for v in range(HE_NUM_BASIS_FUNCTIONS):
+            # sort the combination to obtain the unique integral result
+            combination = tuple(sorted([u,v]))
+            he_v_matrix[u,v] = he_integrals[ATTRACTION][combination]
+    for u in range(H2_NUM_BASIS_FUNCTIONS):
+        for v in range(H2_NUM_BASIS_FUNCTIONS):
+            # sort the combination to obtain the unique integral result
+            combination = tuple(sorted([u,v]))
+            h2_v_matrix[u,v] = h2_integrals[ATTRACTION][combination]
+
+    # obtain transformation matrix X through S^-0.5
+
+    # calculate G matrix using density matrix P and two-electron integrals
+
+    # calculate F = T + V + G
+    # apply transform X to obtain F'
+    # diagonalize F' to get C'
+    # convert C' to C to get a new P
+    # calculate total energy, check for convergence
+
+#
 # Initializer for child processes to respect SIGINT
 #
 def initializer():
@@ -96,17 +165,6 @@ def console_print(string='', end='\n'):
 
     datetime_now = datetime.datetime.now()
     print(datetime_now.strftime(DATETIME_STR_FORMAT) + ' ' + string, end=end)
-
-#
-# This is the main function
-#
-def main(cmd_args):
-
-    precalculate_integrals()
-
-STO_1G_HE_ALPHA = 0.7739
-STO_1G_HE_K = 0.5881
-STO_1G_HE_CENTER = (0,0,0)
 
 #
 # Helium STO-1G basis function (centered around origin)
@@ -164,7 +222,7 @@ def calculate_overlap_integrals(funcs):
     overlap_ints = {}
 
     # symbolic version of the integrand
-    overlap_intgd_sym = funcs[0](z, y, x)*funcs[1](z, y, x)
+    overlap_intgd_sym = sympy.simplify(funcs[0](z, y, x)*funcs[1](z, y, x))
     # numerical version of the integrand
     overlap_intgd_num = sympy.lambdify([z, y, x], overlap_intgd_sym, 'scipy')
     # integrate (first index of tuple contains result)
@@ -181,7 +239,7 @@ def calculate_kinetic_energy_integrals(funcs):
     R = sympy.vector.CoordSys3D('R')
 
     # symbolic version of the integrand
-    kinetic_energy_intgd_sym = funcs[0](R.z, R.y, R.x)*(-1/2)*sympy.vector.Laplacian(funcs[1](R.z, R.y, R.x)).doit()
+    kinetic_energy_intgd_sym = sympy.simplify(funcs[0](R.z, R.y, R.x)*(-1/2)*sympy.vector.Laplacian(funcs[1](R.z, R.y, R.x)).doit())
     # numerical version of the integrand
     kinetic_energy_intgd_num = sympy.lambdify([R.z, R.y, R.x], kinetic_energy_intgd_sym, 'scipy')
     # integrate (first index of tuple contains result)
@@ -190,24 +248,106 @@ def calculate_kinetic_energy_integrals(funcs):
     return kinetic_energy_int_val
 
 #
-# Calculate the nuclear attraction integrals given the function lookup table and the desired combinations
+# Calculate the nuclear attraction integrals given the function lookup table
+# and the desired combinations.  This is the naive version with no
+# optimizations to the integrand.
 #
-def calculate_nuclear_attraction_integrals(subject, funcs):
+def calculate_nuclear_attraction_integrals_naive(subject, funcs):
 
     # sympy regular symbolic variables
     x, y, z = sympy.symbols('x y z')
 
     # symbolic version of the integrand
     if subject == 'he':
-        nuclear_attraction_intgd_sym = funcs[0](z, y, x) * (-2/sympy.sqrt(x**2 + y**2 + z**2)) * funcs[1](z, y, x)
+        nuclear_attraction_intgd_sym = sympy.simplify(funcs[0](z, y, x) * (-2/sympy.sqrt(x**2 + y**2 + z**2)) * funcs[1](z, y, x))
     elif subject == 'h2':
-        nuclear_attraction_intgd_sym = funcs[0](z, y, x) * (-1/sympy.sqrt((x - (-H2_BOND_LENGTH_ATOMIC_UNITS/2.0))**2 + y**2 + z**2)) - (-1/sympy.sqrt((x - (H2_BOND_LENGTH_ATOMIC_UNITS/2.0))**2 + y**2 + z**2)) * funcs[1](z, y, x)
+        nuclear_attraction_intgd_sym = sympy.simplify(funcs[0](z, y, x) * (-1/sympy.sqrt((x - (-H2_BOND_LENGTH_ATOMIC_UNITS/2.0))**2 + y**2 + z**2)) - (-1/sympy.sqrt((x - (H2_BOND_LENGTH_ATOMIC_UNITS/2.0))**2 + y**2 + z**2)) * funcs[1](z, y, x))
     # numerical version of the integrand
     nuclear_attraction_intgd_num = sympy.lambdify([z, y, x], nuclear_attraction_intgd_sym, 'scipy')
     # integrate (first index of tuple contains result)
-    nuclear_attraction_int_val = scipy.integrate.nquad(nuclear_attraction_intgd_num, [[-scipy.inf, scipy.inf], [-scipy.inf, scipy.inf], [-scipy.inf, scipy.inf]])[0]
+    nuclear_attraction_int_val = scipy.integrate.nquad(nuclear_attraction_intgd_num, [[-scipy.inf, scipy.inf], [-scipy.inf, scipy.inf], [-scipy.inf, scipy.inf]], opts={'points':[(-H2_BOND_LENGTH_ATOMIC_UNITS/2.0), (H2_BOND_LENGTH_ATOMIC_UNITS/2.0)]})[0]
 
     return nuclear_attraction_int_val
+
+#
+# Calculate the nuclear attraction integrals given the function lookup table
+# and the desired combinations. This is the optimized version to help speed
+# up calculations. Note that this optmized version of the nuclear attraction
+# integral optimizes into the same form as the exchange integral optimization.
+#
+def calculate_nuclear_attraction_integrals_optimized(subject, func_objs):
+
+    # sympy regular symbolic variables
+    u = sympy.symbols('u')
+
+    # combine the outer K coefficients into a single one that will multiply the final result
+    k_all = func_objs[0].k * func_objs[1].k
+
+    # get the four different function alphas
+    alpha = func_objs[0].alpha
+    beta = func_objs[1].alpha
+    gamma = 1e9 # large number to avoid infinity
+    delta = 0.0
+
+    # get the four different centers, A, B, C, D
+    center_a = scipy.array(func_objs[0].center)
+    center_b = scipy.array(func_objs[1].center)
+    # C becomes the nuclear center
+    center_c_he = scipy.array((0,0,0))
+    center_c_h2_0 = scipy.array(((-H2_BOND_LENGTH_ATOMIC_UNITS/2.0),0,0))
+    center_c_h2_1 = scipy.array(((H2_BOND_LENGTH_ATOMIC_UNITS/2.0),0,0))
+    # unused
+    center_d = scipy.array((0,0,0))
+
+    # calculate the G coefficients
+    g_ab = scipy.exp(((-alpha * beta)/(alpha + beta))*(calculate_distance(center_a, center_b)**2))
+    g_cd = 1.0 # scipy.exp(((-gamma * delta)/(gamma + delta))*(calculate_distance(center_c, center_d)**2)) # this turns into 1.0 since delta = 0.0
+
+    # calculate zeta and eta
+    zeta = alpha + beta
+    eta = gamma + delta
+
+    # calculate new centers Q and P
+    center_p = (((alpha)/(alpha + beta)) * center_a) + (((beta)/(alpha + beta)) * center_b)
+    center_q_he = (((gamma)/(gamma + delta)) * center_c_he) + (((delta)/(gamma + delta)) * center_d)
+    center_q_h2_0 = (((gamma)/(gamma + delta)) * center_c_h2_0) + (((delta)/(gamma + delta)) * center_d)
+    center_q_h2_1 = (((gamma)/(gamma + delta)) * center_c_h2_1) + (((delta)/(gamma + delta)) * center_d)
+
+    # calculate fancy v**2
+    v_squared = ((zeta*eta)/(zeta + eta))
+
+    # calculate T
+    t_he = v_squared * calculate_distance(center_q_he, center_p)
+    t_h2_0 = v_squared * calculate_distance(center_q_h2_0, center_p)
+    t_h2_1 = v_squared * calculate_distance(center_q_h2_1, center_p)
+
+    # combined constant
+    coeff_he = (k_all*g_ab*g_cd)*((2*scipy.pi**(5/2))/(zeta*eta*scipy.sqrt(zeta + eta)))
+
+    # symbolic version of the integrand
+    fundamental_electron_repulsion_he_intgd_sym = coeff*sympy.exp(-t_he*u**2)
+    fundamental_electron_repulsion_h2_0_intgd_sym = coeff*sympy.exp(-t_h2_0*u**2)
+    fundamental_electron_repulsion_h2_1_intgd_sym = coeff*sympy.exp(-t_h2_1*u**2)
+    # numerical version of the integrand
+    if subject == 'he':
+        fundamental_electron_repulsion_intgd_num = sympy.lambdify([u], fundamental_electron_repulsion_he_intgd_sym, 'scipy')
+        # integrate (first index of tuple contains result)
+        fundamental_electron_repulsion_int_val = scipy.integrate.nquad(fundamental_electron_repulsion_intgd_num, [[0, 1]])
+    elif subject == 'h2':
+        fundamental_electron_repulsion_intgd_num_0 = sympy.lambdify([u], fundamental_electron_repulsion_h2_0_intgd_sym, 'scipy')
+        fundamental_electron_repulsion_intgd_num_1 = sympy.lambdify([u], fundamental_electron_repulsion_h2_1_intgd_sym, 'scipy')
+        # integrate (first index of tuple contains result)
+        fundamental_electron_repulsion_int_val_0 = scipy.integrate.nquad(fundamental_electron_repulsion_intgd_num_0, [[0, 1]])
+        # integrate (first index of tuple contains result)
+        fundamental_electron_repulsion_int_val_1 = scipy.integrate.nquad(fundamental_electron_repulsion_intgd_num_1, [[0, 1]])
+
+    if subject == 'he':
+        result = 2*fundamental_electron_repulsion_int_val[0]
+    elif subject == 'h2':
+        result = fundamental_electron_repulsion_int_val_0[0] + fundamental_electron_repulsion_int_val_1[0]
+
+    return result
+
 
 #
 # Calculate the Coulomb repulsion and exchange integrals given the function
@@ -243,8 +383,6 @@ def calculate_coulomb_repulsion_and_exchange_integrals_optimized(func_objs):
 
     # sympy regular symbolic variables
     u = sympy.symbols('u')
-
-    # values is packed with the basis function values K and alpha for all four basis functions
 
     # combine the outer K coefficients into a single one that will multiply the final result
     k_all = func_objs[0].k * func_objs[1].k * func_objs[2].k * func_objs[3].k
@@ -353,6 +491,8 @@ def do_integrals(subject_name, basis_function_objs):
     # for the one-electron integrals, we use naive functions and scipy to evaluate the integrals as they are because they're simple
     one_electron_combinations = get_one_electron_combinations(len(basis_function_objs))
     one_electron_function_combinations = [(basis_function_objs[combination[0]].eval, basis_function_objs[combination[1]].eval) for combination in one_electron_combinations]
+    one_electron_function_combinations_obj = [(basis_function_objs[combination[0]], basis_function_objs[combination[1]]) for combination in one_electron_combinations]
+
     # for the two-electron integrals, we use optimized functions which only have a single integral to evaluate as they are too complex to evaluate naively
     two_electron_combinations = get_two_electron_combinations(len(basis_function_objs))
     two_electron_function_combinations = [(basis_function_objs[combination[0]], basis_function_objs[combination[1]], basis_function_objs[combination[2]], basis_function_objs[combination[3]]) for combination in two_electron_combinations]
@@ -360,20 +500,20 @@ def do_integrals(subject_name, basis_function_objs):
     with multiprocessing.Pool(processes = multiprocessing.cpu_count()-2, initializer=initializer) as pool:
 
         console_print('** Calculating %s overlap integrals...' % subject_name)
-        results = list(tqdm.tqdm(pool.imap(calculate_overlap_integrals, one_electron_function_combinations), ascii=True))
+        results = list(tqdm.tqdm(pool.imap(calculate_overlap_integrals, one_electron_function_combinations), total=len(one_electron_function_combinations), ascii=True))
         integrals[OVERLAP] = dict(zip(one_electron_combinations, results))
 
         console_print('** Calculating %s kinetic energy integrals...' % subject_name)
-        results = list(tqdm.tqdm(pool.imap(calculate_kinetic_energy_integrals, one_electron_function_combinations), ascii=True))
+        results = list(tqdm.tqdm(pool.imap(calculate_kinetic_energy_integrals, one_electron_function_combinations), total=len(one_electron_function_combinations), ascii=True))
         integrals[KINETIC] = dict(zip(one_electron_combinations, results))
 
         console_print('** Calculating %s nuclear attraction integrals...' % subject_name)
-        func = functools.partial(calculate_nuclear_attraction_integrals, subject_name.lower())
-        results = list(tqdm.tqdm(pool.imap(func, one_electron_function_combinations), ascii=True))
+        func = functools.partial(calculate_nuclear_attraction_integrals_optimized, subject_name.lower())
+        results = list(tqdm.tqdm(pool.imap(func, one_electron_function_combinations_obj), total=len(one_electron_function_combinations_obj), ascii=True))
         integrals[ATTRACTION] = dict(zip(one_electron_combinations, results))
 
         console_print('** Calculating %s repulsion and exchange integrals...' % subject_name)
-        results = list(tqdm.tqdm(pool.imap(calculate_coulomb_repulsion_and_exchange_integrals_optimized, two_electron_function_combinations), ascii=True))
+        results = list(tqdm.tqdm(pool.imap(calculate_coulomb_repulsion_and_exchange_integrals_optimized, two_electron_function_combinations), total=len(two_electron_function_combinations), ascii=True))
         integrals[EXCHANGE] = dict(zip(two_electron_combinations, results))
 
     console_print('** Finished calculating %s atom integrals!' % subject_name)
@@ -381,15 +521,27 @@ def do_integrals(subject_name, basis_function_objs):
     return integrals
 
 #
-# Pre-process the integral dictionary for jsonification by converting tuples to strings
+# Process the integral dictionary for jsonification by converting combination tuples to strings
 #
-def preprocess_dict_for_json(integral_dict):
+def process_dict_for_json(integral_dict_from_program):
 
-    for integral_type_key in list(integral_dict.keys()):
-        for combination_key in list(integral_dict[integral_type_key]):
-            integral_dict[integral_type_key][str(combination_key)] = integral_dict[integral_type_key].pop(combination_key)
+    for integral_type_key in list(integral_dict_from_program.keys()):
+        for combination_key in list(integral_dict_from_program[integral_type_key]):
+            integral_dict_from_program[integral_type_key][str(combination_key)] = integral_dict_from_program[integral_type_key].pop(combination_key)
 
-    return integral_dict
+    return integral_dict_from_program
+
+#
+# Process the integral dictionary for the program by converting combination string to tuples
+#
+def process_dict_for_program(integral_dict_from_json):
+
+    for integral_type_key in list(integral_dict_from_json.keys()):
+        for combination_key in list(integral_dict_from_json[integral_type_key]):
+            combination_key_tuple = tuple([int(str_number) for str_number in combination_key.strip('(').strip(')').split(',')])
+            integral_dict_from_json[integral_type_key][combination_key_tuple] = integral_dict_from_json[integral_type_key].pop(combination_key)
+
+    return integral_dict_from_json
 
 #
 # Pre-calculate integrals
@@ -401,8 +553,7 @@ def precalculate_integrals():
 
     try:
         with open(HE_INTEGRALS_FILENAME) as he_integrals_json_file:
-            he_integrals = json.load(he_integrals_json_file)
-            # todo, convert string tuples to real tuples
+            he_integrals = process_dict_for_program(json.load(he_integrals_json_file))
             console_print('** HE integrals loaded from %s' % (HE_INTEGRALS_FILENAME))
     except:
         console_print('** Unable to load He integrals file, will recalculate')
@@ -410,8 +561,7 @@ def precalculate_integrals():
 
     try:
         with open(H2_INTEGRALS_FILENAME) as h2_integrals_json_file:
-            h2_integrals = json.load(h2_integrals_json_file)
-            # todo, convert string tuples to real tuples
+            h2_integrals = process_dict_for_program(json.load(h2_integrals_json_file))
             console_print('** H2 integrals loaded from %s' % (H2_INTEGRALS_FILENAME))
     except:
         console_print('** Unable to load H2 integrals file, will recalculate')
@@ -441,8 +591,7 @@ def precalculate_integrals():
         # write out integrals
         console_print('** Saving Helium atom integrals to %s...' % (HE_INTEGRALS_FILENAME))
         with open(HE_INTEGRALS_FILENAME, 'w') as he_integrals_json_file:
-            he_integrals = preprocess_dict_for_json(he_integrals)
-            print(he_integrals)
+            he_integrals = process_dict_for_json(he_integrals)
             json.dump(he_integrals, he_integrals_json_file, indent=4)
 
     # *************************
@@ -466,39 +615,22 @@ def precalculate_integrals():
         # write out integrals
         console_print('** Saving H2 molecule integrals to %s...' % (H2_INTEGRALS_FILENAME))
         with open(H2_INTEGRALS_FILENAME, 'w') as h2_integrals_json_file:
-            h2_integrals = preprocess_dict_for_json(h2_integrals)
+            h2_integrals = process_dict_for_json(h2_integrals)
             json.dump(h2_integrals, h2_integrals_json_file,  indent=4)
 
         console_print('** Finished calculating H2 molecule integrals!')
+
+    return (he_integrals, h2_integrals)
 
 if __name__ == '__main__':
     # the following sets up the argument parser for the program
     parser = argparse.ArgumentParser(description='Exact Hartree-Fock simulator')
 
-    # arguments for the program
-    parser.add_argument('-i', type=str, dest='input_file', action='store',
-        help='input file (*.xyzp) to plot')
-
-    parser.add_argument('-o', type=str, dest='output_file', action='store',
-        help='path and name of the file containing the results of the current run')
-
-    parser.add_argument('-e', type=int, default=0, dest='energy_level', action='store', choices=[0, 1, 2, 3, 4, 5],
-        help='energy level to generate and/or plot')
-
     parser.add_argument('-t', type=str, default='h2', dest='target_subject', action='store', choices=['h2', 'he'],
         help='target subject to run exact HF sim on')
 
-    parser.add_argument('-p', type=int, default=14, dest='num_partitions', action='store',
-        help='number of partitions to discretize the simulation')
-
-    parser.add_argument('-l', type=float, default=5, dest='limit', action='store',
-        help='the x,y,z max limit, forming a cubic solution space')
-
     parser.add_argument('-c', type=float, default=1.0, dest='convergence_percentage', action='store',
         help='percent change threshold for convergence')
-
-    parser.add_argument('-d', type=float, default=0.1, dest='damping_factor', action='store',
-        help='damping factor to apply to orbital results between iterations')
 
     args = parser.parse_args()
 
