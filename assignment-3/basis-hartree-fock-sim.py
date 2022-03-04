@@ -300,8 +300,8 @@ def calculate_nuclear_attraction_integrals_optimized(subject, func_objs):
     center_d = scipy.array((0,0,0))
 
     # calculate the G coefficients
-    g_ab = scipy.exp(((-alpha * beta)/(alpha + beta))*(calculate_distance(center_a, center_b)**2))
-    g_cd = 1.0 # scipy.exp(((-gamma * delta)/(gamma + delta))*(calculate_distance(center_c, center_d)**2)) # this turns into 1.0 since delta = 0.0
+    g_ab = numpy.exp(((-alpha * beta)/(alpha + beta))*(calculate_distance(center_a, center_b)**2))
+    g_cd = 1.0 # numpy.exp(((-gamma * delta)/(gamma + delta))*(calculate_distance(center_c, center_d)**2)) # this turns into 1.0 since delta = 0.0
 
     # calculate zeta and eta
     zeta = alpha + beta
@@ -400,8 +400,8 @@ def calculate_coulomb_repulsion_and_exchange_integrals_optimized(func_objs):
     center_d = scipy.array(func_objs[3].center)
 
     # calculate the G coefficients
-    g_ab = scipy.exp(((-alpha * beta)/(alpha + beta))*(calculate_distance(center_a, center_b)**2))
-    g_cd = scipy.exp(((-gamma * delta)/(gamma + delta))*(calculate_distance(center_c, center_d)**2))
+    g_ab = numpy.exp(((-alpha * beta)/(alpha + beta))*(calculate_distance(center_a, center_b)**2))
+    g_cd = numpy.exp(((-gamma * delta)/(gamma + delta))*(calculate_distance(center_c, center_d)**2))
 
     # calculate zeta and eta
     zeta = alpha + beta
