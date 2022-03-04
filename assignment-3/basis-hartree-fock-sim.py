@@ -59,15 +59,10 @@ if False:
     })
 
 # program constants
+NUM_ELECTRONS = 2
 H2_BOND_LENGTH_ATOMIC_UNITS = 1.39839733222307
 TINY_NUMBER = 1e-9
-IDX_X = 0
-IDX_Y = 1
-IDX_Z = 2
-IDX_START = 0
-IDX_END = 1
 DATETIME_STR_FORMAT = '[%Y/%m/%d-%H:%M:%S]'
-ENABLE_MP = True # multiprocessing
 HE_NUM_BASIS_FUNCTIONS = 2
 H2_NUM_BASIS_FUNCTIONS = 4
 HE_INTEGRALS_FILENAME = 'he_integrals.json'
@@ -85,67 +80,202 @@ def main(cmd_args):
 
     # prepare matrices P, S, T, V, G, F
     he_p_matrix = numpy.empty((HE_NUM_BASIS_FUNCTIONS,HE_NUM_BASIS_FUNCTIONS))
+    he_new_p_matrix = numpy.empty((HE_NUM_BASIS_FUNCTIONS,HE_NUM_BASIS_FUNCTIONS))
     he_s_matrix = numpy.empty((HE_NUM_BASIS_FUNCTIONS,HE_NUM_BASIS_FUNCTIONS))
     he_t_matrix = numpy.empty((HE_NUM_BASIS_FUNCTIONS,HE_NUM_BASIS_FUNCTIONS))
     he_v_matrix = numpy.empty((HE_NUM_BASIS_FUNCTIONS,HE_NUM_BASIS_FUNCTIONS))
     he_g_matrix = numpy.empty((HE_NUM_BASIS_FUNCTIONS,HE_NUM_BASIS_FUNCTIONS))
     he_f_matrix = numpy.empty((HE_NUM_BASIS_FUNCTIONS,HE_NUM_BASIS_FUNCTIONS))
+    he_f_prime_matrix = numpy.empty((HE_NUM_BASIS_FUNCTIONS,HE_NUM_BASIS_FUNCTIONS))
 
     h2_p_matrix = numpy.empty((H2_NUM_BASIS_FUNCTIONS,H2_NUM_BASIS_FUNCTIONS))
+    h2_new_p_matrix = numpy.empty((H2_NUM_BASIS_FUNCTIONS,H2_NUM_BASIS_FUNCTIONS))
     h2_s_matrix = numpy.empty((H2_NUM_BASIS_FUNCTIONS,H2_NUM_BASIS_FUNCTIONS))
     h2_t_matrix = numpy.empty((H2_NUM_BASIS_FUNCTIONS,H2_NUM_BASIS_FUNCTIONS))
     h2_v_matrix = numpy.empty((H2_NUM_BASIS_FUNCTIONS,H2_NUM_BASIS_FUNCTIONS))
     h2_g_matrix = numpy.empty((H2_NUM_BASIS_FUNCTIONS,H2_NUM_BASIS_FUNCTIONS))
     h2_f_matrix = numpy.empty((H2_NUM_BASIS_FUNCTIONS,H2_NUM_BASIS_FUNCTIONS))
+    h2_f_prime_matrix = numpy.empty((H2_NUM_BASIS_FUNCTIONS,H2_NUM_BASIS_FUNCTIONS))
 
     # read from file or pre-calculate one-electron and two-electron integrals
     he_integrals, h2_integrals = precalculate_integrals()
 
     # fill up S matrix
-    for u in range(HE_NUM_BASIS_FUNCTIONS):
-        for v in range(HE_NUM_BASIS_FUNCTIONS):
+    for v in range(HE_NUM_BASIS_FUNCTIONS):
+        for u in range(HE_NUM_BASIS_FUNCTIONS):
             # sort the combination to obtain the unique integral result
-            combination = tuple(sorted([u,v]))
-            he_s_matrix[u,v] = he_integrals[OVERLAP][combination]
-    for u in range(H2_NUM_BASIS_FUNCTIONS):
-        for v in range(H2_NUM_BASIS_FUNCTIONS):
+            combination = tuple(sorted([v,u]))
+            he_s_matrix[v,u] = he_integrals[OVERLAP][combination]
+    for v in range(H2_NUM_BASIS_FUNCTIONS):
+        for u in range(H2_NUM_BASIS_FUNCTIONS):
             # sort the combination to obtain the unique integral result
-            combination = tuple(sorted([u,v]))
-            h2_s_matrix[u,v] = h2_integrals[OVERLAP][combination]
+            combination = tuple(sorted([v,u]))
+            h2_s_matrix[v,u] = h2_integrals[OVERLAP][combination]
 
     # fill up T matrix
-    for u in range(HE_NUM_BASIS_FUNCTIONS):
-        for v in range(HE_NUM_BASIS_FUNCTIONS):
+    for v in range(HE_NUM_BASIS_FUNCTIONS):
+        for u in range(HE_NUM_BASIS_FUNCTIONS):
             # sort the combination to obtain the unique integral result
-            combination = tuple(sorted([u,v]))
-            he_t_matrix[u,v] = he_integrals[KINETIC][combination]
-    for u in range(H2_NUM_BASIS_FUNCTIONS):
-        for v in range(H2_NUM_BASIS_FUNCTIONS):
+            combination = tuple(sorted([v,u]))
+            he_t_matrix[v,u] = he_integrals[KINETIC][combination]
+    for v in range(H2_NUM_BASIS_FUNCTIONS):
+        for u in range(H2_NUM_BASIS_FUNCTIONS):
             # sort the combination to obtain the unique integral result
-            combination = tuple(sorted([u,v]))
-            h2_t_matrix[u,v] = h2_integrals[KINETIC][combination]
+            combination = tuple(sorted([v,u]))
+            h2_t_matrix[v,u] = h2_integrals[KINETIC][combination]
 
     # fill up V matrix
-    for u in range(HE_NUM_BASIS_FUNCTIONS):
-        for v in range(HE_NUM_BASIS_FUNCTIONS):
+    for v in range(HE_NUM_BASIS_FUNCTIONS):
+        for u in range(HE_NUM_BASIS_FUNCTIONS):
             # sort the combination to obtain the unique integral result
-            combination = tuple(sorted([u,v]))
-            he_v_matrix[u,v] = he_integrals[ATTRACTION][combination]
-    for u in range(H2_NUM_BASIS_FUNCTIONS):
-        for v in range(H2_NUM_BASIS_FUNCTIONS):
+            combination = tuple(sorted([v,u]))
+            he_v_matrix[v,u] = he_integrals[ATTRACTION][combination]
+    for v in range(H2_NUM_BASIS_FUNCTIONS):
+        for u in range(H2_NUM_BASIS_FUNCTIONS):
             # sort the combination to obtain the unique integral result
-            combination = tuple(sorted([u,v]))
-            h2_v_matrix[u,v] = h2_integrals[ATTRACTION][combination]
+            combination = tuple(sorted([v,u]))
+            h2_v_matrix[v,u] = h2_integrals[ATTRACTION][combination]
 
     # obtain transformation matrix X through S^-0.5
+    # obtain eigenvalues
+    he_s_eigenvalues, he_s_eigenvectors = numpy.linalg.eigh(he_s_matrix)
+    h2_s_eigenvalues, h2_s_eigenvectors = numpy.linalg.eigh(h2_s_matrix)
+    # inverse square root the resulting eigenvalues and put them in a diagonal matrix
+    he_s_eigenvalues_inverse_square_root = numpy.diag(he_s_eigenvalues**-0.5)
+    h2_s_eigenvalues_inverse_square_root = numpy.diag(h2_s_eigenvalues**-0.5)
+    # form the transformation matrix X by undiagonalizing the previous matrix
+    he_x_matrix = numpy.matmul(numpy.matmul(he_s_eigenvectors,he_s_eigenvalues_inverse_square_root),numpy.transpose(he_s_eigenvectors))
+    h2_x_matrix = numpy.matmul(numpy.matmul(h2_s_eigenvectors,h2_s_eigenvalues_inverse_square_root),numpy.transpose(h2_s_eigenvectors))
 
-    # calculate G matrix using density matrix P and two-electron integrals
+    # MAIN HF LOOP
+    for iteration in range(50):
 
-    # calculate F = T + V + G
-    # apply transform X to obtain F'
-    # diagonalize F' to get C'
-    # convert C' to C to get a new P
-    # calculate total energy, check for convergence
+        # calculate G matrix using density matrix P and two-electron integrals
+        for v in range(HE_NUM_BASIS_FUNCTIONS):
+            for u in range(HE_NUM_BASIS_FUNCTIONS):
+                for lambda_ in range(HE_NUM_BASIS_FUNCTIONS):
+                    for sigma in range(HE_NUM_BASIS_FUNCTIONS):
+                        
+                        # get index
+                        # Coulomb attraction two-electron integral
+                        coulomb_combination = [v,u,sigma,lambda_]
+                        # Exchange two-electron integral
+                        exchange_combination = [v,lambda_,sigma,u]
+                        # Avoid calculating identical integrals
+                        # (rs|tu) = (rs|ut) = (sr|tu) = (sr|ut) = (tu|rs) = (tu|sr) = (ut|rs) = (ut|sr)
+                        coulomb_combination = tuple(sorted(coulomb_combination[0:2]) + sorted(coulomb_combination[2:4]))
+                        exchange_combination = tuple(sorted(exchange_combination[0:2]) + sorted(exchange_combination[2:4]))
+                        coulomb_combination_swapped = tuple(coulomb_combination[2:4] + coulomb_combination[0:2])
+                        exchange_combination_swapped = tuple(exchange_combination[2:4] + coulomb_combination[0:2])
+
+                        # integral is going to exist in dictionary as _combination or _combination_swapped
+                        # TODO: there's got to be a better way!
+                        try:
+                            coulomb_term = he_integrals[EXCHANGE][coulomb_combination]
+                        except:
+                            coulomb_term = he_integrals[EXCHANGE][coulomb_combination_swapped]
+
+                        try:
+                            exchange_term = he_integrals[EXCHANGE][exchange_combination]
+                        except:
+                            exchange_term = he_integrals[EXCHANGE][exchange_combination_swapped]
+
+                        he_g_matrix[v,u] = he_p_matrix[lambda_,sigma]*(coulomb_term - 0.5*exchange_term)
+        for v in range(H2_NUM_BASIS_FUNCTIONS):
+            for u in range(H2_NUM_BASIS_FUNCTIONS):
+                for lambda_ in range(H2_NUM_BASIS_FUNCTIONS):
+                    for sigma in range(H2_NUM_BASIS_FUNCTIONS):
+                        
+                        # get index
+                        # Coulomb attraction two-electron integral
+                        coulomb_combination = [v,u,sigma,lambda_]
+                        # Exchange two-electron integral
+                        exchange_combination = [v,lambda_,sigma,u]
+                        # Avoid calculating identical integrals
+                        # (rs|tu) = (rs|ut) = (sr|tu) = (sr|ut) = (tu|rs) = (tu|sr) = (ut|rs) = (ut|sr)
+                        coulomb_combination = tuple(sorted(coulomb_combination[0:2]) + sorted(coulomb_combination[2:4]))
+                        exchange_combination = tuple(sorted(exchange_combination[0:2]) + sorted(exchange_combination[2:4]))
+                        coulomb_combination_swapped = tuple(coulomb_combination[2:4] + coulomb_combination[0:2])
+                        exchange_combination_swapped = tuple(exchange_combination[2:4] + coulomb_combination[0:2])
+
+                        # integral is going to exist in dictionary as _combination or _combination_swapped
+                        # TODO: there's got to be a better way!
+                        try:
+                            coulomb_term = h2_integrals[EXCHANGE][coulomb_combination]
+                        except:
+                            coulomb_term = h2_integrals[EXCHANGE][coulomb_combination_swapped]
+
+                        try:
+                            exchange_term = h2_integrals[EXCHANGE][exchange_combination]
+                        except:
+                            exchange_term = h2_integrals[EXCHANGE][exchange_combination_swapped]
+
+                        h2_g_matrix[v,u] = h2_p_matrix[lambda_,sigma]*(coulomb_term - 0.5*exchange_term)
+
+        # calculate F = T + V + G
+        he_f_matrix = he_t_matrix + he_v_matrix + he_g_matrix
+        h2_f_matrix = h2_t_matrix + h2_v_matrix + h2_g_matrix
+
+        # apply transform X to obtain F'
+        he_f_prime_matrix = numpy.matmul(numpy.matmul(numpy.transpose(he_x_matrix),he_x_matrix),he_f_matrix)
+        h2_f_prime_matrix = numpy.matmul(numpy.matmul(numpy.transpose(h2_x_matrix),h2_x_matrix),h2_f_matrix)
+
+        # diagonalize F' to get C'
+        he_f_prime_eigenvalues, he_c_prime_matrix = numpy.linalg.eigh(he_f_prime_matrix)
+        h2_f_prime_eigenvalues, h2_c_prime_matrix = numpy.linalg.eigh(h2_f_prime_matrix)
+
+        # convert C' to C to get a new P
+        he_c_matrix = numpy.matmul(he_x_matrix, he_c_prime_matrix)
+        h2_c_matrix = numpy.matmul(h2_x_matrix, h2_c_prime_matrix)
+
+        # calculate the new P matrix
+        for v in range(HE_NUM_BASIS_FUNCTIONS):
+            for u in range(HE_NUM_BASIS_FUNCTIONS):
+                he_new_p_matrix[v,u] = 0
+                for n in range(int(NUM_ELECTRONS/2)):
+                    he_new_p_matrix[v,u] = he_new_p_matrix[v,u] + 2*he_c_matrix[v,n]*he_c_matrix[u,n]
+        for v in range(H2_NUM_BASIS_FUNCTIONS):
+            for u in range(H2_NUM_BASIS_FUNCTIONS):
+                h2_new_p_matrix[v,u] = 0
+                for n in range(int(NUM_ELECTRONS/2)):
+                    h2_new_p_matrix[v,u] = h2_new_p_matrix[v,u] + 2*h2_c_matrix[v,n]*h2_c_matrix[u,n]
+
+        # compare old and new P matrix
+        # get the average percent difference of all elements
+        he_p_absolute_error = 0
+        for v in range(HE_NUM_BASIS_FUNCTIONS):
+            for u in range(HE_NUM_BASIS_FUNCTIONS):
+                he_p_absolute_error = he_p_absolute_error + abs(he_new_p_matrix[v,u] - he_p_matrix[v,u])/abs((he_new_p_matrix[v,u] + he_p_matrix[v,u])/2)
+        he_p_absolute_error_percent = 100*he_p_absolute_error/HE_NUM_BASIS_FUNCTIONS**2
+        h2_p_absolute_error = 0
+        for v in range(H2_NUM_BASIS_FUNCTIONS):
+            for u in range(H2_NUM_BASIS_FUNCTIONS):
+                h2_p_absolute_error = h2_p_absolute_error + abs(h2_new_p_matrix[v,u] - h2_p_matrix[v,u])/abs((h2_new_p_matrix[v,u] + h2_p_matrix[v,u])/2)
+        h2_p_absolute_error_percent = 100*h2_p_absolute_error/H2_NUM_BASIS_FUNCTIONS**2
+
+        # set old p matrix to new
+        he_p_matrix = he_new_p_matrix
+        h2_p_matrix = h2_new_p_matrix
+
+        # calculate total energy, check for convergence
+        he_total_energy_sum = 0
+        for v in range(HE_NUM_BASIS_FUNCTIONS):
+            for u in range(HE_NUM_BASIS_FUNCTIONS):
+                he_total_energy_sum = he_total_energy_sum + he_p_matrix[v,u]*(he_t_matrix[v,u] + he_v_matrix[v,u] + he_f_matrix[v,u])
+        he_total_energy = 0.5*he_total_energy_sum
+        h2_total_energy_sum = 0
+        for v in range(HE_NUM_BASIS_FUNCTIONS):
+            for u in range(HE_NUM_BASIS_FUNCTIONS):
+                h2_total_energy_sum = h2_total_energy_sum + h2_p_matrix[v,u]*(h2_t_matrix[v,u] + h2_v_matrix[v,u] + h2_f_matrix[v,u])
+        h2_total_energy = 0.5*h2_total_energy_sum
+
+        console_print('Iteration %d' % iteration)
+        console_print('\tHelium Atom:')
+        console_print('\t\tTotal energy: %f' % he_total_energy)
+        console_print('\t\tPercent difference between P matrices: %f%%' % he_p_absolute_error_percent)
+        console_print('\tHelium Atom:')
+        console_print('\t\tTotal energy: %f' % h2_total_energy)
+        console_print('\t\tPercent difference between P matrices: %f%%' % h2_p_absolute_error_percent)
 
 #
 # Initializer for child processes to respect SIGINT
@@ -487,7 +617,7 @@ def do_integrals(subject_name, basis_function_objs):
 
     integrals = {}
 
-    # generate combinations for the one and two electron integral calculations
+    # generate combinations for the one and two-electron integral calculations
     # for the one-electron integrals, we use naive functions and scipy to evaluate the integrals as they are because they're simple
     one_electron_combinations = get_one_electron_combinations(len(basis_function_objs))
     one_electron_function_combinations = [(basis_function_objs[combination[0]].eval, basis_function_objs[combination[1]].eval) for combination in one_electron_combinations]
@@ -519,6 +649,12 @@ def do_integrals(subject_name, basis_function_objs):
     console_print('** Finished calculating %s atom integrals!' % subject_name)
 
     return integrals
+
+#
+# This functions returns whether or not the two matrices are within a specified tolerance
+#
+def is_symmetric(A, B, tol=0.1):
+    return scipy.sparse.linalg.norm(A-B, scipy.inf) < tol;
 
 #
 # Process the integral dictionary for jsonification by converting combination tuples to strings
@@ -591,8 +727,7 @@ def precalculate_integrals():
         # write out integrals
         console_print('** Saving Helium atom integrals to %s...' % (HE_INTEGRALS_FILENAME))
         with open(HE_INTEGRALS_FILENAME, 'w') as he_integrals_json_file:
-            he_integrals = process_dict_for_json(he_integrals)
-            json.dump(he_integrals, he_integrals_json_file, indent=4)
+            json.dump(process_dict_for_json(he_integrals), he_integrals_json_file, indent=4)
 
     # *************************
     # *** HYDROGEN MOLECULE ***
@@ -615,8 +750,7 @@ def precalculate_integrals():
         # write out integrals
         console_print('** Saving H2 molecule integrals to %s...' % (H2_INTEGRALS_FILENAME))
         with open(H2_INTEGRALS_FILENAME, 'w') as h2_integrals_json_file:
-            h2_integrals = process_dict_for_json(h2_integrals)
-            json.dump(h2_integrals, h2_integrals_json_file,  indent=4)
+            json.dump(process_dict_for_json(h2_integrals), h2_integrals_json_file,  indent=4)
 
         console_print('** Finished calculating H2 molecule integrals!')
 
@@ -625,12 +759,6 @@ def precalculate_integrals():
 if __name__ == '__main__':
     # the following sets up the argument parser for the program
     parser = argparse.ArgumentParser(description='Exact Hartree-Fock simulator')
-
-    parser.add_argument('-t', type=str, default='h2', dest='target_subject', action='store', choices=['h2', 'he'],
-        help='target subject to run exact HF sim on')
-
-    parser.add_argument('-c', type=float, default=1.0, dest='convergence_percentage', action='store',
-        help='percent change threshold for convergence')
 
     args = parser.parse_args()
 
