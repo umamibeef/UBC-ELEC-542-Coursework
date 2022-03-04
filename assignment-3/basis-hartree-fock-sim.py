@@ -73,209 +73,143 @@ KINETIC = 'kinetic'
 ATTRACTION = 'attraction'
 EXCHANGE = 'exchange'
 
+def do_hartree(num_basis_functions, integrals):
+
+    # prepare matrices P, S, T, V, G, F
+    p_matrix = numpy.empty((num_basis_functions,num_basis_functions))
+    new_p_matrix = numpy.empty((num_basis_functions,num_basis_functions))
+    s_matrix = numpy.empty((num_basis_functions,num_basis_functions))
+    t_matrix = numpy.empty((num_basis_functions,num_basis_functions))
+    v_matrix = numpy.empty((num_basis_functions,num_basis_functions))
+    g_matrix = numpy.empty((num_basis_functions,num_basis_functions))
+    f_matrix = numpy.empty((num_basis_functions,num_basis_functions))
+    f_prime_matrix = numpy.empty((num_basis_functions,num_basis_functions))
+
+    # fill up S matrix
+    for v in range(num_basis_functions):
+        for u in range(num_basis_functions):
+            # sort the combination to obtain the unique integral result
+            combination = tuple(sorted([v,u]))
+            s_matrix[v,u] = integrals[OVERLAP][combination]
+
+    # fill up T matrix
+    for v in range(num_basis_functions):
+        for u in range(num_basis_functions):
+            # sort the combination to obtain the unique integral result
+            combination = tuple(sorted([v,u]))
+            t_matrix[v,u] = integrals[KINETIC][combination]
+
+    # fill up V matrix
+    for v in range(num_basis_functions):
+        for u in range(num_basis_functions):
+            # sort the combination to obtain the unique integral result
+            combination = tuple(sorted([v,u]))
+            v_matrix[v,u] = integrals[ATTRACTION][combination]
+
+    # obtain transformation matrix X through S^-0.5
+    # obtain eigenvalues
+    s_eigenvalues, s_eigenvectors = numpy.linalg.eigh(s_matrix)
+    # inverse square root the resulting eigenvalues and put them in a diagonal matrix
+    s_eigenvalues_inverse_square_root = numpy.diag(s_eigenvalues**-0.5)
+    # form the transformation matrix X by undiagonalizing the previous matrix
+    x_matrix = numpy.matmul(numpy.matmul(s_eigenvectors,s_eigenvalues_inverse_square_root),numpy.transpose(s_eigenvectors))
+
+    # MAIN HF LOOP
+    iteration = 0
+    while True:
+
+        # calculate G matrix using density matrix P and two-electron integrals
+        for v in range(num_basis_functions):
+            for u in range(num_basis_functions):
+                for lambda_ in range(num_basis_functions):
+                    for sigma in range(num_basis_functions):
+                        
+                        # get index
+                        # Coulomb attraction two-electron integral
+                        coulomb_combination = [v,u,sigma,lambda_]
+                        # Exchange two-electron integral
+                        exchange_combination = [v,lambda_,sigma,u]
+                        # Avoid calculating identical integrals
+                        # (rs|tu) = (rs|ut) = (sr|tu) = (sr|ut) = (tu|rs) = (tu|sr) = (ut|rs) = (ut|sr)
+                        coulomb_combination = tuple(sorted(coulomb_combination[0:2]) + sorted(coulomb_combination[2:4]))
+                        exchange_combination = tuple(sorted(exchange_combination[0:2]) + sorted(exchange_combination[2:4]))
+                        coulomb_combination_swapped = tuple(coulomb_combination[2:4] + coulomb_combination[0:2])
+                        exchange_combination_swapped = tuple(exchange_combination[2:4] + coulomb_combination[0:2])
+
+                        # integral is going to exist in dictionary as _combination or _combination_swapped
+                        # TODO: there's got to be a better way!
+                        try:
+                            coulomb_term = integrals[EXCHANGE][coulomb_combination]
+                        except:
+                            coulomb_term = integrals[EXCHANGE][coulomb_combination_swapped]
+
+                        try:
+                            exchange_term = integrals[EXCHANGE][exchange_combination]
+                        except:
+                            exchange_term = integrals[EXCHANGE][exchange_combination_swapped]
+
+                        g_matrix[v,u] = p_matrix[lambda_,sigma]*(coulomb_term - 0.5*exchange_term)
+
+        # calculate F = T + V + G
+        f_matrix = t_matrix + v_matrix + g_matrix
+
+        # apply transform X to obtain F'
+        f_prime_matrix = numpy.matmul(numpy.matmul(numpy.transpose(x_matrix),x_matrix),f_matrix)
+
+        # diagonalize F' to get C'
+        f_prime_eigenvalues, c_prime_matrix = numpy.linalg.eigh(f_prime_matrix)
+
+        # convert C' to C to get a new P
+        c_matrix = numpy.matmul(x_matrix, c_prime_matrix)
+
+        # calculate the new P matrix
+        for v in range(num_basis_functions):
+            for u in range(num_basis_functions):
+                new_p_matrix[v,u] = 0
+                for n in range(int(NUM_ELECTRONS/2)):
+                    new_p_matrix[v,u] = new_p_matrix[v,u] + 2*c_matrix[v,n]*c_matrix[u,n]
+
+        # compare old and new P matrix
+        # get the average percent difference of all elements
+        p_absolute_error = 0
+        for v in range(num_basis_functions):
+            for u in range(num_basis_functions):
+                p_absolute_error = p_absolute_error + abs(new_p_matrix[v,u] - p_matrix[v,u])/abs((new_p_matrix[v,u] + p_matrix[v,u])/2)
+        p_absolute_error_percent = 100*p_absolute_error/num_basis_functions**2
+
+        # set old p matrix to new
+        p_matrix = new_p_matrix
+
+        # calculate total energy, check for convergence
+        total_energy_sum = 0
+        for v in range(num_basis_functions):
+            for u in range(num_basis_functions):
+                total_energy_sum = total_energy_sum + p_matrix[v,u]*(t_matrix[v,u] + v_matrix[v,u] + f_matrix[v,u])
+        total_energy = 0.5*total_energy_sum
+
+        console_print('Iteration %d' % iteration)
+        console_print('\t\tTotal energy: %f' % total_energy)
+        console_print('\t\tPercent difference between P matrices: %f%%' % p_absolute_error_percent)
+
+        # increment iteration
+        iteration = iteration + 1
+
+        # check for end condition
+        if p_absolute_error_percent < 1 or iteration > 10:
+            break
+
 #
 # This is the main function
 #
 def main(cmd_args):
 
-    # prepare matrices P, S, T, V, G, F
-    he_p_matrix = numpy.empty((HE_NUM_BASIS_FUNCTIONS,HE_NUM_BASIS_FUNCTIONS))
-    he_new_p_matrix = numpy.empty((HE_NUM_BASIS_FUNCTIONS,HE_NUM_BASIS_FUNCTIONS))
-    he_s_matrix = numpy.empty((HE_NUM_BASIS_FUNCTIONS,HE_NUM_BASIS_FUNCTIONS))
-    he_t_matrix = numpy.empty((HE_NUM_BASIS_FUNCTIONS,HE_NUM_BASIS_FUNCTIONS))
-    he_v_matrix = numpy.empty((HE_NUM_BASIS_FUNCTIONS,HE_NUM_BASIS_FUNCTIONS))
-    he_g_matrix = numpy.empty((HE_NUM_BASIS_FUNCTIONS,HE_NUM_BASIS_FUNCTIONS))
-    he_f_matrix = numpy.empty((HE_NUM_BASIS_FUNCTIONS,HE_NUM_BASIS_FUNCTIONS))
-    he_f_prime_matrix = numpy.empty((HE_NUM_BASIS_FUNCTIONS,HE_NUM_BASIS_FUNCTIONS))
-
-    h2_p_matrix = numpy.empty((H2_NUM_BASIS_FUNCTIONS,H2_NUM_BASIS_FUNCTIONS))
-    h2_new_p_matrix = numpy.empty((H2_NUM_BASIS_FUNCTIONS,H2_NUM_BASIS_FUNCTIONS))
-    h2_s_matrix = numpy.empty((H2_NUM_BASIS_FUNCTIONS,H2_NUM_BASIS_FUNCTIONS))
-    h2_t_matrix = numpy.empty((H2_NUM_BASIS_FUNCTIONS,H2_NUM_BASIS_FUNCTIONS))
-    h2_v_matrix = numpy.empty((H2_NUM_BASIS_FUNCTIONS,H2_NUM_BASIS_FUNCTIONS))
-    h2_g_matrix = numpy.empty((H2_NUM_BASIS_FUNCTIONS,H2_NUM_BASIS_FUNCTIONS))
-    h2_f_matrix = numpy.empty((H2_NUM_BASIS_FUNCTIONS,H2_NUM_BASIS_FUNCTIONS))
-    h2_f_prime_matrix = numpy.empty((H2_NUM_BASIS_FUNCTIONS,H2_NUM_BASIS_FUNCTIONS))
-
     # read from file or pre-calculate one-electron and two-electron integrals
     he_integrals, h2_integrals = precalculate_integrals()
 
-    # fill up S matrix
-    for v in range(HE_NUM_BASIS_FUNCTIONS):
-        for u in range(HE_NUM_BASIS_FUNCTIONS):
-            # sort the combination to obtain the unique integral result
-            combination = tuple(sorted([v,u]))
-            he_s_matrix[v,u] = he_integrals[OVERLAP][combination]
-    for v in range(H2_NUM_BASIS_FUNCTIONS):
-        for u in range(H2_NUM_BASIS_FUNCTIONS):
-            # sort the combination to obtain the unique integral result
-            combination = tuple(sorted([v,u]))
-            h2_s_matrix[v,u] = h2_integrals[OVERLAP][combination]
-
-    # fill up T matrix
-    for v in range(HE_NUM_BASIS_FUNCTIONS):
-        for u in range(HE_NUM_BASIS_FUNCTIONS):
-            # sort the combination to obtain the unique integral result
-            combination = tuple(sorted([v,u]))
-            he_t_matrix[v,u] = he_integrals[KINETIC][combination]
-    for v in range(H2_NUM_BASIS_FUNCTIONS):
-        for u in range(H2_NUM_BASIS_FUNCTIONS):
-            # sort the combination to obtain the unique integral result
-            combination = tuple(sorted([v,u]))
-            h2_t_matrix[v,u] = h2_integrals[KINETIC][combination]
-
-    # fill up V matrix
-    for v in range(HE_NUM_BASIS_FUNCTIONS):
-        for u in range(HE_NUM_BASIS_FUNCTIONS):
-            # sort the combination to obtain the unique integral result
-            combination = tuple(sorted([v,u]))
-            he_v_matrix[v,u] = he_integrals[ATTRACTION][combination]
-    for v in range(H2_NUM_BASIS_FUNCTIONS):
-        for u in range(H2_NUM_BASIS_FUNCTIONS):
-            # sort the combination to obtain the unique integral result
-            combination = tuple(sorted([v,u]))
-            h2_v_matrix[v,u] = h2_integrals[ATTRACTION][combination]
-
-    # obtain transformation matrix X through S^-0.5
-    # obtain eigenvalues
-    he_s_eigenvalues, he_s_eigenvectors = numpy.linalg.eigh(he_s_matrix)
-    h2_s_eigenvalues, h2_s_eigenvectors = numpy.linalg.eigh(h2_s_matrix)
-    # inverse square root the resulting eigenvalues and put them in a diagonal matrix
-    he_s_eigenvalues_inverse_square_root = numpy.diag(he_s_eigenvalues**-0.5)
-    h2_s_eigenvalues_inverse_square_root = numpy.diag(h2_s_eigenvalues**-0.5)
-    # form the transformation matrix X by undiagonalizing the previous matrix
-    he_x_matrix = numpy.matmul(numpy.matmul(he_s_eigenvectors,he_s_eigenvalues_inverse_square_root),numpy.transpose(he_s_eigenvectors))
-    h2_x_matrix = numpy.matmul(numpy.matmul(h2_s_eigenvectors,h2_s_eigenvalues_inverse_square_root),numpy.transpose(h2_s_eigenvectors))
-
-    # MAIN HF LOOP
-    for iteration in range(50):
-
-        # calculate G matrix using density matrix P and two-electron integrals
-        for v in range(HE_NUM_BASIS_FUNCTIONS):
-            for u in range(HE_NUM_BASIS_FUNCTIONS):
-                for lambda_ in range(HE_NUM_BASIS_FUNCTIONS):
-                    for sigma in range(HE_NUM_BASIS_FUNCTIONS):
-                        
-                        # get index
-                        # Coulomb attraction two-electron integral
-                        coulomb_combination = [v,u,sigma,lambda_]
-                        # Exchange two-electron integral
-                        exchange_combination = [v,lambda_,sigma,u]
-                        # Avoid calculating identical integrals
-                        # (rs|tu) = (rs|ut) = (sr|tu) = (sr|ut) = (tu|rs) = (tu|sr) = (ut|rs) = (ut|sr)
-                        coulomb_combination = tuple(sorted(coulomb_combination[0:2]) + sorted(coulomb_combination[2:4]))
-                        exchange_combination = tuple(sorted(exchange_combination[0:2]) + sorted(exchange_combination[2:4]))
-                        coulomb_combination_swapped = tuple(coulomb_combination[2:4] + coulomb_combination[0:2])
-                        exchange_combination_swapped = tuple(exchange_combination[2:4] + coulomb_combination[0:2])
-
-                        # integral is going to exist in dictionary as _combination or _combination_swapped
-                        # TODO: there's got to be a better way!
-                        try:
-                            coulomb_term = he_integrals[EXCHANGE][coulomb_combination]
-                        except:
-                            coulomb_term = he_integrals[EXCHANGE][coulomb_combination_swapped]
-
-                        try:
-                            exchange_term = he_integrals[EXCHANGE][exchange_combination]
-                        except:
-                            exchange_term = he_integrals[EXCHANGE][exchange_combination_swapped]
-
-                        he_g_matrix[v,u] = he_p_matrix[lambda_,sigma]*(coulomb_term - 0.5*exchange_term)
-        for v in range(H2_NUM_BASIS_FUNCTIONS):
-            for u in range(H2_NUM_BASIS_FUNCTIONS):
-                for lambda_ in range(H2_NUM_BASIS_FUNCTIONS):
-                    for sigma in range(H2_NUM_BASIS_FUNCTIONS):
-                        
-                        # get index
-                        # Coulomb attraction two-electron integral
-                        coulomb_combination = [v,u,sigma,lambda_]
-                        # Exchange two-electron integral
-                        exchange_combination = [v,lambda_,sigma,u]
-                        # Avoid calculating identical integrals
-                        # (rs|tu) = (rs|ut) = (sr|tu) = (sr|ut) = (tu|rs) = (tu|sr) = (ut|rs) = (ut|sr)
-                        coulomb_combination = tuple(sorted(coulomb_combination[0:2]) + sorted(coulomb_combination[2:4]))
-                        exchange_combination = tuple(sorted(exchange_combination[0:2]) + sorted(exchange_combination[2:4]))
-                        coulomb_combination_swapped = tuple(coulomb_combination[2:4] + coulomb_combination[0:2])
-                        exchange_combination_swapped = tuple(exchange_combination[2:4] + coulomb_combination[0:2])
-
-                        # integral is going to exist in dictionary as _combination or _combination_swapped
-                        # TODO: there's got to be a better way!
-                        try:
-                            coulomb_term = h2_integrals[EXCHANGE][coulomb_combination]
-                        except:
-                            coulomb_term = h2_integrals[EXCHANGE][coulomb_combination_swapped]
-
-                        try:
-                            exchange_term = h2_integrals[EXCHANGE][exchange_combination]
-                        except:
-                            exchange_term = h2_integrals[EXCHANGE][exchange_combination_swapped]
-
-                        h2_g_matrix[v,u] = h2_p_matrix[lambda_,sigma]*(coulomb_term - 0.5*exchange_term)
-
-        # calculate F = T + V + G
-        he_f_matrix = he_t_matrix + he_v_matrix + he_g_matrix
-        h2_f_matrix = h2_t_matrix + h2_v_matrix + h2_g_matrix
-
-        # apply transform X to obtain F'
-        he_f_prime_matrix = numpy.matmul(numpy.matmul(numpy.transpose(he_x_matrix),he_x_matrix),he_f_matrix)
-        h2_f_prime_matrix = numpy.matmul(numpy.matmul(numpy.transpose(h2_x_matrix),h2_x_matrix),h2_f_matrix)
-
-        # diagonalize F' to get C'
-        he_f_prime_eigenvalues, he_c_prime_matrix = numpy.linalg.eigh(he_f_prime_matrix)
-        h2_f_prime_eigenvalues, h2_c_prime_matrix = numpy.linalg.eigh(h2_f_prime_matrix)
-
-        # convert C' to C to get a new P
-        he_c_matrix = numpy.matmul(he_x_matrix, he_c_prime_matrix)
-        h2_c_matrix = numpy.matmul(h2_x_matrix, h2_c_prime_matrix)
-
-        # calculate the new P matrix
-        for v in range(HE_NUM_BASIS_FUNCTIONS):
-            for u in range(HE_NUM_BASIS_FUNCTIONS):
-                he_new_p_matrix[v,u] = 0
-                for n in range(int(NUM_ELECTRONS/2)):
-                    he_new_p_matrix[v,u] = he_new_p_matrix[v,u] + 2*he_c_matrix[v,n]*he_c_matrix[u,n]
-        for v in range(H2_NUM_BASIS_FUNCTIONS):
-            for u in range(H2_NUM_BASIS_FUNCTIONS):
-                h2_new_p_matrix[v,u] = 0
-                for n in range(int(NUM_ELECTRONS/2)):
-                    h2_new_p_matrix[v,u] = h2_new_p_matrix[v,u] + 2*h2_c_matrix[v,n]*h2_c_matrix[u,n]
-
-        # compare old and new P matrix
-        # get the average percent difference of all elements
-        he_p_absolute_error = 0
-        for v in range(HE_NUM_BASIS_FUNCTIONS):
-            for u in range(HE_NUM_BASIS_FUNCTIONS):
-                he_p_absolute_error = he_p_absolute_error + abs(he_new_p_matrix[v,u] - he_p_matrix[v,u])/abs((he_new_p_matrix[v,u] + he_p_matrix[v,u])/2)
-        he_p_absolute_error_percent = 100*he_p_absolute_error/HE_NUM_BASIS_FUNCTIONS**2
-        h2_p_absolute_error = 0
-        for v in range(H2_NUM_BASIS_FUNCTIONS):
-            for u in range(H2_NUM_BASIS_FUNCTIONS):
-                h2_p_absolute_error = h2_p_absolute_error + abs(h2_new_p_matrix[v,u] - h2_p_matrix[v,u])/abs((h2_new_p_matrix[v,u] + h2_p_matrix[v,u])/2)
-        h2_p_absolute_error_percent = 100*h2_p_absolute_error/H2_NUM_BASIS_FUNCTIONS**2
-
-        # set old p matrix to new
-        he_p_matrix = he_new_p_matrix
-        h2_p_matrix = h2_new_p_matrix
-
-        # calculate total energy, check for convergence
-        he_total_energy_sum = 0
-        for v in range(HE_NUM_BASIS_FUNCTIONS):
-            for u in range(HE_NUM_BASIS_FUNCTIONS):
-                he_total_energy_sum = he_total_energy_sum + he_p_matrix[v,u]*(he_t_matrix[v,u] + he_v_matrix[v,u] + he_f_matrix[v,u])
-        he_total_energy = 0.5*he_total_energy_sum
-        h2_total_energy_sum = 0
-        for v in range(HE_NUM_BASIS_FUNCTIONS):
-            for u in range(HE_NUM_BASIS_FUNCTIONS):
-                h2_total_energy_sum = h2_total_energy_sum + h2_p_matrix[v,u]*(h2_t_matrix[v,u] + h2_v_matrix[v,u] + h2_f_matrix[v,u])
-        h2_total_energy = 0.5*h2_total_energy_sum
-
-        console_print('Iteration %d' % iteration)
-        console_print('\tHelium Atom:')
-        console_print('\t\tTotal energy: %f' % he_total_energy)
-        console_print('\t\tPercent difference between P matrices: %f%%' % he_p_absolute_error_percent)
-        console_print('\tHelium Atom:')
-        console_print('\t\tTotal energy: %f' % h2_total_energy)
-        console_print('\t\tPercent difference between P matrices: %f%%' % h2_p_absolute_error_percent)
+    # do HF for He
+    do_hartree(HE_NUM_BASIS_FUNCTIONS, he_integrals)
+    # do HF for H2
+    do_hartree(H2_NUM_BASIS_FUNCTIONS, h2_integrals)
 
 #
 # Initializer for child processes to respect SIGINT
