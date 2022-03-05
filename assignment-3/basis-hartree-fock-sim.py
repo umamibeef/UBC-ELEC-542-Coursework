@@ -43,6 +43,7 @@ import tqdm # progress bar for MP
 import sys
 import json
 import signal
+import copy
 
 numpy.set_printoptions(precision=None, suppress=None, edgeitems=30, linewidth=100000, 
     formatter=dict(float=lambda x: '%.3g' % x))
@@ -286,12 +287,6 @@ def console_print(verbose_level=0, string='', end='\n'):
         print(datetime_now.strftime(DATETIME_STR_FORMAT) + ' ' + string_line, end=end)
 
 #
-# Helium STO-1G basis function (centered around origin)
-#
-def sto_1g_helium_func(z, y, x):
-    return 0.5881*sympy.exp(-0.7739*(sympy.sqrt(x**2+y**2+z**2))**2)
-
-#
 # Helium STO-1G basis function class
 #
 class sto_1g_helium_class:
@@ -299,22 +294,12 @@ class sto_1g_helium_class:
     k = 0.5881
     alpha = 0.7739
 
-    def __init__(self, center=(0,0,0)):
+    def __init__(self, center=(0,0,0), modifier=1.0):
         self.center = center
+        self.alpha = self.alpha*modifier
 
     def eval(self, z, y, x):
         return self.k*sympy.exp(-self.alpha*(sympy.sqrt(((x - self.center[0])**2 + (y - self.center[1])**2 + (z - self.center[2])**2))**2))
-#
-# Hydrogen STO-1G basis function (centered around Hydrogen nucleus 0)
-#
-def sto_1g_hydrogen_0_func(z, y, x):
-    return 0.3696*sympy.exp(-0.4166*(sympy.sqrt((x - (-H2_BOND_LENGTH_ATOMIC_UNITS/2.0))**2+y**2+z**2))**2)
-
-#
-# Hydrogen STO-1G basis function (centered around Hydrogen nucleus 1)
-#
-def sto_1g_hydrogen_1_func(z, y, x):
-    return 0.3696*sympy.exp(-0.4166*(sympy.sqrt((x - (H2_BOND_LENGTH_ATOMIC_UNITS/2.0))**2+y**2+z**2))**2)    
 
 #
 # Hydrogen STO-1G basis function class
@@ -324,8 +309,9 @@ class sto_1g_hydrogen_class:
     k = 0.3696
     alpha = 0.4166
 
-    def __init__(self, center=(0,0,0)):
+    def __init__(self, center=(0,0,0), modifier=1.0):
         self.center = center
+        self.alpha = self.alpha*modifier
 
     def eval(self, z, y, x):
         return self.k*sympy.exp(-self.alpha*(sympy.sqrt(((x - self.center[0])**2 + (y - self.center[1])**2 + (z - self.center[2])**2))**2))
@@ -649,11 +635,12 @@ def is_symmetric(A, B, tol=0.1):
 #
 def process_dict_for_json(integral_dict_from_program):
 
-    for integral_type_key in list(integral_dict_from_program.keys()):
-        for combination_key in list(integral_dict_from_program[integral_type_key]):
-            integral_dict_from_program[integral_type_key][str(combination_key)] = integral_dict_from_program[integral_type_key].pop(combination_key)
+    integral_dict_json_copy = copy.deepcopy(integral_dict_from_program)
+    for integral_type_key in list(integral_dict_json_copy.keys()):
+        for combination_key in list(integral_dict_json_copy[integral_type_key]):
+            integral_dict_json_copy[integral_type_key][str(combination_key)] = integral_dict_json_copy[integral_type_key].pop(combination_key)
 
-    return integral_dict_from_program
+    return integral_dict_json_copy
 
 #
 # Process the integral dictionary for the program by converting combination string to tuples
@@ -692,9 +679,12 @@ def precalculate_integrals():
         do_h2_integrals = True
 
     # instantiate basis function classes for integral calculations
-    sto_1g_helium_obj = sto_1g_helium_class((0,0,0))
-    sto_1g_hydrogen_0_obj = sto_1g_helium_class(((-H2_BOND_LENGTH_ATOMIC_UNITS/2.0),0,0))
-    sto_1g_hydrogen_1_obj = sto_1g_helium_class(((H2_BOND_LENGTH_ATOMIC_UNITS/2.0),0,0))
+    sto_1g_helium_0_obj = sto_1g_helium_class((0,0,0))
+    sto_1g_helium_1_obj = sto_1g_helium_class((0,0,0))
+    sto_1g_hydrogen_00_obj = sto_1g_hydrogen_class(((-H2_BOND_LENGTH_ATOMIC_UNITS/2.0),0,0))
+    sto_1g_hydrogen_01_obj = sto_1g_hydrogen_class(((-H2_BOND_LENGTH_ATOMIC_UNITS/2.0),0,0))
+    sto_1g_hydrogen_10_obj = sto_1g_hydrogen_class(((H2_BOND_LENGTH_ATOMIC_UNITS/2.0),0,0))
+    sto_1g_hydrogen_11_obj = sto_1g_hydrogen_class(((H2_BOND_LENGTH_ATOMIC_UNITS/2.0),0,0))
 
     # *******************
     # *** HELIUM ATOM ***
@@ -708,7 +698,7 @@ def precalculate_integrals():
         # identical four all four entries 11 = 12 = 21 = 22
 
         # basis function lookup table
-        he_basis_func_lut = (sto_1g_helium_obj, sto_1g_helium_obj)
+        he_basis_func_lut = (sto_1g_helium_0_obj, sto_1g_helium_1_obj)
 
         he_integrals = do_integrals('He', he_basis_func_lut)
 
@@ -731,7 +721,7 @@ def precalculate_integrals():
         # combinations
 
         # basis function lookup table
-        h2_basis_func_lut = (sto_1g_hydrogen_0_obj, sto_1g_hydrogen_0_obj, sto_1g_hydrogen_1_obj, sto_1g_hydrogen_1_obj)
+        h2_basis_func_lut = (sto_1g_hydrogen_00_obj, sto_1g_hydrogen_01_obj, sto_1g_hydrogen_10_obj, sto_1g_hydrogen_11_obj)
 
         h2_integrals = do_integrals('H2', h2_basis_func_lut)
 
