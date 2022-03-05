@@ -67,11 +67,26 @@ HE_NUM_BASIS_FUNCTIONS = 2
 H2_NUM_BASIS_FUNCTIONS = 4
 HE_INTEGRALS_FILENAME = 'he_integrals.json'
 H2_INTEGRALS_FILENAME = 'h2_integrals.json'
+PROGRAM_VERBOSITY = 0
 # dictionary keys
 OVERLAP = 'overlap'
 KINETIC = 'kinetic'
 ATTRACTION = 'attraction'
 EXCHANGE = 'exchange'
+
+#
+# This is the main function
+#
+def main(cmd_args):
+
+    # read from file or pre-calculate one-electron and two-electron integrals
+    he_integrals, h2_integrals = precalculate_integrals()
+
+    # do HF for He
+    do_hartree(HE_NUM_BASIS_FUNCTIONS, he_integrals)
+    # do HF for H2
+    do_hartree(H2_NUM_BASIS_FUNCTIONS, h2_integrals)
+
 
 def do_hartree(num_basis_functions, integrals):
 
@@ -92,12 +107,18 @@ def do_hartree(num_basis_functions, integrals):
             combination = tuple(sorted([v,u]))
             s_matrix[v,u] = integrals[OVERLAP][combination]
 
+    console_print(1, 'S matrix:')
+    console_print(1, str(s_matrix))
+
     # fill up T matrix
     for v in range(num_basis_functions):
         for u in range(num_basis_functions):
             # sort the combination to obtain the unique integral result
             combination = tuple(sorted([v,u]))
             t_matrix[v,u] = integrals[KINETIC][combination]
+
+    console_print(1, 'T matrix:')
+    console_print(1, str(t_matrix))
 
     # fill up V matrix
     for v in range(num_basis_functions):
@@ -106,10 +127,15 @@ def do_hartree(num_basis_functions, integrals):
             combination = tuple(sorted([v,u]))
             v_matrix[v,u] = integrals[ATTRACTION][combination]
 
+    console_print(1, 'V matrix:')
+    console_print(1, str(v_matrix))
+
     # obtain transformation matrix X through S^-0.5
     # obtain eigenvalues
     s_eigenvalues, s_eigenvectors = numpy.linalg.eigh(s_matrix)
     # inverse square root the resulting eigenvalues and put them in a diagonal matrix
+    # add a TINY_NUMBER to avoid div by zero
+    s_eigenvalues = numpy.array([eigenvalue + TINY_NUMBER for eigenvalue in s_eigenvalues])
     s_eigenvalues_inverse_square_root = numpy.diag(s_eigenvalues**-0.5)
     # form the transformation matrix X by undiagonalizing the previous matrix
     x_matrix = numpy.matmul(numpy.matmul(s_eigenvectors,s_eigenvalues_inverse_square_root),numpy.transpose(s_eigenvectors))
@@ -117,6 +143,8 @@ def do_hartree(num_basis_functions, integrals):
     # MAIN HF LOOP
     iteration = 0
     while True:
+
+        console_print(0, '\n **** ITERATION %d **** \n' % iteration)
 
         # calculate G matrix using density matrix P and two-electron integrals
         for v in range(num_basis_functions):
@@ -134,7 +162,7 @@ def do_hartree(num_basis_functions, integrals):
                         coulomb_combination = tuple(sorted(coulomb_combination[0:2]) + sorted(coulomb_combination[2:4]))
                         exchange_combination = tuple(sorted(exchange_combination[0:2]) + sorted(exchange_combination[2:4]))
                         coulomb_combination_swapped = tuple(coulomb_combination[2:4] + coulomb_combination[0:2])
-                        exchange_combination_swapped = tuple(exchange_combination[2:4] + coulomb_combination[0:2])
+                        exchange_combination_swapped = tuple(exchange_combination[2:4] + exchange_combination[0:2])
 
                         # integral is going to exist in dictionary as _combination or _combination_swapped
                         # TODO: there's got to be a better way!
@@ -150,17 +178,32 @@ def do_hartree(num_basis_functions, integrals):
 
                         g_matrix[v,u] = p_matrix[lambda_,sigma]*(coulomb_term - 0.5*exchange_term)
 
+        console_print(1, 'G matrix:')
+        console_print(1, str(g_matrix))
+
         # calculate F = T + V + G
         f_matrix = t_matrix + v_matrix + g_matrix
 
+        console_print(1, 'F matrix:')
+        console_print(1, str(f_matrix))
+
         # apply transform X to obtain F'
-        f_prime_matrix = numpy.matmul(numpy.matmul(numpy.transpose(x_matrix),x_matrix),f_matrix)
+        f_prime_matrix = numpy.matmul(numpy.matmul(numpy.transpose(x_matrix),f_matrix),x_matrix)
+
+        console_print(1, 'F\' matrix:')
+        console_print(1, str(f_prime_matrix))
 
         # diagonalize F' to get C'
         f_prime_eigenvalues, c_prime_matrix = numpy.linalg.eigh(f_prime_matrix)
 
+        console_print(1, 'C\' matrix:')
+        console_print(1, str(c_prime_matrix))
+
         # convert C' to C to get a new P
         c_matrix = numpy.matmul(x_matrix, c_prime_matrix)
+
+        console_print(1, 'C matrix:')
+        console_print(1, str(c_matrix))
 
         # calculate the new P matrix
         for v in range(num_basis_functions):
@@ -168,6 +211,13 @@ def do_hartree(num_basis_functions, integrals):
                 new_p_matrix[v,u] = 0
                 for n in range(int(NUM_ELECTRONS/2)):
                     new_p_matrix[v,u] = new_p_matrix[v,u] + 2*c_matrix[v,n]*c_matrix[u,n]
+                    console_print(1, 'new_p_matrix[%d,%d] = %f' % (v,u,new_p_matrix[v,u]))
+                    console_print(1, 'c_matrix[%d,%d] = %f' % (v,n,c_matrix[v,n]))
+                    console_print(1, 'c_matrix[%d,%d] = %f' % (u,n,c_matrix[u,n]))
+                    console_print(1, 'new_p_matrix[%d,%d] = new_p_matrix[%d,%d] + 2*c_matrix[%d,%d]*c_matrix[%d,%d] = %f' % (v,u,v,u,v,n,u,n,new_p_matrix[v,u]))
+
+        console_print(1, 'new P matrix:')
+        console_print(1, str(new_p_matrix))
 
         # compare old and new P matrix
         # get the average percent difference of all elements
@@ -187,30 +237,15 @@ def do_hartree(num_basis_functions, integrals):
                 total_energy_sum = total_energy_sum + p_matrix[v,u]*(t_matrix[v,u] + v_matrix[v,u] + f_matrix[v,u])
         total_energy = 0.5*total_energy_sum
 
-        console_print('Iteration %d' % iteration)
-        console_print('\t\tTotal energy: %f' % total_energy)
-        console_print('\t\tPercent difference between P matrices: %f%%' % p_absolute_error_percent)
+        console_print(0, '\t\tTotal energy: %f' % total_energy)
+        console_print(0, '\t\tPercent difference between P matrices: %f%%' % p_absolute_error_percent)
 
         # increment iteration
         iteration = iteration + 1
 
         # check for end condition
-        if p_absolute_error_percent < 1 or iteration > 10:
+        if p_absolute_error_percent < 0.0001 or iteration > 10:
             break
-
-#
-# This is the main function
-#
-def main(cmd_args):
-
-    # read from file or pre-calculate one-electron and two-electron integrals
-    he_integrals, h2_integrals = precalculate_integrals()
-
-    # do HF for He
-    do_hartree(HE_NUM_BASIS_FUNCTIONS, he_integrals)
-    # do HF for H2
-    do_hartree(H2_NUM_BASIS_FUNCTIONS, h2_integrals)
-
 #
 # Initializer for child processes to respect SIGINT
 #
@@ -221,14 +256,22 @@ def initializer():
 #
 # Console formatter
 #
-def console_print(string='', end='\n'):
+def console_print(verbose_level=0, string='', end='\n'):
+
+    if verbose_level > PROGRAM_VERBOSITY:
+        return
 
     # get str representation
     if not isinstance(string, str):
         string = str(string)
 
-    datetime_now = datetime.datetime.now()
-    print(datetime_now.strftime(DATETIME_STR_FORMAT) + ' ' + string, end=end)
+    # split string at new lines
+    string = string.split('\n')
+
+    # write out line by line
+    for string_line in string:
+        datetime_now = datetime.datetime.now()
+        print(datetime_now.strftime(DATETIME_STR_FORMAT) + ' ' + string_line, end=end)
 
 #
 # Helium STO-1G basis function (centered around origin)
@@ -434,7 +477,6 @@ def calculate_coulomb_repulsion_and_exchange_integrals_naive(funcs):
     coulomb_repulsion_and_exchange_intgd_num = sympy.lambdify([z, y, x, w, v, u], coulomb_repulsion_and_exchange_intgd_sym, 'scipy')
     # integrate (first index of tuple contains result)
     coulomb_repulsion_and_exchange_int_val = scipy.integrate.nquad(coulomb_repulsion_and_exchange_intgd_num, [[-limits, limits]]*6, opts={'epsabs':err, 'epsrel':err}, full_output=True)
-    print(coulomb_repulsion_and_exchange_int_val)
 
     return coulomb_repulsion_and_exchange_int_val[0]
 
@@ -499,9 +541,9 @@ def calculate_coulomb_repulsion_and_exchange_integrals_optimized(func_objs):
 def get_one_electron_combinations(num_basis_functions):
 
     combinations = list(itertools.combinations_with_replacement(list(range(num_basis_functions)),2))
-    console_print('  One-Electron Integral Combinations (total=%d):' % len(combinations))
+    console_print(0, '  One-Electron Integral Combinations (total=%d):' % len(combinations))
     for combination in combinations:
-        console_print('    (%d, %d)' % (combination[0], combination[1]))
+        console_print(0, '    (%d, %d)' % (combination[0], combination[1]))
 
     return combinations
 
@@ -531,9 +573,9 @@ def get_two_electron_combinations(num_basis_functions):
                     if exchange not in combinations and exchange_swapped not in combinations:
                         combinations.append(exchange)
 
-    console_print('  Two-Electron Integral Combinations (total=%d):' % len(combinations))
+    console_print(0, '  Two-Electron Integral Combinations (total=%d):' % len(combinations))
     for combination in combinations:
-        console_print('    (%d, %d, %d, %d)' % (combination[0], combination[1], combination[2], combination[3]))
+        console_print(0, '    (%d, %d, %d, %d)' % (combination[0], combination[1], combination[2], combination[3]))
 
     return combinations
 
@@ -563,24 +605,24 @@ def do_integrals(subject_name, basis_function_objs):
 
     with multiprocessing.Pool(processes = multiprocessing.cpu_count()-2, initializer=initializer) as pool:
 
-        console_print('** Calculating %s overlap integrals...' % subject_name)
+        console_print(0, '** Calculating %s overlap integrals...' % subject_name)
         results = list(tqdm.tqdm(pool.imap(calculate_overlap_integrals, one_electron_function_combinations), total=len(one_electron_function_combinations), ascii=True))
         integrals[OVERLAP] = dict(zip(one_electron_combinations, results))
 
-        console_print('** Calculating %s kinetic energy integrals...' % subject_name)
+        console_print(0, '** Calculating %s kinetic energy integrals...' % subject_name)
         results = list(tqdm.tqdm(pool.imap(calculate_kinetic_energy_integrals, one_electron_function_combinations), total=len(one_electron_function_combinations), ascii=True))
         integrals[KINETIC] = dict(zip(one_electron_combinations, results))
 
-        console_print('** Calculating %s nuclear attraction integrals...' % subject_name)
+        console_print(0, '** Calculating %s nuclear attraction integrals...' % subject_name)
         func = functools.partial(calculate_nuclear_attraction_integrals_naive, subject_name.lower())
         results = list(tqdm.tqdm(pool.imap(func, one_electron_function_combinations), total=len(one_electron_function_combinations), ascii=True))
         integrals[ATTRACTION] = dict(zip(one_electron_combinations, results))
 
-        console_print('** Calculating %s repulsion and exchange integrals...' % subject_name)
+        console_print(0, '** Calculating %s repulsion and exchange integrals...' % subject_name)
         results = list(tqdm.tqdm(pool.imap(calculate_coulomb_repulsion_and_exchange_integrals_optimized, two_electron_function_combinations), total=len(two_electron_function_combinations), ascii=True))
         integrals[EXCHANGE] = dict(zip(two_electron_combinations, results))
 
-    console_print('** Finished calculating %s atom integrals!' % subject_name)
+    console_print(0, '** Finished calculating %s atom integrals!' % subject_name)
 
     return integrals
 
@@ -624,17 +666,17 @@ def precalculate_integrals():
     try:
         with open(HE_INTEGRALS_FILENAME) as he_integrals_json_file:
             he_integrals = process_dict_for_program(json.load(he_integrals_json_file))
-            console_print('** HE integrals loaded from %s' % (HE_INTEGRALS_FILENAME))
+            console_print(0, '** HE integrals loaded from %s' % (HE_INTEGRALS_FILENAME))
     except:
-        console_print('** Unable to load He integrals file, will recalculate')
+        console_print(0, '** Unable to load He integrals file, will recalculate')
         do_he_integrals = True
 
     try:
         with open(H2_INTEGRALS_FILENAME) as h2_integrals_json_file:
             h2_integrals = process_dict_for_program(json.load(h2_integrals_json_file))
-            console_print('** H2 integrals loaded from %s' % (H2_INTEGRALS_FILENAME))
+            console_print(0, '** H2 integrals loaded from %s' % (H2_INTEGRALS_FILENAME))
     except:
-        console_print('** Unable to load H2 integrals file, will recalculate')
+        console_print(0, '** Unable to load H2 integrals file, will recalculate')
         do_h2_integrals = True
 
     # instantiate basis function classes for integral calculations
@@ -648,7 +690,7 @@ def precalculate_integrals():
 
     if do_he_integrals:
 
-        console_print('** Starting He atom integral calculations')
+        console_print(0, '** Starting He atom integral calculations')
 
         # He uses the same basis function twice, so the integrals end up being
         # identical four all four entries 11 = 12 = 21 = 22
@@ -659,7 +701,7 @@ def precalculate_integrals():
         he_integrals = do_integrals('He', he_basis_func_lut)
 
         # write out integrals
-        console_print('** Saving Helium atom integrals to %s...' % (HE_INTEGRALS_FILENAME))
+        console_print(0, '** Saving Helium atom integrals to %s...' % (HE_INTEGRALS_FILENAME))
         with open(HE_INTEGRALS_FILENAME, 'w') as he_integrals_json_file:
             json.dump(process_dict_for_json(he_integrals), he_integrals_json_file, indent=4)
 
@@ -669,7 +711,7 @@ def precalculate_integrals():
 
     if do_h2_integrals:
 
-        console_print('** Starting H2 molecule integral calculations')
+        console_print(0, '** Starting H2 molecule integral calculations')
 
         # H2 molecule has two basis functions centered on each nuclei, for a
         # total of four basis function (only two are unique). They will need to
@@ -682,11 +724,11 @@ def precalculate_integrals():
         h2_integrals = do_integrals('H2', h2_basis_func_lut)
 
         # write out integrals
-        console_print('** Saving H2 molecule integrals to %s...' % (H2_INTEGRALS_FILENAME))
+        console_print(0, '** Saving H2 molecule integrals to %s...' % (H2_INTEGRALS_FILENAME))
         with open(H2_INTEGRALS_FILENAME, 'w') as h2_integrals_json_file:
             json.dump(process_dict_for_json(h2_integrals), h2_integrals_json_file,  indent=4)
 
-        console_print('** Finished calculating H2 molecule integrals!')
+        console_print(0, '** Finished calculating H2 molecule integrals!')
 
     return (he_integrals, h2_integrals)
 
