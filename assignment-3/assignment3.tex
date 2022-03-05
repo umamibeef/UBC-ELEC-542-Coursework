@@ -18,6 +18,40 @@
   keywordstyle=\color{blue}, % keyword style
   stringstyle=\color{mymauve}, % string literal style
 }
+
+% defining a new style for JSON output
+% obtained from: https://tex.stackexchange.com/questions/83085/how-to-improve-listings-display-of-json-files
+\definecolor{eclipseStrings}{RGB}{42,0.0,255}
+\definecolor{eclipseKeywords}{RGB}{127,0,85}
+\colorlet{numb}{magenta!60!black}
+
+\lstdefinelanguage{json}{
+    % basicstyle=\normalfont\ttfamily,
+    commentstyle=\color{eclipseStrings}, % style of comment
+    stringstyle=\color{eclipseKeywords}, % style of strings
+    % numbers=left,
+    % numberstyle=\scriptsize,
+    % stepnumber=1,
+    % numbersep=8pt,
+    % showstringspaces=false,
+    % breaklines=true,
+    % frame=lines,
+    % backgroundcolor=\color{gray}, %only if you like
+    string=[s]{"}{"},
+    comment=[l]{:\ "},
+    morecomment=[l]{:"},
+    literate=
+        *{0}{{{\color{numb}0}}}{1}
+         {1}{{{\color{numb}1}}}{1}
+         {2}{{{\color{numb}2}}}{1}
+         {3}{{{\color{numb}3}}}{1}
+         {4}{{{\color{numb}4}}}{1}
+         {5}{{{\color{numb}5}}}{1}
+         {6}{{{\color{numb}6}}}{1}
+         {7}{{{\color{numb}7}}}{1}
+         {8}{{{\color{numb}8}}}{1}
+         {9}{{{\color{numb}9}}}{1}
+}
 \usepackage{enumitem}
 \usepackage{blindtext}
 \usepackage{datetime2}
@@ -322,11 +356,12 @@ We now have all of the background required to implement our solution. The follow
 \section{Program Implementation Details}
 
 \begin{itemize}
-  \item On startup, the program searches for two JSON files containing pre-calculated integrals for both the Helium atom and the Hydrogen molecule. These files include all of the combinations that produce a unique integration result provided that the basis functions are different. If the files are not found, then the program precalculates the integrals and saved the result in these files. Multiprocessing is used to calculate an integral per available CPU core, helping to parallelize the workload.
+  \item On startup, the program searches for two JSON files containing pre-calculated integrals for both the Helium atom and the Hydrogen molecule. These files include all of the combinations that produce a unique integration result provided that the basis functions are different. If the files are not found, then the program pre-calculates the integrals and saved the result in these files. Multiprocessing is used to calculate an integral per available CPU core, helping to parallelize the workload.
   \item The combinations for the one electron and two electron integrals attempt to reduce the amount of integrations performed by the program. For the one-electron integrals, the combinations will exclude those whose flipped indices are already accounted for as they produce the same results. For the two electron integrals, a similar process is performed on the pairs of indices on either side of the repulsion term where flipped indices are discarded. The symmetry where the two functions are swapped at the same time on either side is also respeted. This can be summarized as follows:
   $(rs|t\mu) = (rs|\mu t) = (sr|t\mu) = (sr|\mu t) = (t\mu|rs) = (t\mu|sr) = (\mu t|rs) = (\mu t|sr)$ \cite{hartree-fock-in-100-lines}.
   \item Classes are defined for each basis function which provides the ability to extract the two coefficients of the basis function, define where the basis function is centered, and evaluate the function as a member function of the class. Since the program uses both naive and optimized equations for the integration, the naive version uses the full function defined in the class and the optimized version uses the coefficients of the Gaussian functions.
   \item The \texttt{sympy} library is used to symbolically define the functions, which is helpful in perform operations such as the Laplacian in the kinetic energy integrand. The resulting symbolic representation of each naive integrand is then converted into a Python lambda function to be numerically evaluated through the \texttt{scipy} package.
+  \item The main loop of the program generally follows what was written in the final recipe section. The difference between the previous P matrix and the new P matrix is used as the convergence criteria to know when the program has ended. The difference is calculated as the mean percent difference of all P matrix entries.
 \end{itemize}
 
 % \newpage
@@ -355,7 +390,10 @@ We now have all of the background required to implement our solution. The follow
 \section{Discussion}
 
 \begin{itemize}
+    \item As submitted, the current program does not work as expected. After only two iterations, the program thinks it obtains a convergence because the $\bm{P}$ matrices barely changes or doesn't change at all after the first iteration. As a result, the G matrix remains the same between the two iterations producing an identical result. Looking at the resulting coefficient matrix $\bm{C}$, the coefficients appear to barely change, only the sign appears to change. Could this be because two exact basis functions were chosen for each atom?
+    \item With the current program, the total energy calculated for the Helium atom is -3.045330 Hartrees and for the Hydrogen molecule is -21.759838 Hartrees. The Helium number appears to be close to -2.90372 Hartrees which was calculated by Pekeris in 1959. A value for the Hydrogen molecule wasn't found, but the result obtained through this program seems to be an order of magnitude off. Neither of these answers inspire much confidence, however, so they are only added here for posterity.
     \item If time permitted, the simplified integrals outlined in \cite{molecular-integrals-over-gaussian-basis-functions} would have been applied to the other, one-electron integrals in this assignment as well. The amount of time saved is phenomenal. Unfortunately, the resource was discovered too late in the game.
+    \item If time permits, another round of integration will be performed with basis functions that have slightly different alpha values. Perhaps this will help the algorithm to excite a better solution.
 \end{itemize}
 
 \newpage
@@ -365,6 +403,16 @@ We now have all of the background required to implement our solution. The follow
 \label{code-listing-python}
 The following is the code written in Python to generate the solutions and plots used in this report.
 \lstinputlisting[language=Python]{basis-hartree-fock-sim.py}
+
+\subsection{Helium Atom Integrals}
+\label{he-integrals}
+The following is the JSON file content for the Helium atom integrals.
+\lstinputlisting[language=json]{he_integrals.json}
+
+\subsection{Hydrogen Molecule Integrals}
+\label{h2-integrals}
+The following is the JSON file content for the Hydrogen atom integrals.
+\lstinputlisting[language=json]{h2_integrals.json}
 
 \nocite{*}
 

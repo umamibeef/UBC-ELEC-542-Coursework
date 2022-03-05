@@ -44,7 +44,7 @@ import sys
 import json
 import signal
 
-numpy.set_printoptions(edgeitems=30, linewidth=100000, 
+numpy.set_printoptions(precision=None, suppress=None, edgeitems=30, linewidth=100000, 
     formatter=dict(float=lambda x: '%.3g' % x))
 
 # Matplotlib export settings
@@ -67,7 +67,7 @@ HE_NUM_BASIS_FUNCTIONS = 2
 H2_NUM_BASIS_FUNCTIONS = 4
 HE_INTEGRALS_FILENAME = 'he_integrals.json'
 H2_INTEGRALS_FILENAME = 'h2_integrals.json'
-PROGRAM_VERBOSITY = 0
+PROGRAM_VERBOSITY = 1
 # dictionary keys
 OVERLAP = 'overlap'
 KINETIC = 'kinetic'
@@ -133,6 +133,14 @@ def do_hartree(num_basis_functions, integrals):
     # obtain transformation matrix X through S^-0.5
     # obtain eigenvalues
     s_eigenvalues, s_eigenvectors = numpy.linalg.eigh(s_matrix)
+    # sort eigenthings
+    sorted_indices = numpy.argsort(s_eigenvalues)
+    s_eigenvalues = s_eigenvalues[sorted_indices]
+    s_eigenvectors = s_eigenvectors[:,sorted_indices]
+    console_print(1, 'S eigenvalues:')
+    console_print(1, str(s_eigenvalues))
+    console_print(1, 'S eigenvectors:')
+    console_print(1, str(s_eigenvectors))
     # inverse square root the resulting eigenvalues and put them in a diagonal matrix
     # add a TINY_NUMBER to avoid div by zero
     s_eigenvalues = numpy.array([eigenvalue + TINY_NUMBER for eigenvalue in s_eigenvalues])
@@ -151,7 +159,6 @@ def do_hartree(num_basis_functions, integrals):
             for u in range(num_basis_functions):
                 for lambda_ in range(num_basis_functions):
                     for sigma in range(num_basis_functions):
-                        
                         # get index
                         # Coulomb attraction two-electron integral
                         coulomb_combination = [v,u,sigma,lambda_]
@@ -195,7 +202,12 @@ def do_hartree(num_basis_functions, integrals):
 
         # diagonalize F' to get C'
         f_prime_eigenvalues, c_prime_matrix = numpy.linalg.eigh(f_prime_matrix)
-
+        # sort eigenthings
+        sorted_indices = numpy.argsort(f_prime_eigenvalues)
+        f_prime_eigenvalues = s_eigenvalues[sorted_indices]
+        c_prime_matrix = c_prime_matrix[:,sorted_indices]
+        console_print(1, 'F\' eigenvalues:')
+        console_print(1, str(f_prime_eigenvalues))
         console_print(1, 'C\' matrix:')
         console_print(1, str(c_prime_matrix))
 
@@ -211,10 +223,10 @@ def do_hartree(num_basis_functions, integrals):
                 new_p_matrix[v,u] = 0
                 for n in range(int(NUM_ELECTRONS/2)):
                     new_p_matrix[v,u] = new_p_matrix[v,u] + 2*c_matrix[v,n]*c_matrix[u,n]
-                    console_print(1, 'new_p_matrix[%d,%d] = %f' % (v,u,new_p_matrix[v,u]))
-                    console_print(1, 'c_matrix[%d,%d] = %f' % (v,n,c_matrix[v,n]))
-                    console_print(1, 'c_matrix[%d,%d] = %f' % (u,n,c_matrix[u,n]))
-                    console_print(1, 'new_p_matrix[%d,%d] = new_p_matrix[%d,%d] + 2*c_matrix[%d,%d]*c_matrix[%d,%d] = %f' % (v,u,v,u,v,n,u,n,new_p_matrix[v,u]))
+                    console_print(2, 'new_p_matrix[%d,%d] = %f' % (v,u,new_p_matrix[v,u]))
+                    console_print(2, 'c_matrix[%d,%d] = %f' % (v,n,c_matrix[v,n]))
+                    console_print(2, 'c_matrix[%d,%d] = %f' % (u,n,c_matrix[u,n]))
+                    console_print(2, 'new_p_matrix[%d,%d] = new_p_matrix[%d,%d] + 2*c_matrix[%d,%d]*c_matrix[%d,%d] = %f' % (v,u,v,u,v,n,u,n,new_p_matrix[v,u]))
 
         console_print(1, 'new P matrix:')
         console_print(1, str(new_p_matrix))
