@@ -147,7 +147,7 @@ def do_hartree(num_basis_functions, integrals):
     s_eigenvalues = numpy.array([eigenvalue + TINY_NUMBER for eigenvalue in s_eigenvalues])
     s_eigenvalues_inverse_square_root = numpy.diag(s_eigenvalues**-0.5)
     # form the transformation matrix X by undiagonalizing the previous matrix
-    x_matrix = s_eigenvectors @ s_eigenvalues_inverse_square_root @ s_eigenvectors
+    x_matrix = s_eigenvectors @ s_eigenvalues_inverse_square_root @ numpy.transpose(s_eigenvectors)
 
     # MAIN HF LOOP
     iteration = 0
@@ -323,7 +323,7 @@ class sto_1g_hydrogen_class:
 #
 # Calculate the overlap integrals given the function lookup table and the desired combinations
 #
-def calculate_overlap_integrals(funcs):
+def calculate_overlap_integrals_naive(funcs):
 
     # sympy regular symbolic variables
     x, y, z = sympy.symbols('x y z')
@@ -336,6 +336,26 @@ def calculate_overlap_integrals(funcs):
     overlap_intgd_num = sympy.lambdify([z, y, x], overlap_intgd_sym, 'scipy')
     # integrate (first index of tuple contains result)
     overlap_int_val = scipy.integrate.nquad(overlap_intgd_num, [[-scipy.inf, scipy.inf], [-scipy.inf, scipy.inf], [-scipy.inf, scipy.inf]])[0]
+
+    return overlap_int_val
+
+#
+# Calculate the overlap integrals given the function lookup table and the desired combinations
+#
+def calculate_overlap_integrals_optimized(func_objs):
+
+    # combine the outer K coefficients into a single one that will multiply the final result
+    k_all = func_objs[0].k * func_objs[1].k
+
+    # get the four different function alphas
+    alpha = func_objs[0].alpha
+    gamma = func_objs[1].alpha
+
+    # get the two different centers, A, C
+    center_a = scipy.array(func_objs[0].center)
+    center_c = scipy.array(func_objs[1].center)
+
+    overlap_int_val = k_all*((scipy.pi/(alpha + gamma))**(3.0/2.0))*scipy.exp(-alpha*gamma*(calculate_distance(center_a, center_c)**2)/(alpha + gamma))
 
     return overlap_int_val
 
@@ -605,10 +625,12 @@ def do_integrals(subject_name, basis_function_objs):
     two_electron_combinations = get_two_electron_combinations(len(basis_function_objs))
     two_electron_function_combinations = [(basis_function_objs[combination[0]], basis_function_objs[combination[1]], basis_function_objs[combination[2]], basis_function_objs[combination[3]]) for combination in two_electron_combinations]
 
+    calculate_overlap_integrals_optimized(one_electron_function_combinations_obj[0])
+
     with multiprocessing.Pool(processes = multiprocessing.cpu_count()-2, initializer=initializer) as pool:
 
         console_print(0, '** Calculating %s overlap integrals...' % subject_name)
-        results = list(tqdm.tqdm(pool.imap(calculate_overlap_integrals, one_electron_function_combinations), total=len(one_electron_function_combinations), ascii=True))
+        results = list(tqdm.tqdm(pool.imap(calculate_overlap_integrals_optimized, one_electron_function_combinations_obj), total=len(one_electron_function_combinations_obj), ascii=True))
         integrals[OVERLAP] = dict(zip(one_electron_combinations, results))
 
         console_print(0, '** Calculating %s kinetic energy integrals...' % subject_name)
