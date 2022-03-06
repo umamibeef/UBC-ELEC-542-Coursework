@@ -215,7 +215,7 @@ Now we have all the pieces to expand the Fock operator into its new basis functi
 \begin{align*}
   F_{v\mu} &= \int_{-\infty}^{\infty} \phi_v^\ast(\vec{r}) \hat{F}(\vec{r}) \phi_\mu(\vec{r})d\vec{r} \\
   F_{v\mu} &= \int_{-\infty}^{\infty} \phi_v^\ast(\vec{r}) \hat{H}(\vec{r}) \phi_\mu(\vec{r})d\vec{r} + \sum_{n=1}^{N/2} \int_{-\infty}^{\infty} \phi_v^\ast(\vec{r}) \left[2J_n(\vec{r}) - K_n(\vec{r})\right] \phi_\mu(\vec{r})d\vec{r} \\
-  F_{v\mu} &= H_{v\mu}^{core} + \sum_{n=1}^{N/2} 2(v\mu|aa) - (va|\mu a)
+  F_{v\mu} &= H_{v\mu}^{core} + \sum_{n=1}^{N/2} 2(v\mu|nn) - (vn|\mu n)
 \end{align*}
 
 The core Hamiltonian matrix element $H_{v\mu}^{core}$ can be further expanded into the kinetic energy integrals $T_{v\mu}$ and nuclear attraction integrals $V_{v\mu}$:
@@ -342,6 +342,11 @@ We now have all of the background required to implement our solution. The follow
       \end{itemize}
     \item Fill in $\bm{T}$ and $\bm{V}$ matrices using one-electron integrals
     \item Obtain the transformation matrix $\bm{X}$ by obtaining $\bm{X} = \bm{S}^{-\frac{1}{2}}$
+      \begin{itemize}
+        \item Diagonalize $\bm{S}$ to find its eigenvalues
+        \item Create a new matrix with the eigenvalues set to the negative half power on the diagonal: $\bm{s}^{-\frac{1}{2}}$
+        \item Form the transformation matrix $\bm{X}$ by calculating $\bm{U}\bm{s}^{-\frac{1}{2}}\bm{U}^\dagger$
+      \end{itemize}
     \item Calculate the $\bm{G}$ matrix using the current density matrix $\bm{P}$ (zero on the first iteration) and the two-electron integrals
     \item Calculate the $\bm{F}$ Fock matrix using $\bm{T} + \bm{V} + \bm{G}$
     \item Apply the transformation matrix $\bm{X}$ to obtain the orthonormalized Fock matrix $\bm{F}' = \bm{X}^\dagger\bm{F}\bm{X}$:
@@ -364,36 +369,16 @@ We now have all of the background required to implement our solution. The follow
   \item The main loop of the program generally follows what was written in the final recipe section. The difference between the previous P matrix and the new P matrix is used as the convergence criteria to know when the program has ended. The difference is calculated as the mean percent difference of all P matrix entries.
 \end{itemize}
 
-% \newpage
-% \section{Results}
-
-% \begin{figure}[H]
-%   \begin{center}
-%     % \includegraphics[scale=0.75]{he_N28_l5.png}
-%   \end{center}
-%   \caption{Calculated orbitals for $He$ atom using limits of [-5,5]}
-%   \label{he-plot}
-% \end{figure}
-
-% \begin{table}[H]
-% \begin{center}
-% \begin{tabular}{l|llllll}\hline
-% $n$    & $1$    & $2$     & $3$     & $4$      & $5$      & $6$      \\\hline
-% $E_n$  & $-0.049968$  & $-0.049878$  & $-0.041970$  & $0.011558$  & $-0.007816$  & $0.065703$ \\\hline
-% \end{tabular}
-% \end{center}
-%   \caption{The first six orbital energy levels obtained from applying HF to the Helium atom using limits of [-5,5]}
-%   \label{orbital-energies-he}
-% \end{table}
-
 \newpage
 \section{Discussion}
 
 \begin{itemize}
     \item As submitted, the current program does not work as expected. After only two iterations, the program thinks it obtains a convergence because the $\bm{P}$ matrices barely changes or doesn't change at all after the first iteration. As a result, the $\bm{G}$ matrix remains the same between the two iterations producing an identical result. Looking at the resulting coefficient matrix $\bm{C}$, the coefficients appear to barely change, only the sign appears to change. Could this be because two exact basis functions were chosen for each atom?
-    \item With the current program, the total energy calculated for the Helium atom is -3.045430 Hartrees and for the Hydrogen molecule is -24.154613 Hartrees. The Helium number appears to be close to -2.90372 Hartrees which was calculated by Pekeris in 1959. A value for the Hydrogen molecule wasn't found, but the result obtained through this program seems to be an order of magnitude off. Neither of these answers inspire much confidence, however, so they are only added here for posterity.
+    \item With the current program, the total energy calculated for the Helium atom is -3.045430 Hartrees and for the Hydrogen molecule is -24.154613 Hartrees.
+    \item Using ABACUS, Hartree-Fock was run using the STO-3G basis set to calculate the molecular orbitals for both the Helium atom and the Hydrogen molecule. The Helium atom's first orbital is calculated to have an energy of -636.746 eV or -23.3999729 Hartrees and the Hydrogen molecule first orbital is calculated to have an energy of -480.416 eV or -17.6549541 Hartrees. Unfortunately, the results obtained in this program do not appear to be correct.
+    \item Another round of integration was performed with basis functions that have slightly different alpha values. However, this did not affect the algorithm in a meaningful way. While many calculation errors were found in followup revisions of the code and theory, none of the fixes made any difference to the solution. There is very likely a logical error somewhere in the code or the theoretical interpretation that is causing the program to behave improperly. Other Hartree-Fock implementations using Roothaan-Hall equations were studied online, but no major deviations were found between them and this program's implementation.
     \item If time permitted, the simplified integrals outlined in \cite{molecular-integrals-over-gaussian-basis-functions} would have been applied to the other, one-electron integrals in this assignment as well. The amount of time saved is phenomenal. Unfortunately, the resource was discovered too late in the game.
-    \item Another round of integration was performed with basis functions that have slightly different alpha values. However, this did not affect the algorithm in a meaningful way.
+    \item If the program had worked, the resulting linear combinations of wave functions would have been plotted in a similar manner to the previous assignment as a comparison.
 \end{itemize}
 
 \newpage
