@@ -147,7 +147,7 @@ def do_hartree(num_basis_functions, integrals):
     s_eigenvalues = numpy.array([eigenvalue + TINY_NUMBER for eigenvalue in s_eigenvalues])
     s_eigenvalues_inverse_square_root = numpy.diag(s_eigenvalues**-0.5)
     # form the transformation matrix X by undiagonalizing the previous matrix
-    x_matrix = numpy.matmul(numpy.matmul(s_eigenvectors,s_eigenvalues_inverse_square_root),numpy.transpose(s_eigenvectors))
+    x_matrix = s_eigenvectors @ s_eigenvalues_inverse_square_root @ s_eigenvectors
 
     # MAIN HF LOOP
     iteration = 0
@@ -196,7 +196,7 @@ def do_hartree(num_basis_functions, integrals):
         console_print(1, str(f_matrix))
 
         # apply transform X to obtain F'
-        f_prime_matrix = numpy.matmul(numpy.matmul(numpy.transpose(x_matrix),f_matrix),x_matrix)
+        f_prime_matrix = numpy.transpose(x_matrix) @ f_matrix @ x_matrix
 
         console_print(1, 'F\' matrix:')
         console_print(1, str(f_prime_matrix))
@@ -213,10 +213,13 @@ def do_hartree(num_basis_functions, integrals):
         console_print(1, str(c_prime_matrix))
 
         # convert C' to C to get a new P
-        c_matrix = numpy.matmul(x_matrix, c_prime_matrix)
+        c_matrix = x_matrix @ c_prime_matrix
 
         console_print(1, 'C matrix:')
         console_print(1, str(c_matrix))
+
+        console_print(1, 'old P matrix:')
+        console_print(1, str(p_matrix))
 
         # calculate the new P matrix
         for v in range(num_basis_functions):
@@ -234,11 +237,12 @@ def do_hartree(num_basis_functions, integrals):
 
         # compare old and new P matrix
         # get the average percent difference of all elements
-        p_absolute_error = 0
+        delta = 0
         for v in range(num_basis_functions):
             for u in range(num_basis_functions):
-                p_absolute_error = p_absolute_error + abs(new_p_matrix[v,u] - p_matrix[v,u])/abs((new_p_matrix[v,u] + p_matrix[v,u])/2)
-        p_absolute_error_percent = 100*p_absolute_error/num_basis_functions**2
+                console_print(2, 'v=%d u=%d error: %f' % (v, u, abs(new_p_matrix[v,u] - p_matrix[v,u])/abs((new_p_matrix[v,u] + p_matrix[v,u])/2)))
+                delta = delta + (p_matrix[v,u] - new_p_matrix[v,u])**2
+        delta = (delta / num_basis_functions)**0.5
 
         # set old p matrix to new
         p_matrix = new_p_matrix
@@ -251,13 +255,13 @@ def do_hartree(num_basis_functions, integrals):
         total_energy = 0.5*total_energy_sum
 
         console_print(0, '\t\tTotal energy: %f' % total_energy)
-        console_print(0, '\t\tPercent difference between P matrices: %f%%' % p_absolute_error_percent)
+        console_print(0, '\t\tDelta between P matrices: %f' % delta)
 
         # increment iteration
         iteration = iteration + 1
 
         # check for end condition
-        if p_absolute_error_percent < 0.0001 or iteration > 10:
+        if delta < 0.00001 or iteration > 10:
             break
 #
 # Initializer for child processes to respect SIGINT
@@ -299,7 +303,7 @@ class sto_1g_helium_class:
         self.alpha = self.alpha*modifier
 
     def eval(self, z, y, x):
-        return self.k*sympy.exp(-self.alpha*(sympy.sqrt(((x - self.center[0])**2 + (y - self.center[1])**2 + (z - self.center[2])**2))**2))
+        return self.k*sympy.exp(-self.alpha*(sympy.sqrt((x - self.center[0])**2 + (y - self.center[1])**2 + (z - self.center[2])**2)**2))
 
 #
 # Hydrogen STO-1G basis function class
@@ -314,7 +318,7 @@ class sto_1g_hydrogen_class:
         self.alpha = self.alpha*modifier
 
     def eval(self, z, y, x):
-        return self.k*sympy.exp(-self.alpha*(sympy.sqrt(((x - self.center[0])**2 + (y - self.center[1])**2 + (z - self.center[2])**2))**2))
+        return self.k*sympy.exp(-self.alpha*(sympy.sqrt((x - self.center[0])**2 + (y - self.center[1])**2 + (z - self.center[2])**2)**2))
 
 #
 # Calculate the overlap integrals given the function lookup table and the desired combinations
