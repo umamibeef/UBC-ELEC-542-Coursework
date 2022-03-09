@@ -92,13 +92,15 @@
 
 \section{Introduction}
 
-\cite{molecular-integrals-over-gaussian-basis-functions}
+In this course's assignments, we have discovered how computationally expensive nanoscale modelling can be. Exactly simulating the interaction of subatomic particles in various configurations requires immense processing power, often outside of the realm of current technological capabilities. Despite the technological limitations, however, there has been decades of research and development in this field. This is largely attributed to clever optimizations and simplifications to various quantum models which have allowed for the highly accurate simulation of nanoscale systems. This project hopes to explore how the current generation of computational resources can be optimized to solve these problems.
 
-\section{Prior Work}
+Naively programming a scientific workload can lead to numerous inefficiencies if factors such as locality or parallelism are not taken into account. By effectively using a computational resource through programming that takes advantage of proper scheduling and utilization of computing resources can produce big performance gains. For example, graphics processing units (GPUs), which were originally designed for real-time rasterized 3D graphics processing possess an architecture that is suited for a variety of other high-throughput arithmetic operations. These devices are found in the majority of high performance computers, but are not utilized unless the software has been explicitly written to make use of them. This software also needs to be written in such a way where the workload is effectively partitioned to stream through the architecture of the GPU in an effective manner. GPUs are now used in a variety of scientific workloads with many nanoscale modelling packages accelerating calculations through them \cite{electronic-structure-calculations-on-gpus}.
 
-\section{Idea}
+There also exists the possibility of designing dedicated high performance hardware to perform singular tasks with high throughput. Using field-programmable gate arrays (FPGAs), it is possible to implement in hardware computational blocks designed to accelerate scientific workloads such as those implemented by nanoscale simulations. Both \cite{fpga-hf} and \cite{hardware-implementation-of-the-exponent-based-computational-core-for-an-exchange-correlation-potential-matrix-generation} explore their application in implementing Hartree-Fock and the exchange integral calculation respectively.
 
 \section{Methodology}
+
+The abundance of GPUs makes them an attractive prospect for this project, so they are chosen as the computational resource to leverage and optimize for. A workload, likely one that was covered in this class, will be identified as the subject for acceleration. Either a baseline will be written from scratch, or an existing workload that is not using GPU acceleration will be chosen as the subject.
 
 \section{Work Plan}
 
@@ -107,19 +109,11 @@ The following rough workplan has been laid out to help estimate the amount of wo
 \subsection{Milestones [Estimated Weeks]}
 
 \begin{itemize}
-  \item [0.25] A quarter week of work
-  \item [1.00] A week of work
-  \item [1.00] A week of work
-  \item [3.00] Three weeks of work
-\end{itemize}
-
-\subsection{Deadlines}
-
-\begin{itemize}
-  \item [0.25] A quarter week of work
-  \item [1.00] A week of work
-  \item [1.00] A week of work
-  \item [3.00] Three weeks of work
+  \item {[0.75]} Literature review
+  \item {[0.25]} Workload acceleration identification
+  \item {[0.50]} Baseline metrics obtained for comparison
+  \item {[1.50]} Acceleration implementation
+  \item {[0.50]} Analysis and report
 \end{itemize}
 
 \nocite{*}
