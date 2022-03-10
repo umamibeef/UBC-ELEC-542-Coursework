@@ -98,9 +98,13 @@ Naively programming a scientific workload can lead to numerous inefficiencies if
 
 There also exists the possibility of designing dedicated high performance hardware to perform singular tasks with high throughput. Using field-programmable gate arrays (FPGAs), it is possible to implement in hardware computational blocks designed to accelerate scientific workloads such as those implemented by nanoscale simulations. Both \cite{fpga-hf} and \cite{hardware-implementation-of-the-exponent-based-computational-core-for-an-exchange-correlation-potential-matrix-generation} explore their application in implementing Hartree-Fock and the exchange integral calculation respectively.
 
+% TODO cite the special purpose HF computer, likely as an intro to the FPGA section
+
 \section{Methodology}
 
 The abundance of GPUs makes them an attractive prospect for this project, so they are chosen as the computational resource to leverage and optimize for. A workload, likely one that was covered in this class, will be identified as the subject for acceleration. Either a baseline will be written from scratch, or an existing workload that is not using GPU acceleration will be chosen as the subject.
+
+% TODO: cite CUDA
 
 \section{Work Plan}
 
