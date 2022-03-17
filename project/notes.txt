@@ -1,1 +1,7 @@
 Possible optimization target: pyscf, numint_uniform_grid.c
+ * integration is performed by multigrid.py
+    - specifically, the eval_mat function
+    - the numeric integration function name to call is constructed and stored
+      in eval_fn (e.g. eval_fn = 'NUMINTeval_' + xctype.lower() + lattice_type)
+    - the numerical integration is passed as the first paramter of
+      libdft.NUMINT_fill2c
