@@ -5,3 +5,5 @@ Possible optimization target: pyscf, numint_uniform_grid.c
       in eval_fn (e.g. eval_fn = 'NUMINTeval_' + xctype.lower() + lattice_type)
     - the numerical integration is passed as the first paramter of
       libdft.NUMINT_fill2c
+    - a test function exists: test_eval_mat, found in test_numint.py and test_r_numint.py
+    - BLAS and LAPACK libraries are required to build pyscf (sudo apt install libblas-dev liblapack-dev)
