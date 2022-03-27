@@ -31,6 +31,7 @@
   * A project that implements numerical integration grids: https://theochem.github.io/horton/2.1.1/lib/pck_horton_grid.html
   * A paper talking numerical integration: https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.33.3141&rep=rep1&type=pdf
   * Another paper on Smolyak's construction https://core.ac.uk/download/pdf/14928756.pdf
+  * Paper: "Smolyak's algorithm: A powerful black box for the acceleration of scientific computations" https://arxiv.org/pdf/1703.08872.pdf
 
 # TODOs
   * finalize a benchmark to run that will utilize the numerical integration
