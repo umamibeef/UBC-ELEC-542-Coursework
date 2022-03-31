@@ -39,7 +39,7 @@
 
 # TODOs
   * priority is to understand DFT better, because right now it doesn't make enough sense
-    - https://pyscf.org/user/dft.html seems to have a good overview, and the benchmark uses a variation of the example within
-  * watch this, CP2K parallel algorithms overview (~1h): https://www.youtube.com/watch?v=GNnSKOgqEwM
+    - https://pyscf.org/user/dft.html seems to have a good overview, and the benchmark uses a variation of the example within~
+  * Nevermind, not worth it. ~~watch this, CP2K parallel algorithms overview (~1h): https://www.youtube.com/watch?v=GNnSKOgqEwM~~
   * finalize a benchmark to run that will utilize the numerical integration
   * understand what workloads use the numerical integration routines that will be accelerated
