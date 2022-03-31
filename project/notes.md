@@ -7,6 +7,7 @@
       libdft.NUMINT_fill2c
     - a test function exists: test_eval_mat, found in test_numint.py and test_r_numint.py
     - BLAS and LAPACK libraries are required to build pyscf (sudo apt install libblas-dev liblapack-dev)
+    - OpenMP is used to parallelize the functions
 
 # Python venv setup
   * Create virtual environment
@@ -33,6 +34,12 @@
   * Another paper on Smolyak's construction https://core.ac.uk/download/pdf/14928756.pdf
   * Paper: "Smolyak's algorithm: A powerful black box for the acceleration of scientific computations" https://arxiv.org/pdf/1703.08872.pdf
 
+  * CUDA
+    - Following instructions here: https://docs.nvidia.com/cuda/wsl-user-guide/index.html
+
 # TODOs
+  * priority is to understand DFT better, because right now it doesn't make enough sense
+    - https://pyscf.org/user/dft.html seems to have a good overview, and the benchmark uses a variation of the example within
+  * watch this, CP2K parallel algorithms overview (~1h): https://www.youtube.com/watch?v=GNnSKOgqEwM
   * finalize a benchmark to run that will utilize the numerical integration
   * understand what workloads use the numerical integration routines that will be accelerated
