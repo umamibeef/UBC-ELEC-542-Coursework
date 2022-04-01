@@ -41,6 +41,7 @@
   * Change of plans, redo assignment 2 but with GPU acceleration
     - reimplement assignment 2 in C
     - implement numerical integration from textbook: Electronic Structure Calculations on Graphics
+    - for naive implementation, could do this: https://eecs.oregonstate.edu/research/vlsi/teaching/ECE472_FA12/briggs_haller_cuda.pdf
 Processing Units ("C:\Users\Michel\OneDrive\School\ELEC542\Project\Electronic Structure Calculations on Graphics Processing Units - 2016 - Walker.pdf")
   * ~~priority is to understand DFT better, because right now it doesn't make enough sense
     - https://pyscf.org/user/dft.html seems to have a good overview, and the benchmark uses a variation of the example within~~ Done.
