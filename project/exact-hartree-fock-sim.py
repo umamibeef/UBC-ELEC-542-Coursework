@@ -53,7 +53,7 @@ if False:
 
 # program constants
 H2_BOND_LENGTH_ATOMIC_UNITS = 1.39839733222307
-TINY_NUMBER = 0.001
+TINY_NUMBER = 1e-4
 IDX_X = 0
 IDX_Y = 1
 IDX_Z = 2
@@ -307,10 +307,11 @@ def main(cmd_args):
             exchange_matrix = exchange_matrix_gen(orbital_values, coords)
 
             # create Fock matrix
+            # kinetic and attraction matrices already have the appropriate sign (-)
             if target_subject == 'h2':
-                fock_matrix = kinetic_energy_matrix + attraction_matrix_hydrogen + repulsion_matrix + exchange_matrix
+                fock_matrix = kinetic_energy_matrix + attraction_matrix_hydrogen + 2*repulsion_matrix - exchange_matrix
             elif target_subject == 'he':
-                fock_matrix = kinetic_energy_matrix + attraction_matrix_helium + repulsion_matrix + exchange_matrix
+                fock_matrix = kinetic_energy_matrix + attraction_matrix_helium + 2*repulsion_matrix - exchange_matrix
             else:
                 console_print('Fatal error, exiting.')
                 quit()
@@ -388,17 +389,17 @@ def main(cmd_args):
     console_print(' ** Eigenvalues:')
     console_print(eigenvalues)
 
-    console_print(' ** Orbital energies:')
-    for n in range(len(eigenvalues)):
-        console_print('\tn=%d orbital energy: %f' % (n, eigenvalues[n]))
-        eigenvector = eigenvectors[:,n]
-        squared_eigenvector_3d = lambda x, y, z : numpy.square(eigenvector).reshape((N,N,N)).transpose()[x, y, z]
-        expectation = integrate(squared_eigenvector_3d, coords)
-        console_print('\t\tPsi_%d expectation value: %f' % (n, expectation))
+    # console_print(' ** Orbital energies:')
+    # for n in range(len(eigenvalues)):
+    #     console_print('\tn=%d orbital energy: %f' % (n, eigenvalues[n]))
+    #     eigenvector = eigenvectors[:,n]
+    #     squared_eigenvector_3d = lambda x, y, z : numpy.square(eigenvector).reshape((N,N,N)).transpose()[x, y, z]
+    #     expectation = integrate(squared_eigenvector_3d, coords)
+    #     console_print('\t\tPsi_%d expectation value: %f' % (n, expectation))
 
-    console_print(' ** Total Energy:')
-    eigenvector = eigenvectors[:,n]
-    console_print('\tn=%d total energy: %f' % (energy_level, calculate_total_energy(target_subject, eigenvector, coords)))
+    # console_print(' ** Total Energy:')
+    # eigenvector = eigenvectors[:,n]
+    # console_print('\tn=%d total energy: %f' % (energy_level, calculate_total_energy(target_subject, eigenvector, coords)))
 
     # plot data
     console_print(' ** Plotting data...')
@@ -510,7 +511,7 @@ def generate_coordinates(minimum, maximum, N):
 # element simulation. A small number tiny_number is provided to prevent divide
 # by zero scenarios.
 #
-def attraction_func_helium(coords):
+def attraction_func_helium(coords, h):
 
     x = coords[IDX_X]
     y = coords[IDX_Y]
@@ -520,14 +521,14 @@ def attraction_func_helium(coords):
 
     denominator = math.sqrt(x**2 + y**2 + z**2)
 
-    return -((2.0/(tiny_number + denominator)))
+    return -((2.0/(tiny_number + denominator)))/h
 
 #
 # This function returns the nuclear attraction for an electron in the Hydrogen
 # molecule simulation. A small number tiny_number is provided to prevent divide
 # by zero scenarios.
 #
-def attraction_func_hydrogen(coords):
+def attraction_func_hydrogen(coords, h):
 
     x = coords[IDX_X]
     y = coords[IDX_Y]
@@ -538,14 +539,14 @@ def attraction_func_hydrogen(coords):
     denominator_1 = math.sqrt(((H2_BOND_LENGTH_ATOMIC_UNITS/2) - x)**2 + y**2 + z**2)
     denominator_2 = math.sqrt(((-H2_BOND_LENGTH_ATOMIC_UNITS/2) - x)**2 + y**2 + z**2)
 
-    return -((1.0/(tiny_number + denominator_1)) + (1.0/(tiny_number + denominator_2)))
+    return -((1.0/(tiny_number + denominator_1)) + (1.0/(tiny_number + denominator_2)))/h
 
 #
 # This functions calculates the repulsion between two electrons. A small number
 # TINY_NUMBER is provided to prevent divide by zero scenarios.
 #
 @functools.lru_cache(maxsize=8192)
-def repulsion_func(coords_1, coords_2, h):
+def repulsion_func(coords_1, coords_2):
 
     x1 = coords_1[IDX_X]
     y1 = coords_1[IDX_Y]
@@ -601,7 +602,7 @@ def attraction_matrix_gen(attraction_func, coords):
 
     # use scipy sparse matrix generation
     # create the diagonal 
-    diagonal = [attraction_func(coordinate_index_to_coordinates(matrix_index_to_coordinate_indices(i, N), coords)) for i in range(N**3)]
+    diagonal = [attraction_func(coordinate_index_to_coordinates(matrix_index_to_coordinate_indices(i, N), coords), h) for i in range(N**3)]
 
     # now generate the matrix with the desired diagonal
     matrix = scipy.sparse.spdiags(data=diagonal, diags=0, m=N**3, n=N**3)
@@ -809,34 +810,44 @@ def integrate(function, coords):
     sum = 0
 
     # calculate the integration over the solution space
-    for xi in range(N):
-        for yi in range(N):
-            for zi in range(N):
-
-                # first integration weight is 0
-                if xi == 0 or yi == 0 or zi == 0:
-                    w = 0
-                else:
-                    w = h
-                row_index = xi + yi*N + zi*N*N
-                sum += w*function(xi, yi, zi)
+    for i in range(N**3):
+        coords_1 = matrix_index_to_coordinate_indices(i, N)
+        sum += (h**3)*function(coords_1)
 
     # return result
     return sum
+
+#
+# This function evaluates the integrand of the repulsion matrix diagonals
+#
+def repulsion_matrix_integrand_func(orbital_values, coords_1, coords_2):
+
+    x1 = coords_1[IDX_X]
+    y1 = coords_1[IDX_Y]
+    z1 = coords_1[IDX_Z]
+
+    x2 = coords_2[IDX_X]
+    y2 = coords_2[IDX_Y]
+    z2 = coords_2[IDX_Z]
+
+    return (orbital_values[x2, y2, z2]**2)*repulsion_func(coords_1, coords_2)
 
 #
 # This function evaluates the Coulomb term 
 #
 def repulsion_matrix_gen(orbital_values, coords):
 
-    # get partition size
+    # extract h, get partition size
     h = coords[IDX_X][1] - coords[IDX_X][0]
-    # get number of partitions
+    # extract N, get number of partitions
     N = len(coords[IDX_X])
 
-    # use scipy sparse matrix generation
-    # create the diagonal
-    # diagonal = [attraction_func(coordinate_index_to_coordinates(matrix_index_to_coordinate_indices(i, N), coords)) for i in range(N**3)]
+    # generate the diagonal
+    diagonal = []
+    for i in range(N**3):
+        coords_1 = matrix_index_to_coordinate_indices(i, N)
+        integrand = lambda coords_2 : repulsion_matrix_integrand_func(orbital_values, coords_1, coords_2)
+        diagonal += [integrate(integrand, coords)]
 
     # now generate the matrix with the desired diagonal
     matrix = scipy.sparse.spdiags(data=diagonal, diags=0, m=N**3, n=N**3)
@@ -844,19 +855,36 @@ def repulsion_matrix_gen(orbital_values, coords):
     return matrix.tocoo()
 
 #
+# This funciton evaluates the integrand of the exchange matrix diagonals
+#
+def exchange_matrix_integrand_func(orbital_values, coords_1, coords_2):
+
+    x1 = coords_1[IDX_X]
+    y1 = coords_1[IDX_Y]
+    z1 = coords_1[IDX_Z]
+
+    x2 = coords_2[IDX_X]
+    y2 = coords_2[IDX_Y]
+    z2 = coords_2[IDX_Z]
+
+    return (orbital_values[x1, y1, z1]*orbital_values[x2, y2, z2])*repulsion_func(coords_1, coords_2)
+
+#
 # This funciton evaluates the Exchange term
 #
 def exchange_matrix_gen(orbital_values, coords):
 
-    # get partition size
+    # extract h, get partition size
     h = coords[IDX_X][1] - coords[IDX_X][0]
-    # get number of partitions
+    # extract N, get number of partitions
     N = len(coords[IDX_X])
 
-    # use scipy sparse matrix generation
-    # create the diagonal
-    diagonal = [integrate(orbital_values[coordinate_index_to_coordinates(matrix_index_to_coordinate_indices(i, N), coords)]*orbital_values[coordinate_index_to_coordinates(matrix_index_to_coordinate_indices(i, N), coords)]/repulsion_func(coordinate_index_to_coordinates(matrix_index_to_coordinate_indices(i, N), coords))) for i in range(N**3)]
-
+    # generate the diagonal
+    diagonal = []
+    for i in range(N**3):
+        coords_1 = matrix_index_to_coordinate_indices(i, N)
+        integrand = lambda coords_2 : exchange_matrix_integrand_func(orbital_values, coords_1, coords_2)
+        diagonal += [integrate(integrand, coords)]
 
     # now generate the matrix with the desired diagonal
     matrix = scipy.sparse.spdiags(data=diagonal, diags=0, m=N**3, n=N**3)
@@ -889,7 +917,7 @@ if __name__ == '__main__':
     parser.add_argument('-c', type=float, default=1.0, dest='convergence_percentage', action='store',
         help='percent change threshold for convergence')
 
-    parser.add_argument('-d', type=float, default=0.1, dest='damping_factor', action='store',
+    parser.add_argument('-d', type=float, default=1.0, dest='damping_factor', action='store',
         help='damping factor to apply to orbital results between iterations')
 
     args = parser.parse_args()
@@ -907,6 +935,7 @@ if __name__ == '__main__':
 #     # get partition size
 #     h = all_coords[IDX_X][1] - all_coords[IDX_X][0]
 #     # get number of partitions
+# 
 #     N = len(all_coords[IDX_X])
 
 #     # running sum
