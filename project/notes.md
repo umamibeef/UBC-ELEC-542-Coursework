@@ -38,7 +38,12 @@
     - Following instructions here: https://docs.nvidia.com/cuda/wsl-user-guide/index.html
 
 # TODOs
-  * Change of plans, redo assignment 2 but with GPU acceleration
+  * Immediate:
+    - implement proper exchange and repulsion matrices by looking at good homework example
+    - coordinates may not work with dedicated integration function, may need to revisit that
+    - may need to drop list generator for more traditional implementatio
+  * Longterm:
+    - Change of plans, redo assignment 2 but with GPU acceleration
     - reimplement assignment 2 in C
     - implement numerical integration from textbook: Electronic Structure Calculations on Graphics
     - for naive implementation, could do this: https://eecs.oregonstate.edu/research/vlsi/teaching/ECE472_FA12/briggs_haller_cuda.pdf
