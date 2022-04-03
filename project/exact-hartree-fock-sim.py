@@ -53,7 +53,7 @@ if False:
 
 # program constants
 H2_BOND_LENGTH_ATOMIC_UNITS = 1.39839733222307
-TINY_NUMBER = 1e-12
+TINY_NUMBER = 1e-9
 # TINY_NUMBER = math.sqrt((0.15*0.8)**2)
 IDX_X = 0
 IDX_Y = 1
@@ -297,10 +297,8 @@ def main(cmd_args):
                 console_print(' ** Iteration: %d' % iteration_count)
 
             # Modify eigenvectors to help with convergence
-            # console_print(' ** Modifying eigenvector values with damping factor of %f' % damping_factor)
-            # eigenvector = eigenvectors[:,energy_level] * damping_factor
-
-            eigenvector = numpy.array(eigenvectors[:,energy_level])
+            console_print(' ** Modifying eigenvector values with damping factor of %f' % damping_factor)
+            eigenvector = numpy.array(eigenvectors[:,energy_level]) * damping_factor
 
             # create integration matrix
             console_print(' ** Generating integration matrix')
@@ -892,7 +890,7 @@ if __name__ == '__main__':
     parser.add_argument('-c', type=float, default=1.0, dest='convergence_percentage', action='store',
         help='percent change threshold for convergence')
 
-    parser.add_argument('-d', type=float, default=1.0, dest='damping_factor', action='store',
+    parser.add_argument('-d', type=float, default=0.5, dest='damping_factor', action='store',
         help='damping factor to apply to orbital results between iterations')
 
     args = parser.parse_args()
