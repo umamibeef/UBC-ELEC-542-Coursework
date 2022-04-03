@@ -53,7 +53,7 @@ if False:
 
 # program constants
 H2_BOND_LENGTH_ATOMIC_UNITS = 1.39839733222307
-TINY_NUMBER = 1e-9
+TINY_NUMBER = 1e-3
 # TINY_NUMBER = math.sqrt((0.15*0.8)**2)
 IDX_X = 0
 IDX_Y = 1
@@ -131,7 +131,7 @@ def make_plots(results):
     for current_energy_level in range(total_energy_levels):
 
         # reshape eigenvectors for specified
-        data = numpy.square(eigenvectors[:,current_energy_level].reshape((N,N,N)).transpose())
+        data = numpy.square(numpy.array(eigenvectors[:,current_energy_level]).reshape((N,N,N)).transpose())
 
         # three rows, two columns, index
         axes.append(fig.add_subplot(3, 2, current_energy_level + 1, projection='3d', proj_type='ortho'))
@@ -304,7 +304,7 @@ def main(cmd_args):
             console_print(' ** Generating integration matrix')
             # turn our eigenvector into a square matrix and square all of the terms
             # orbital_values_squared = numpy.square(eigenvector).reshape((N,N,N)).transpose()
-            orbital_values = eigenvector.reshape(N,N,N).transpose()
+            orbital_values = eigenvector.reshape(N,N,N) #.transpose()
 
             # create coulomb repulsion matrix
             repulsion_matrix = repulsion_matrix_gen(orbital_values, coords)
@@ -318,6 +318,9 @@ def main(cmd_args):
             # get (total_energy_levels) eigenvectors and eigenvalues and order them from smallest to largest
             console_print(' ** Obtaining eigenvalues and eigenvectors...')
             eigenvalues, eigenvectors = numpy.linalg.eigh(fock_matrix)
+
+            eigenvectors = eigenvectors[:,:total_energy_levels]
+            eigenvalues = eigenvalues[:total_energy_levels]
 
             # check percentage difference between previous and current eigenvalues
             # total_energy = numpy.sum(eigenvalues)
@@ -364,8 +367,8 @@ def main(cmd_args):
             args.output_file = output_file
 
         console_print(' ** Saving results to ' + output_file)
-        results.eigenvectors = eigenvectors
-        results.eigenvalues = eigenvalues
+        results.eigenvectors = eigenvectors[:,:total_energy_levels]
+        results.eigenvalues = eigenvalues[:total_energy_levels]
         results.args = args
         results.save(output_file)
 
@@ -411,7 +414,7 @@ def calculate_total_energy(target_subject, orbital_values, coords):
     h = coords[IDX_X][1] - coords[IDX_X][0]
 
     # turn orbital values into 3d array
-    orbital_values_squared = numpy.square(orbital_values.reshape((N,N,N)).transpose())
+    orbital_values_squared = numpy.square(orbital_values.reshape((N,N,N))) #.transpose())
 
     # calculate kinetic energy
 
@@ -849,20 +852,64 @@ def exchange_matrix_integrand_func(orbital_values, coords_1, coords_2, coords):
 #
 def exchange_matrix_gen(orbital_values, coords):
 
+    h = coords[IDX_X][1] - coords[IDX_X][0]
     # extract N, get number of partitions
     N = len(coords[IDX_X])
 
-    # generate the diagonal
-    diagonal = []
+    # diagonal = numpy.zeros(N**3)
+    # for i in range(N**3):
+    #     coords_1_idx = matrix_index_to_coordinate_indices(i, N)
+    #     coords_1_vals = coordinate_indices_to_coordinates(coords_1_idx, coords)
+    #     for j in range(N**3):
+    #         coords_2_idx = matrix_index_to_coordinate_indices(j, N)
+    #         coords_2_vals = coordinate_indices_to_coordinates(coords_2_idx, coords)
+
+    #         x1 = coords_1_idx[IDX_X]
+    #         y1 = coords_1_idx[IDX_Y]
+    #         z1 = coords_1_idx[IDX_Z]
+    #         x2 = coords_2_idx[IDX_X]
+    #         y2 = coords_2_idx[IDX_Y]
+    #         z2 = coords_2_idx[IDX_Z]
+
+    #         diagonal[i] += orbital_values[x1, y1, z1]*orbital_values[x2, y2, z2]*repulsion_func(coords_1_vals, coords_2_vals)*(h**3)
+
+    # exchange_matrix = numpy.diag(diagonal)
+
+    exchange_matrix = numpy.zeros((N**3,N**3))
     for i in range(N**3):
-        coords_1 = matrix_index_to_coordinate_indices(i, N)
-        integrand = lambda coords_2 : exchange_matrix_integrand_func(orbital_values, coords_1, coords_2, coords)
-        diagonal += [integrate(integrand, coords)]
+        coords_1_idx = matrix_index_to_coordinate_indices(i, N)
+        coords_1_vals = coordinate_indices_to_coordinates(coords_1_idx, coords)
+        for j in range(i+1):
+            coords_2_idx = matrix_index_to_coordinate_indices(j, N)
+            coords_2_vals = coordinate_indices_to_coordinates(coords_2_idx, coords)
 
-    # now generate the matrix with the desired diagonal
-    matrix = numpy.diag(diagonal)
+            x1 = coords_1_idx[IDX_X]
+            y1 = coords_1_idx[IDX_Y]
+            z1 = coords_1_idx[IDX_Z]
 
-    return matrix
+            x2 = coords_2_idx[IDX_X]
+            y2 = coords_2_idx[IDX_Y]
+            z2 = coords_2_idx[IDX_Z]
+
+            exchange_matrix[i,j] = orbital_values[x1, y1, z1]*orbital_values[x2, y2, z2]*repulsion_func(coords_1_vals, coords_2_vals)
+            exchange_matrix[j,i] = exchange_matrix[i, j]
+    exchange_matrix *= h**3
+
+    # print(exchange_matrix)
+
+    # # generate the diagonal
+    # diagonal = []
+    # for i in range(N**3):
+    #     coords_1 = matrix_index_to_coordinate_indices(i, N)
+    #     integrand = lambda coords_2 : exchange_matrix_integrand_func(orbital_values, coords_1, coords_2, coords)
+    #     diagonal += [integrate(integrand, coords)]
+
+    # # now generate the matrix with the desired diagonal
+    # matrix = numpy.diag(diagonal)
+
+    # return matrix
+
+    return exchange_matrix
 
 if __name__ == '__main__':
     # the following sets up the argument parser for the program
@@ -878,7 +925,7 @@ if __name__ == '__main__':
     parser.add_argument('-e', type=int, default=0, dest='energy_level', action='store', choices=[0, 1, 2, 3, 4, 5],
         help='energy level to generate and/or plot')
 
-    parser.add_argument('-t', type=str, default='he', dest='target_subject', action='store', choices=['h2', 'he'],
+    parser.add_argument('-t', type=str, default='h2', dest='target_subject', action='store', choices=['h2', 'he'],
         help='target subject to run exact HF sim on')
 
     parser.add_argument('-p', type=int, default=11, dest='num_partitions', action='store',
@@ -890,7 +937,7 @@ if __name__ == '__main__':
     parser.add_argument('-c', type=float, default=1.0, dest='convergence_percentage', action='store',
         help='percent change threshold for convergence')
 
-    parser.add_argument('-d', type=float, default=0.5, dest='damping_factor', action='store',
+    parser.add_argument('-d', type=float, default=1.0, dest='damping_factor', action='store',
         help='damping factor to apply to orbital results between iterations')
 
     args = parser.parse_args()
