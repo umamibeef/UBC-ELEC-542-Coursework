@@ -259,7 +259,7 @@ def main(cmd_args):
         laplacian_matrix = second_order_laplacian_3d_sparse_matrix_gen(N)
 
         # generate kinetic matrix
-        kinetic_energy_matrix = (-1.0/(2.0*h**2))*laplacian_matrix
+        kinetic_energy_matrix = (laplacian_matrix/(2.0*h**2))
 
         # create base solution
         eigenvectors = numpy.ndarray(((N**3), total_energy_levels))
@@ -307,11 +307,10 @@ def main(cmd_args):
             exchange_matrix = exchange_matrix_gen(orbital_values, coords)
 
             # create Fock matrix
-            # kinetic and attraction matrices already have the appropriate sign (-)
             if target_subject == 'h2':
-                fock_matrix = kinetic_energy_matrix + attraction_matrix_hydrogen + 2*repulsion_matrix - exchange_matrix
+                fock_matrix = -kinetic_energy_matrix - attraction_matrix_hydrogen + 2*repulsion_matrix - exchange_matrix
             elif target_subject == 'he':
-                fock_matrix = kinetic_energy_matrix + attraction_matrix_helium + 2*repulsion_matrix - exchange_matrix
+                fock_matrix = -kinetic_energy_matrix - attraction_matrix_helium + 2*repulsion_matrix - exchange_matrix
             else:
                 console_print('Fatal error, exiting.')
                 quit()
@@ -511,7 +510,7 @@ def generate_coordinates(minimum, maximum, N):
 # element simulation. A small number tiny_number is provided to prevent divide
 # by zero scenarios.
 #
-def attraction_func_helium(coords, h):
+def attraction_func_helium(coords):
 
     x = coords[IDX_X]
     y = coords[IDX_Y]
@@ -521,14 +520,14 @@ def attraction_func_helium(coords, h):
 
     denominator = math.sqrt(x**2 + y**2 + z**2)
 
-    return -((2.0/(tiny_number + denominator)))/h
+    return ((2.0/(tiny_number + denominator)))
 
 #
 # This function returns the nuclear attraction for an electron in the Hydrogen
 # molecule simulation. A small number tiny_number is provided to prevent divide
 # by zero scenarios.
 #
-def attraction_func_hydrogen(coords, h):
+def attraction_func_hydrogen(coords):
 
     x = coords[IDX_X]
     y = coords[IDX_Y]
@@ -539,7 +538,7 @@ def attraction_func_hydrogen(coords, h):
     denominator_1 = math.sqrt(((H2_BOND_LENGTH_ATOMIC_UNITS/2) - x)**2 + y**2 + z**2)
     denominator_2 = math.sqrt(((-H2_BOND_LENGTH_ATOMIC_UNITS/2) - x)**2 + y**2 + z**2)
 
-    return -((1.0/(tiny_number + denominator_1)) + (1.0/(tiny_number + denominator_2)))/h
+    return ((1.0/(tiny_number + denominator_1)) + (1.0/(tiny_number + denominator_2)))
 
 #
 # This functions calculates the repulsion between two electrons. A small number
@@ -585,7 +584,7 @@ def attraction_val_matrix_gen(attraction_func, coords):
                 y = coords[IDX_Y][yi]
                 z = coords[IDX_Z][zi]
 
-                solution_space[xi,yi,zi] = attraction_func((x, y, z), h)
+                solution_space[xi,yi,zi] = attraction_func((x, y, z))
 
     return solution_space
 
@@ -600,9 +599,11 @@ def attraction_matrix_gen(attraction_func, coords):
     # get number of partitions
     N = len(coords[IDX_X])
 
+    # print('h: %f' % h)
+
     # use scipy sparse matrix generation
     # create the diagonal 
-    diagonal = [attraction_func(coordinate_index_to_coordinates(matrix_index_to_coordinate_indices(i, N), coords), h) for i in range(N**3)]
+    diagonal = [attraction_func(coordinate_index_to_coordinates(matrix_index_to_coordinate_indices(i, N), coords)) for i in range(N**3)]
 
     # now generate the matrix with the desired diagonal
     matrix = scipy.sparse.spdiags(data=diagonal, diags=0, m=N**3, n=N**3)
@@ -806,13 +807,15 @@ def integrate(function, coords):
     # get number of partitions
     N = len(coords[IDX_X])
 
+    # print('h: %f' % h)
+
     # running sum
     sum = 0
 
     # calculate the integration over the solution space
     for i in range(N**3):
         coords_1 = matrix_index_to_coordinate_indices(i, N)
-        sum += (h**3)*function(coords_1)
+        sum += function(coords_1)*(h**3)
 
     # return result
     return sum
@@ -821,10 +824,6 @@ def integrate(function, coords):
 # This function evaluates the integrand of the repulsion matrix diagonals
 #
 def repulsion_matrix_integrand_func(orbital_values, coords_1, coords_2):
-
-    x1 = coords_1[IDX_X]
-    y1 = coords_1[IDX_Y]
-    z1 = coords_1[IDX_Z]
 
     x2 = coords_2[IDX_X]
     y2 = coords_2[IDX_Y]
@@ -836,9 +835,7 @@ def repulsion_matrix_integrand_func(orbital_values, coords_1, coords_2):
 # This function evaluates the Coulomb term 
 #
 def repulsion_matrix_gen(orbital_values, coords):
-
-    # extract h, get partition size
-    h = coords[IDX_X][1] - coords[IDX_X][0]
+    
     # extract N, get number of partitions
     N = len(coords[IDX_X])
 
@@ -911,7 +908,7 @@ if __name__ == '__main__':
     parser.add_argument('-p', type=int, default=14, dest='num_partitions', action='store',
         help='number of partitions to discretize the simulation')
 
-    parser.add_argument('-l', type=float, default=5, dest='limit', action='store',
+    parser.add_argument('-l', type=float, default=10, dest='limit', action='store',
         help='the x,y,z max limit, forming a cubic solution space')
 
     parser.add_argument('-c', type=float, default=1.0, dest='convergence_percentage', action='store',
