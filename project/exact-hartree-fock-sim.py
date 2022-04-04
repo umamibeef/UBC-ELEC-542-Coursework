@@ -54,7 +54,7 @@ if False:
 # program constants
 AU_DISTANCE=5.29e-11; # Atomic unit of distance= Bohr radius (m)
 H2_BOND_LENGTH_ATOMIC_UNITS = 0.74e-10/AU_DISTANCE; # Bond length of Hydrogen atom in atomic unit
-TINY_NUMBER = 1e-3
+TINY_NUMBER = 2.5e-3
 IDX_X = 0
 IDX_Y = 1
 IDX_Z = 2
@@ -855,47 +855,6 @@ def exchange_matrix_gen(orbital_values, coords):
     # extract N, get number of partitions
     N = len(coords[IDX_X])
 
-    # diagonal = numpy.zeros(N**3)
-    # for i in range(N**3):
-    #     coords_1_idx = matrix_index_to_coordinate_indices(i, N)
-    #     coords_1_vals = coordinate_indices_to_coordinates(coords_1_idx, coords)
-    #     for j in range(N**3):
-    #         coords_2_idx = matrix_index_to_coordinate_indices(j, N)
-    #         coords_2_vals = coordinate_indices_to_coordinates(coords_2_idx, coords)
-
-    #         x1 = coords_1_idx[IDX_X]
-    #         y1 = coords_1_idx[IDX_Y]
-    #         z1 = coords_1_idx[IDX_Z]
-    #         x2 = coords_2_idx[IDX_X]
-    #         y2 = coords_2_idx[IDX_Y]
-    #         z2 = coords_2_idx[IDX_Z]
-
-    #         diagonal[i] += orbital_values[x1, y1, z1]*orbital_values[x2, y2, z2]*repulsion_func(coords_1_vals, coords_2_vals)*(h**3)
-
-    # exchange_matrix = numpy.diag(diagonal)
-
-    # exchange_matrix = numpy.zeros((N**3,N**3))
-    # for i in range(N**3):
-    #     coords_1_idx = matrix_index_to_coordinate_indices(i, N)
-    #     coords_1_vals = coordinate_indices_to_coordinates(coords_1_idx, coords)
-    #     for j in range(i+1):
-    #         coords_2_idx = matrix_index_to_coordinate_indices(j, N)
-    #         coords_2_vals = coordinate_indices_to_coordinates(coords_2_idx, coords)
-
-    #         x1 = coords_1_idx[IDX_X]
-    #         y1 = coords_1_idx[IDX_Y]
-    #         z1 = coords_1_idx[IDX_Z]
-
-    #         x2 = coords_2_idx[IDX_X]
-    #         y2 = coords_2_idx[IDX_Y]
-    #         z2 = coords_2_idx[IDX_Z]
-
-    #         exchange_matrix[i,j] = orbital_values[x1, y1, z1]*orbital_values[x2, y2, z2]*repulsion_func(coords_1_vals, coords_2_vals)
-    #         exchange_matrix[j,i] = exchange_matrix[i, j]
-    # exchange_matrix *= h**3
-
-    # print(exchange_matrix)
-
     # generate the diagonal
     diagonal = []
     for i in range(N**3):
@@ -924,7 +883,7 @@ if __name__ == '__main__':
     parser.add_argument('-e', type=int, default=0, dest='energy_level', action='store', choices=[0, 1, 2, 3, 4, 5],
         help='energy level to generate and/or plot')
 
-    parser.add_argument('-t', type=str, default='he', dest='target_subject', action='store', choices=['h2', 'he'],
+    parser.add_argument('-t', type=str, default='h2', dest='target_subject', action='store', choices=['h2', 'he'],
         help='target subject to run exact HF sim on')
 
     parser.add_argument('-p', type=int, default=11, dest='num_partitions', action='store',
