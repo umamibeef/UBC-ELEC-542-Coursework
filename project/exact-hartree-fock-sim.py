@@ -54,7 +54,7 @@ if False:
 # program constants
 AU_DISTANCE=5.29e-11; # Atomic unit of distance= Bohr radius (m)
 H2_BOND_LENGTH_ATOMIC_UNITS = 0.74e-10/AU_DISTANCE; # Bond length of Hydrogen atom in atomic unit
-TINY_NUMBER = 2.5e-3
+TINY_NUMBER = 0.01
 IDX_X = 0
 IDX_Y = 1
 IDX_Z = 2
@@ -300,16 +300,16 @@ def main(cmd_args):
             console_print(' ** Modifying eigenvector values with damping factor of %f' % damping_factor)
             eigenvector = numpy.array(eigenvectors[:,energy_level]) * damping_factor
 
-            # create integration matrix
-            console_print(' ** Generating integration matrix')
             # turn our eigenvector into a square matrix and square all of the terms
             # orbital_values_squared = numpy.square(eigenvector).reshape((N,N,N)).transpose()
             orbital_values = eigenvector.reshape(N,N,N) #.transpose()
 
             # create coulomb repulsion matrix
+            console_print(' ** Generating repulsion matrix')
             repulsion_matrix = repulsion_matrix_gen(orbital_values, coords)
 
             # create exchange matrix
+            console_print(' ** Generating exchange matrix')
             exchange_matrix = exchange_matrix_gen(orbital_values, coords)
 
             # create Fock matrix
@@ -394,15 +394,19 @@ def main(cmd_args):
     # make_plots(results)
 
 #
+# This function extract the number of partitions and their size from a list of coordinates
+#
+def get_partition_size_and_num(coords):
+
+    return (coords[IDX_X][1] - coords[IDX_X][0], len(coords[IDX_X])) # returns h, N
+
+#
 # This function calculates the total energy of the system
 #
 def calculate_total_energy(target_subject, orbital_values, coords):
 
-    # extract N
-    N = int(numpy.cbrt(len(orbital_values)))
-
-    # extract h
-    h = coords[IDX_X][1] - coords[IDX_X][0]
+    # extract h, N
+    h, N = get_partition_size_and_num(coords)
 
     # turn orbital values into 3d array
     orbital_values_squared = numpy.square(orbital_values.reshape((N,N,N))) #.transpose())
@@ -524,8 +528,8 @@ def attraction_func_hydrogen(coords):
     y = coords[IDX_Y]
     z = coords[IDX_Z]
 
-    denominator_1 = math.sqrt(((H2_BOND_LENGTH_ATOMIC_UNITS/2) - x)**2 + y**2 + (z+0.5)**2)
-    denominator_2 = math.sqrt(((-H2_BOND_LENGTH_ATOMIC_UNITS/2) - x)**2 + y**2 + (z+0.5)**2)
+    denominator_1 = math.sqrt(((H2_BOND_LENGTH_ATOMIC_UNITS/2) - x)**2 + y**2 + (z+0.25)**2)
+    denominator_2 = math.sqrt(((-H2_BOND_LENGTH_ATOMIC_UNITS/2) - x)**2 + y**2 + (z+0.25)**2)
 
     # check if we have infinite solutions
     if not denominator_1:
@@ -564,10 +568,8 @@ def repulsion_func(coords_1, coords_2):
 #
 def attraction_matrix_gen(attraction_func, coords):
 
-    # get partition size
-    h = coords[IDX_X][1] - coords[IDX_X][0]
-    # get number of partitions
-    N = len(coords[IDX_X])
+    # extract h, N
+    h, N = get_partition_size_and_num(coords)
 
     # print('h: %f' % h)
 
@@ -714,10 +716,8 @@ def second_order_laplacian_3d_sparse_matrix_gen(N):
 #
 def diff_2(function, coords):
 
-    # get partition size
-    h = coords[IDX_X][1] - coords[IDX_X][0]
-    # get number of partitions
-    N = len(coords[IDX_X])
+    # extract h, N
+    h, N = get_partition_size_and_num(coords)
 
     # generate a solution space
     solution_space = numpy.empty((N,N,N))
@@ -772,10 +772,8 @@ def diff_2(function, coords):
 #
 def integrate(function, coords):
 
-    # get partition size
-    h = coords[IDX_X][1] - coords[IDX_X][0]
-    # get number of partitions
-    N = len(coords[IDX_X])
+    # extract h, N
+    h, N = get_partition_size_and_num(coords)
 
     # running sum
     sum = 0
@@ -791,7 +789,7 @@ def integrate(function, coords):
 #
 # This function evaluates the integrand of the repulsion matrix diagonals
 #
-def repulsion_matrix_integrand_func(orbital_values, coords_1, coords_2, coords):
+def repulsion_matrix_integrand_func(orbital_values, coords, coords_1, coords_2):
 
     x2 = coords_2[IDX_X]
     y2 = coords_2[IDX_Y]
@@ -810,15 +808,22 @@ def repulsion_matrix_integrand_func(orbital_values, coords_1, coords_2, coords):
 #
 def repulsion_matrix_gen(orbital_values, coords):
 
-    # extract N, get number of partitions
-    N = len(coords[IDX_X])
+    # extract h, N
+    h, N = get_partition_size_and_num(coords)
 
     # generate the diagonal
-    diagonal = []
-    for i in range(N**3):
-        coords_1 = matrix_index_to_coordinate_indices(i, N)
-        integrand = lambda coords_2 : repulsion_matrix_integrand_func(orbital_values, coords_1, coords_2, coords)
-        diagonal += [integrate(integrand, coords)]
+    if ENABLE_MP:
+        # multiprocessing filling of the diagonal
+        coords_1 = [matrix_index_to_coordinate_indices(i, N) for i in range(N**3)]
+        with multiprocessing.Pool(processes = multiprocessing.cpu_count()-1, maxtasksperchild=1000) as pool:
+            func = functools.partial(repulsion_matrix_integration, orbital_values, coords)
+            diagonal = list(tqdm.tqdm(pool.imap(func, coords_1), total=(N**3), ascii=True, smoothing=0.01))
+    else:
+        diagonal = []
+        for i in range(N**3):
+            coords_1 = matrix_index_to_coordinate_indices(i, N)
+            integrand = lambda coords_2 : repulsion_matrix_integrand_func(orbital_values, coords, coords_1, coords_2)
+            diagonal += [integrate(integrand, coords)]
 
     # now generate the matrix with the desired diagonal
     matrix = numpy.diag(diagonal)
@@ -826,9 +831,9 @@ def repulsion_matrix_gen(orbital_values, coords):
     return matrix
 
 #
-# This funciton evaluates the integrand of the exchange matrix diagonals
+# This function evaluates the integrand of the exchange matrix diagonals
 #
-def exchange_matrix_integrand_func(orbital_values, coords_1, coords_2, coords):
+def exchange_matrix_integrand_func(orbital_values, coords, coords_1, coords_2):
 
     x1 = coords_1[IDX_X]
     y1 = coords_1[IDX_Y]
@@ -847,20 +852,57 @@ def exchange_matrix_integrand_func(orbital_values, coords_1, coords_2, coords):
     return orbital_values[x1, y1, z1]*orbital_values[x2, y2, z2]*repulsion_func(real_coords_1, real_coords_2)
 
 #
+# This function evaluates the exchange matrix integral over electron 2
+#
+def exchange_matrix_integration(orbital_values, coords, coords_1):
+
+    # extract h, N
+    h, N = get_partition_size_and_num(coords)
+
+    sum = 0
+    for i in range(N**3):
+        coords_2 = matrix_index_to_coordinate_indices(i, N)
+        sum += exchange_matrix_integrand_func(orbital_values, coords, coords_1, coords_2)*(h**3)
+
+    return sum
+
+#
+# This function evaluates the repulsion matrix integral over electron 2
+#
+def repulsion_matrix_integration(orbital_values, coords, coords_1):
+
+    # extract h, N
+    h, N = get_partition_size_and_num(coords)
+
+    sum = 0
+    for i in range(N**3):
+        coords_2 = matrix_index_to_coordinate_indices(i, N)
+        sum += repulsion_matrix_integrand_func(orbital_values, coords, coords_1, coords_2)*(h**3)
+
+    return sum
+
+#
 # This funciton evaluates the Exchange term
 #
 def exchange_matrix_gen(orbital_values, coords):
 
-    h = coords[IDX_X][1] - coords[IDX_X][0]
-    # extract N, get number of partitions
-    N = len(coords[IDX_X])
+    # extract h, N
+    h, N = get_partition_size_and_num(coords)
 
     # generate the diagonal
-    diagonal = []
-    for i in range(N**3):
-        coords_1 = matrix_index_to_coordinate_indices(i, N)
-        integrand = lambda coords_2 : exchange_matrix_integrand_func(orbital_values, coords_1, coords_2, coords)
-        diagonal += [integrate(integrand, coords)]
+    if ENABLE_MP:
+        # multiprocessing filling of the diagonal
+        coords_1 = [matrix_index_to_coordinate_indices(i, N) for i in range(N**3)]
+        with multiprocessing.Pool(processes = multiprocessing.cpu_count()-1, maxtasksperchild=1000) as pool:
+            func = functools.partial(exchange_matrix_integration, orbital_values, coords)
+            diagonal = list(tqdm.tqdm(pool.imap(func, coords_1), total=(N**3), ascii=True, smoothing=0.01))
+    else:
+        diagonal = []
+        for i in range(N**3):
+            coords_1 = matrix_index_to_coordinate_indices(i, N)
+            integrand = lambda coords_2 : exchange_matrix_integrand_func(orbital_values, coords, coords_1, coords_2)
+            diagonal += [integrate(integrand, coords)]
+
 
     # now generate the matrix with the desired diagonal
     exchange_matrix = numpy.diag(diagonal)
@@ -883,7 +925,7 @@ if __name__ == '__main__':
     parser.add_argument('-e', type=int, default=0, dest='energy_level', action='store', choices=[0, 1, 2, 3, 4, 5],
         help='energy level to generate and/or plot')
 
-    parser.add_argument('-t', type=str, default='h2', dest='target_subject', action='store', choices=['h2', 'he'],
+    parser.add_argument('-t', type=str, default='he', dest='target_subject', action='store', choices=['h2', 'he'],
         help='target subject to run exact HF sim on')
 
     parser.add_argument('-p', type=int, default=11, dest='num_partitions', action='store',
