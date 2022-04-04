@@ -52,9 +52,9 @@ if False:
     })
 
 # program constants
-H2_BOND_LENGTH_ATOMIC_UNITS = 1.39839733222307
+AU_DISTANCE=5.29e-11; # Atomic unit of distance= Bohr radius (m)
+H2_BOND_LENGTH_ATOMIC_UNITS = 0.74e-10/AU_DISTANCE; # Bond length of Hydrogen atom in atomic unit
 TINY_NUMBER = 1e-3
-# TINY_NUMBER = math.sqrt((0.15*0.8)**2)
 IDX_X = 0
 IDX_Y = 1
 IDX_Z = 2
@@ -270,7 +270,7 @@ def main(cmd_args):
         initial_fock_matrix = -kinetic_energy_matrix - attraction_matrix
         eigenvalues, eigenvectors = numpy.linalg.eigh(initial_fock_matrix)
 
-        # last eigenvalues
+        # last total energy
         last_total_energy = 0
 
         # first iteration
@@ -319,22 +319,29 @@ def main(cmd_args):
             console_print(' ** Obtaining eigenvalues and eigenvectors...')
             eigenvalues, eigenvectors = numpy.linalg.eigh(fock_matrix)
 
+            # remove extra solutions by trimming down to the amount we desire
             eigenvectors = eigenvectors[:,:total_energy_levels]
             eigenvalues = eigenvalues[:total_energy_levels]
 
-            # check percentage difference between previous and current eigenvalues
-            # total_energy = numpy.sum(eigenvalues)
-            # only compare the orbital we're trying to converge on
-            total_energy = eigenvalues[energy_level]
+            # calculate total energy
+            energies = []
+            # sum for total number of electrons
+            for i in range(2):
+                # calculate total energy = psi'*(H-attraction)*psi + 0.5*psi'*(2*repulsion - exchange)*psi
+                psi_prime = numpy.matrix(eigenvectors[:,i]).getH()
+                psi = eigenvectors[:,i]
+                energies += [psi_prime*(-kinetic_energy_matrix - attraction_matrix)*psi + 0.5*psi_prime*(2*repulsion_matrix - exchange_matrix)*psi]
+            total_energy = sum(energies)
 
             # record history
             results.historical_eigenvalues.append(eigenvalues)
             results.historical_total_orbital_energies.append(total_energy)
 
-            # calculate total energy
-            total_energy_percent_diff = abs(total_energy - last_total_energy)/((total_energy + last_total_energy) / 2)
+            # calculate total energy percent difference
+            total_energy_percent_diff = abs((total_energy - last_total_energy)/((total_energy + last_total_energy) / 2))
 
-            console_print(' ** Orbital %d energy %% diff: %.3f%%' % (energy_level, total_energy_percent_diff * 100.0))
+            console_print(' ** Total energy: %.3f' % (total_energy))
+            console_print(' ** Energy %% diff: %.3f%%' % (total_energy_percent_diff * 100.0))
 
             # update last value
             last_total_energy = total_energy
@@ -378,29 +385,13 @@ def main(cmd_args):
     for iteration, iteration_time in enumerate(results.iteration_times):
         console_print('\tIteration %i took %.3f seconds' % (iteration, iteration_time))
 
-    # solution results display
-
-    # console_print(' ** Coordinates:')
-    # console_print(coords)
-
-    console_print(' ** Eigenvalues:')
-    console_print(eigenvalues)
-
-    # console_print(' ** Orbital energies:')
-    # for n in range(len(eigenvalues)):
-    #     console_print('\tn=%d orbital energy: %f' % (n, eigenvalues[n]))
-    #     eigenvector = eigenvectors[:,n]
-    #     squared_eigenvector_3d = lambda x, y, z : numpy.square(eigenvector).reshape((N,N,N)).transpose()[x, y, z]
-    #     expectation = integrate(squared_eigenvector_3d, coords)
-    #     console_print('\t\tPsi_%d expectation value: %f' % (n, expectation))
-
-    # console_print(' ** Total Energy:')
-    # eigenvector = eigenvectors[:,n]
-    # console_print('\tn=%d total energy: %f' % (energy_level, calculate_total_energy(target_subject, eigenvector, coords)))
+    console_print(' ** Orbital energies:')
+    for n in range(len(eigenvalues)):
+        console_print('\tn=%d orbital energy: %f' % (n, eigenvalues[n]))
 
     # plot data
-    console_print(' ** Plotting data...')
-    make_plots(results)
+    # console_print(' ** Plotting data...')
+    # make_plots(results)
 
 #
 # This function calculates the total energy of the system
@@ -514,11 +505,13 @@ def attraction_func_helium(coords):
     y = coords[IDX_Y]
     z = coords[IDX_Z]
 
-    tiny_number = TINY_NUMBER
+    denominator = math.sqrt(x**2 + y**2 + (z+0.5)**2)
 
-    denominator = math.sqrt(x**2 + y**2 + (z+0.53156899810964083175803402646503)**2)
+    # check if we have infinite solutions
+    if not denominator:
+        denominator = TINY_NUMBER
 
-    return ((2.0/(tiny_number + denominator)))
+    return ((2.0/(denominator)))
 
 #
 # This function returns the nuclear attraction for an electron in the Hydrogen
@@ -531,12 +524,16 @@ def attraction_func_hydrogen(coords):
     y = coords[IDX_Y]
     z = coords[IDX_Z]
 
-    tiny_number = TINY_NUMBER
+    denominator_1 = math.sqrt(((H2_BOND_LENGTH_ATOMIC_UNITS/2) - x)**2 + y**2 + (z+0.5)**2)
+    denominator_2 = math.sqrt(((-H2_BOND_LENGTH_ATOMIC_UNITS/2) - x)**2 + y**2 + (z+0.5)**2)
 
-    denominator_1 = math.sqrt(((H2_BOND_LENGTH_ATOMIC_UNITS/2) - x)**2 + y**2 + z**2)
-    denominator_2 = math.sqrt(((-H2_BOND_LENGTH_ATOMIC_UNITS/2) - x)**2 + y**2 + z**2)
+    # check if we have infinite solutions
+    if not denominator_1:
+        denominator_1 = TINY_NUMBER
+    if not denominator_2:
+        denominator_2 = TINY_NUMBER
 
-    return ((1.0/(tiny_number + denominator_1)) + (1.0/(tiny_number + denominator_2)))
+    return ((1.0/(denominator_1)) + (1.0/(denominator_2)))
 
 #
 # This functions calculates the repulsion between two electrons. A small number
@@ -553,11 +550,13 @@ def repulsion_func(coords_1, coords_2):
     y2 = coords_2[IDX_Y]
     z2 = coords_2[IDX_Z]
 
-    tiny_number = TINY_NUMBER
-
     denominator = math.sqrt((x2 - x1)**2 + (y2 - y1)**2 + (z2 - z1)**2)
 
-    return ((1.0/(tiny_number + denominator)))
+    # check if we have infinite solutions
+    if not denominator:
+        denominator = TINY_NUMBER
+
+    return ((1.0/(denominator)))
 
 #
 # This function generates an attraction matrix with the specified attraction
@@ -875,41 +874,41 @@ def exchange_matrix_gen(orbital_values, coords):
 
     # exchange_matrix = numpy.diag(diagonal)
 
-    exchange_matrix = numpy.zeros((N**3,N**3))
-    for i in range(N**3):
-        coords_1_idx = matrix_index_to_coordinate_indices(i, N)
-        coords_1_vals = coordinate_indices_to_coordinates(coords_1_idx, coords)
-        for j in range(i+1):
-            coords_2_idx = matrix_index_to_coordinate_indices(j, N)
-            coords_2_vals = coordinate_indices_to_coordinates(coords_2_idx, coords)
+    # exchange_matrix = numpy.zeros((N**3,N**3))
+    # for i in range(N**3):
+    #     coords_1_idx = matrix_index_to_coordinate_indices(i, N)
+    #     coords_1_vals = coordinate_indices_to_coordinates(coords_1_idx, coords)
+    #     for j in range(i+1):
+    #         coords_2_idx = matrix_index_to_coordinate_indices(j, N)
+    #         coords_2_vals = coordinate_indices_to_coordinates(coords_2_idx, coords)
 
-            x1 = coords_1_idx[IDX_X]
-            y1 = coords_1_idx[IDX_Y]
-            z1 = coords_1_idx[IDX_Z]
+    #         x1 = coords_1_idx[IDX_X]
+    #         y1 = coords_1_idx[IDX_Y]
+    #         z1 = coords_1_idx[IDX_Z]
 
-            x2 = coords_2_idx[IDX_X]
-            y2 = coords_2_idx[IDX_Y]
-            z2 = coords_2_idx[IDX_Z]
+    #         x2 = coords_2_idx[IDX_X]
+    #         y2 = coords_2_idx[IDX_Y]
+    #         z2 = coords_2_idx[IDX_Z]
 
-            exchange_matrix[i,j] = orbital_values[x1, y1, z1]*orbital_values[x2, y2, z2]*repulsion_func(coords_1_vals, coords_2_vals)
-            exchange_matrix[j,i] = exchange_matrix[i, j]
-    exchange_matrix *= h**3
+    #         exchange_matrix[i,j] = orbital_values[x1, y1, z1]*orbital_values[x2, y2, z2]*repulsion_func(coords_1_vals, coords_2_vals)
+    #         exchange_matrix[j,i] = exchange_matrix[i, j]
+    # exchange_matrix *= h**3
 
     # print(exchange_matrix)
 
-    # # generate the diagonal
-    # diagonal = []
-    # for i in range(N**3):
-    #     coords_1 = matrix_index_to_coordinate_indices(i, N)
-    #     integrand = lambda coords_2 : exchange_matrix_integrand_func(orbital_values, coords_1, coords_2, coords)
-    #     diagonal += [integrate(integrand, coords)]
+    # generate the diagonal
+    diagonal = []
+    for i in range(N**3):
+        coords_1 = matrix_index_to_coordinate_indices(i, N)
+        integrand = lambda coords_2 : exchange_matrix_integrand_func(orbital_values, coords_1, coords_2, coords)
+        diagonal += [integrate(integrand, coords)]
 
-    # # now generate the matrix with the desired diagonal
-    # matrix = numpy.diag(diagonal)
-
-    # return matrix
+    # now generate the matrix with the desired diagonal
+    exchange_matrix = numpy.diag(diagonal)
 
     return exchange_matrix
+
+    # return exchange_matrix
 
 if __name__ == '__main__':
     # the following sets up the argument parser for the program
@@ -925,7 +924,7 @@ if __name__ == '__main__':
     parser.add_argument('-e', type=int, default=0, dest='energy_level', action='store', choices=[0, 1, 2, 3, 4, 5],
         help='energy level to generate and/or plot')
 
-    parser.add_argument('-t', type=str, default='h2', dest='target_subject', action='store', choices=['h2', 'he'],
+    parser.add_argument('-t', type=str, default='he', dest='target_subject', action='store', choices=['h2', 'he'],
         help='target subject to run exact HF sim on')
 
     parser.add_argument('-p', type=int, default=11, dest='num_partitions', action='store',
@@ -943,156 +942,3 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     main(args)
-
-# DEPRECATED/BAD FUNCTIONS FROM ORIGINAL IMPLEMENTATION
-
-# #
-# # This function evaluates the integration function used by both the Helium
-# # element and the Hydrogen molecule.
-# #
-# def integration_term_func(orbital_values_squared, all_coords, coords_1):
-
-#     # get partition size
-#     h = all_coords[IDX_X][1] - all_coords[IDX_X][0]
-#     # get number of partitions
-# 
-#     N = len(all_coords[IDX_X])
-
-#     # running sum
-#     sum = 0
-
-#     # calculate the integration over the solution space of the specified psi squared
-#     for xi, x in enumerate(all_coords[IDX_X]):
-#         for yi, y in enumerate(all_coords[IDX_Y]):
-#             for zi, z in enumerate(all_coords[IDX_Z]):
-#                 # first integration weight is 0
-#                 if xi == 0 or yi == 0 or zi == 0:
-#                     w = 0
-#                 else:
-#                     w = h
-#                 matrix_index = xi + yi*N + zi*N*N
-#                 coords_2 = (x, y, z)
-#                 sum = sum + w*orbital_values_squared[xi, yi, zi]*repulsion_func(coords_1, coords_2, h)
-
-#     return sum
-
-# # This function generates the the integration matrix
-# #
-# def integration_matrix_gen(orbital_values_squared, coords):
-
-#     # extract h from coordinates
-#     h = coords[IDX_X][1] - coords[IDX_X][0]
-#     # get number of partitions
-#     N = len(coords[IDX_X])
-
-#     # generate coordinates
-#     coordinates = [coordinate_indices_to_coordinates(matrix_index_to_coordinate_indices(i, N), coords) for i in range(N**3)]
-
-#     # this takes an extremely long time!!!
-#     if ENABLE_MP:
-#         # multiprocessing filling of the diagonal
-#         with multiprocessing.Pool(processes = multiprocessing.cpu_count()-1, maxtasksperchild=1000) as pool:
-#             func = functools.partial(integration_term_func, orbital_values_squared, coords)
-#             # diagonal = pool.map(func, coordinates)
-#             diagonal = list(tqdm.tqdm(pool.imap(func, coordinates), total=(N**3), ascii=True, smoothing=0.01))
-#     else:
-#         # create the diagonal (no MP)
-#         diagonal = numpy.ndarray(N**3)
-#         for i in tqdm.tqdm(range(N**3), ascii=True):
-#             diagonal[i] = integration_term_func(orbital_values_squared, coords, coordinates[i])
-#         # add a new line after we're done progress
-#         console_print()
- 
-#     # now generate the matrix with the desired diagonal
-#     matrix = scipy.sparse.spdiags(data=diagonal, diags=0, m=N**3, n=N**3)
-
-#     return matrix.tocoo()
-
-# #
-# # This function calculates the Coulomb/exchange two electron integral
-# # expectation value used in the total energy calculation.
-# #
-# def two_electron_integration_calc(orbital_values_squared, coords):
-
-#     # get partition size
-#     h = coords[IDX_X][1] - coords[IDX_X][0]
-#     # get number of partitions
-#     N = len(coords[IDX_X])
-
-#     # calculate inner integral matrix
-#     console_print(' ** Calculating inner two electron integral for all solution space...')
-#     inner_integration_val_matrix = inner_integration_val_matrix_gen(orbital_values_squared, coords)
-
-#     # running sum
-#     sum = 0
-
-#     # calculate the integration over the solution space of the specified psi squared
-#     for xi in range(N):
-#         for yi in range(N):
-#             for zi in range(N):
-#                 # first integration weight is 0
-#                 if xi == 0 or yi == 0 or zi == 0:
-#                     w = 0
-#                 else:
-#                     w = h
-#                 sum = sum + w*(orbital_values_squared[xi, yi, zi]*inner_integration_val_matrix[xi, yi, zi])
-
-#     return sum
-
-# #
-# # This function generates an N*N*N matrix A with the inner result of the
-# # integration term (combined Coulomb/exchange)
-# #
-# def inner_integration_val_matrix_gen(orbital_values_squared, coords):
-
-#     # get partition size
-#     h = coords[IDX_X][1] - coords[IDX_X][0]
-#     # get number of partitions
-#     N = len(coords[IDX_X])
-
-#     # generate coordinates
-#     coordinates = []
-#     for xi in range(N):
-#         for yi in range(N):
-#             for zi in range(N):
-#                 coordinates.append((coords[IDX_X][xi],coords[IDX_Y][yi],coords[IDX_Z][zi]))
-
-#     # this takes an extremely long time!!!
-#     if ENABLE_MP:
-#         # multiprocessing filling of the diagonal
-#         with multiprocessing.Pool(processes = multiprocessing.cpu_count()-1, maxtasksperchild=1000) as pool:
-#             func = functools.partial(integration_term_func, orbital_values_squared, coords)
-#             # diagonal = pool.map(func, coordinates)
-#             solution_space = list(tqdm.tqdm(pool.imap(func, coordinates), total=(N**3), ascii=True, smoothing=0.01))
-
-#     # reshape solution space
-#     solution_space = numpy.array(solution_space).reshape((N,N,N)).transpose()
-
-#     return solution_space
-
-# # This function generates an N*N*N matrix A with the specified attraction
-# # function. This matrix contains values that evaluates the attraction
-# # function at the specified coordinates. i.e, A[x,y,z] = attraction_func
-# # (x,y,z) Note that this is different from the matrix generated by
-# # attraction_matrix_gen, which is used to solve a linear system of equations.
-# def attraction_val_matrix_gen(attraction_func, coords):
-
-#     # get partition size
-#     h = coords[IDX_X][1] - coords[IDX_X][0]
-#     # get number of partitions
-#     N = len(coords[IDX_X])
-
-#     # generate a solution space
-#     solution_space = numpy.empty((N,N,N))
-
-#     for xi in range(N):
-#         for yi in range(N):
-#             for zi in range(N):
-
-#                 x = coords[IDX_X][xi]
-#                 y = coords[IDX_Y][yi]
-#                 z = coords[IDX_Z][zi]
-
-#                 solution_space[xi,yi,zi] = attraction_func((x, y, z))
-
-#     return solution_space
