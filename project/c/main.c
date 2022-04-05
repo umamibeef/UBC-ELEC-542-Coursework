@@ -1,8 +1,13 @@
 #include <stdio.h>
 #include <gsl/gsl_linalg.h>
 
+#include "kernel.h"
+
+
 int main(void)
 {
+
+    // GSL example
     double a_data[] = { 0.18, 0.60, 0.57, 0.96,
                         0.41, 0.24, 0.99, 0.58,
                         0.14, 0.30, 0.97, 0.66,
@@ -28,5 +33,9 @@ int main(void)
     gsl_vector_fprintf(stdout, x, "%g");
 
     gsl_permutation_free(p);
+
+    // Call CUDA example
+    cuda_example();
+
     return 0;
 }
