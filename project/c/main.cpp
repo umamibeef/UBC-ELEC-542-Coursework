@@ -1,101 +1,173 @@
+/** 
+MIT License
+
+Copyright (c) [2022] [Michel Kakulphimp]
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+**/
+ 
 #include <iostream>
-#include <gsl/gsl_linalg.h>
 #include <Eigen/Dense>
 #include <boost/format.hpp>
 
 #include "kernel.h"
 
+typedef enum name
+{
+    IDX_X = 0,
+    IDX_Y = 1,
+    IDX_Z = 2,
+    IDX_NUM,
+} coordinateIndex_e;
+
+void coordinate_index_to_coordinates(int num_partitions, int coordinate_index, int * coordinate_array)
+{
+    // convert coordinate index to x,y,z coordinates
+    int base_10_num = coordinate_index;
+    for (int i = 0; i < IDX_NUM; i++)
+    {
+        coordinate_array[i] = base_10_num % num_partitions;
+        base_10_num /= num_partitions;
+    }
+}
+
+void generate_coordinates(int num_partitions, int limit, double step_size, Eigen::Matrix<double, 1, Eigen::Dynamic> (&row_vector)[IDX_NUM])
+{
+    // Resize
+    for (int i = 0; i < IDX_NUM; i++)
+    {
+        row_vector[i].resize(1, num_partitions);
+    }
+    // populate coordinates
+    for (int i = 0; i < num_partitions; i++)
+    {
+        row_vector[IDX_X](i) = (double)(-limit) + (double)(i*step_size);
+        row_vector[IDX_Y](i) = (double)(-limit) + (double)(i*step_size);
+        row_vector[IDX_Z](i) = (double)(-limit) + (double)(i*step_size);
+    }
+}
+
+// Generate the 3D Laplacian matrix for the given number of partitions
+template <typename Type>
+void generate_lapacian_matrix(Eigen::MatrixBase<Type> &matrix)
+{
+    // Matrix is square
+    int matrix_dim = matrix.cols();
+    // Number of partitions is cube root of matrix_dim
+    int num_partitions = std::cbrt(matrix_dim);
+    int row_coordinates[IDX_NUM];
+    int col_coordinates[IDX_NUM];
+
+    for (int row_coordinate_index = 0; row_coordinate_index < matrix_dim; row_coordinate_index++)
+    {
+        coordinate_index_to_coordinates(num_partitions, row_coordinate_index, row_coordinates);
+        for (int col_coordinate_index = 0; col_coordinate_index < matrix_dim; col_coordinate_index++)
+        {
+            coordinate_index_to_coordinates(num_partitions, col_coordinate_index, col_coordinates);
+
+            // U(x,y,z)
+            if (row_coordinate_index == col_coordinate_index)
+            {
+                matrix(row_coordinate_index, col_coordinate_index) = -6.0;
+            }
+
+            if ((row_coordinates[IDX_Y] == col_coordinates[IDX_Y]) && (row_coordinates[IDX_Z] == col_coordinates[IDX_Z]))
+            {
+                // U(x-1,y,z)
+                if (row_coordinates[IDX_X] == col_coordinates[IDX_X] + 1)
+                {
+                    matrix(row_coordinate_index, col_coordinate_index) = 1.0;
+                }
+                // U(x+1,y,z)
+                if (row_coordinates[IDX_X] == col_coordinates[IDX_X] - 1)
+                {
+                    matrix(row_coordinate_index, col_coordinate_index) = 1.0;
+                }
+            }
+
+            if ((row_coordinates[IDX_X] == col_coordinates[IDX_X]) && (row_coordinates[IDX_Z] == col_coordinates[IDX_Z]))
+            {
+                // U(x,y-1,z)
+                if (row_coordinates[IDX_Y] == col_coordinates[IDX_Y] + 1)
+                {
+                    matrix(row_coordinate_index, col_coordinate_index) = 1.0;
+                }
+                // U(x,y+1,z)
+                if (row_coordinates[IDX_Y] == col_coordinates[IDX_Y] - 1)
+                {
+                    matrix(row_coordinate_index, col_coordinate_index) = 1.0;
+                }
+            }
+
+            if ((row_coordinates[IDX_X] == col_coordinates[IDX_X]) && (row_coordinates[IDX_Y] == col_coordinates[IDX_Y]))
+            {
+                // U(x,y,z-1)
+                if (row_coordinates[IDX_Z] == col_coordinates[IDX_Z] + 1)
+                {
+                    matrix(row_coordinate_index, col_coordinate_index) = 1.0;
+                }
+                // U(x,y,z+1)
+                if (row_coordinates[IDX_Z] == col_coordinates[IDX_Z] - 1)
+                {
+                    matrix(row_coordinate_index, col_coordinate_index) = 1.0;
+                }
+            }
+        }
+    }
+}
+
 int main(int argc, char ** argv)
 {
     // number of partitions and limits
-    int n = 11;
-    int matrix_dim = n*n*n;
-    int lim = 4;
-    double h = (double)(4<<1)/(double)(n - 1);
+    int num_partitions = 11;
+    int matrix_dim = num_partitions*num_partitions*num_partitions;
+    int limit = 4;
+    double step_size = (double)(4<<1)/(double)(num_partitions - 1);
 
-    std::cout << boost::format("n = %d\n") % n;
+    std::cout << boost::format("num_partitions = %d\n") % num_partitions;
     std::cout << boost::format("matrix_dim = %d\n") % matrix_dim;
-    std::cout << boost::format("lim = %d\n") % lim;
-    std::cout << boost::format("h = %f\n") % h;
+    std::cout << boost::format("limit = %d\n") % limit;
+    std::cout << boost::format("step_size = %f\n") % step_size;
 
     // coordinates
-    double *coords_x;
-    double *coords_y;
-    double *coords_z;
-    // matrices
-    double *laplacian_matrix_data;
-    double *kinetic_matrix_data;
-    double *attraction_matrix_data;
-    double *repulsion_matrix_data;
-    double *exchange_matrix_data;
-    double *fock_matrix_data;
+    Eigen::Matrix<double, 1, Eigen::Dynamic> coords[IDX_NUM];
+    // generate coordinates (will resize and populate)
+    generate_coordinates(num_partitions, limit, step_size, coords);
 
-    // allocate coordinate matrices and populate them
-    coords_x = (double*)calloc(n, sizeof(double));
-    coords_y = (double*)calloc(n, sizeof(double));
-    coords_z = (double*)calloc(n, sizeof(double));
-    for (int i = 0; i < n; i++)
-    {
-        coords_x[i] = (double)(-lim) + (double)(i*h);
-        coords_y[i] = (double)(-lim) + (double)(i*h);
-        coords_z[i] = (double)(-lim) + (double)(i*h);
-    }
+    std::cout << coords[IDX_X] << std::endl;
+    std::cout << coords[IDX_Y] << std::endl;
+    std::cout << coords[IDX_Z] << std::endl;
 
-    // allocate matrices
-    laplacian_matrix_data = (double*)calloc(matrix_dim, sizeof(double));
-    kinetic_matrix_data = (double*)calloc(matrix_dim, sizeof(double));
-    attraction_matrix_data = (double*)calloc(matrix_dim, sizeof(double));
-    repulsion_matrix_data = (double*)calloc(matrix_dim, sizeof(double));
-    exchange_matrix_data = (double*)calloc(matrix_dim, sizeof(double));
-    fock_matrix_data = (double*)calloc(matrix_dim, sizeof(double));
+    // matrix instantiations
+    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> laplacian_matrix(matrix_dim, matrix_dim);
+    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> kinetic_matrix(matrix_dim, matrix_dim);
+    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> attraction_matrix(matrix_dim, matrix_dim);
+    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> repulsion_matrix(matrix_dim, matrix_dim);
+    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> exchange_matrix(matrix_dim, matrix_dim);
+    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> fock_matrix(matrix_dim, matrix_dim);
+    // can also use Eigen::MatrixXf matrix(rows, cols)
 
-    // create gsl matrix views
-    gsl_matrix_view laplacian = gsl_matrix_view_array(laplacian_matrix_data, matrix_dim, matrix_dim);
-    gsl_matrix_view kinetic_energy = gsl_matrix_view_array(kinetic_matrix_data, matrix_dim, matrix_dim);
-    gsl_matrix_view attraction = gsl_matrix_view_array(attraction_matrix_data, matrix_dim, matrix_dim);
-    gsl_matrix_view repulsion = gsl_matrix_view_array(repulsion_matrix_data, matrix_dim, matrix_dim);
-    gsl_matrix_view exchange = gsl_matrix_view_array(exchange_matrix_data, matrix_dim, matrix_dim);
-    gsl_matrix_view fock = gsl_matrix_view_array(fock_matrix_data, matrix_dim, matrix_dim);
+    // generate the second order Laplacian matrix for 3D space
+    generate_lapacian_matrix(laplacian_matrix);
 
-    // Eigen example
-    Eigen::MatrixXd m(2,2);
-    m(0,0) = 3;
-    m(1,0) = 2.5;
-    m(0,1) = -1;
-    m(1,1) = m(1,0) + m(0,1);
-    std::cout << m << std::endl;
-
-#if 0
-    // GSL example
-    double a_data[] = { 0.18, 0.60, 0.57, 0.96,
-                        0.41, 0.24, 0.99, 0.58,
-                        0.14, 0.30, 0.97, 0.66,
-                        0.51, 0.13, 0.19, 0.85 };
-    double b_data[] = { 1.0, 2.0, 3.0, 4.0 };
-    gsl_matrix_view m = gsl_matrix_view_array(a_data, 4, 4);
-    gsl_vector_view b = gsl_vector_view_array(b_data, 4);
-    gsl_vector *x = gsl_vector_alloc(4);
-    int s;
-    gsl_permutation * p = gsl_permutation_alloc(4);
-    gsl_linalg_LU_decomp(&m.matrix, p, &s);
-    gsl_linalg_LU_solve(&m.matrix, p, &b.vector, x);
-    printf("x = \n");
-    gsl_vector_fprintf(stdout, x, "%g");
-    gsl_permutation_free(p);
     // Call CUDA example
     cuda_example();
-#endif // 0
-
-    // free memory
-    free(coords_x);
-    free(coords_y);
-    free(coords_z);
-    free(laplacian_matrix_data);
-    free(kinetic_matrix_data);
-    free(attraction_matrix_data);
-    free(repulsion_matrix_data);
-    free(exchange_matrix_data);
-    free(fock_matrix_data);
 
     return 0;
 }

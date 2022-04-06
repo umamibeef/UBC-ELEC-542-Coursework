@@ -30,10 +30,8 @@
 
 #include "randomize.h"
 
-extern "C"
-{
-    #include "kernel.h"
-}
+#include "kernel.h"
+
 
 // v3.h
 
@@ -136,7 +134,7 @@ __global__ void advanceParticles(float dt, particle * pArray, int nParticles)
     }
 }
 
-extern "C" void cuda_example(void)
+void cuda_example(void)
 {
     cudaError_t error;
     int n = 1000000;
