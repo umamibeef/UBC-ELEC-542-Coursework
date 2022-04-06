@@ -52,8 +52,8 @@ if False:
     })
 
 # program constants
-AU_DISTANCE=5.29e-11; # Atomic unit of distance= Bohr radius (m)
-H2_BOND_LENGTH_ATOMIC_UNITS = 0.74e-10/AU_DISTANCE; # Bond length of Hydrogen atom in atomic unit
+AU_DISTANCE=5.29e-11 # Atomic unit of distance= Bohr radius (m)
+H2_BOND_LENGTH_ATOMIC_UNITS = 0.74e-10/AU_DISTANCE # Bond length of Hydrogen atom in atomic unit
 TINY_NUMBER = 0.01
 IDX_X = 0
 IDX_Y = 1
@@ -401,43 +401,6 @@ def get_partition_size_and_num(coords):
     return (coords[IDX_X][1] - coords[IDX_X][0], len(coords[IDX_X])) # returns h, N
 
 #
-# This function calculates the total energy of the system
-#
-def calculate_total_energy(target_subject, orbital_values, coords):
-
-    # extract h, N
-    h, N = get_partition_size_and_num(coords)
-
-    # turn orbital values into 3d array
-    orbital_values_squared = numpy.square(orbital_values.reshape((N,N,N))) #.transpose())
-
-    # calculate kinetic energy
-
-    # helper lambdas
-    # interpret a matrix as a function f(x,y,z)
-    matrix_to_func = lambda matrix : lambda x, y, z : matrix[x, y, z]
-
-    # calculate kinetic energy
-    diff_result = diff_2(matrix_to_func(orbital_values_squared), coords)
-    kinetic_energy = -1.0*(integrate(matrix_to_func(diff_result), coords))
-
-    # calculate nuclear attraction
-    if target_subject == 'he':
-        attraction_vals = attraction_val_matrix_gen(attraction_func_helium, coords)
-    elif target_subject == 'h2':
-        attraction_vals = attraction_val_matrix_gen(attraction_func_hydrogen, coords)
-    else:
-        console_print('Fatal error, exiting.')
-        quit()
-
-    nuclear_attraction = 2*integrate(matrix_to_func(orbital_values_squared*attraction_vals), coords)
-
-    # calculate Coulomb/exchange contribution
-    two_electron_integration = two_electron_integration_calc(orbital_values_squared, coords)
-
-    return kinetic_energy + nuclear_attraction + two_electron_integration
-
-#
 # This functions returns whether or not the matrix is symmetric
 #
 def is_symmetric(A, tol=1e-8):
@@ -570,8 +533,6 @@ def attraction_matrix_gen(attraction_func, coords):
 
     # extract h, N
     h, N = get_partition_size_and_num(coords)
-
-    # print('h: %f' % h)
 
     # use scipy sparse matrix generation
     # create the diagonal 

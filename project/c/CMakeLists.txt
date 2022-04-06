@@ -19,7 +19,7 @@ link_libraries(Eigen3::Eigen)
 set(Boost_USE_STATIC_LIBS OFF) 
 set(Boost_USE_MULTITHREADED ON)  
 set(Boost_USE_STATIC_RUNTIME OFF) 
-find_package(Boost 1.71.0 COMPONENTS format program_options)
+find_package(Boost 1.71.0 COMPONENTS format program_options chrono)
 link_libraries(${Boost_LIBRARIES})
 
 # need to point to CUDA and Boost include dirs
