@@ -7,15 +7,26 @@ set(CMAKE_CUDA_COMPILER /usr/local/cuda/bin/nvcc)
 # set the program name
 project(ExactHartreeFockSim LANGUAGES C CXX CUDA)
 
-# need GSL and CUDA
+# GSL
 find_package(GSL REQUIRED)
 link_libraries(GSL::gsl GSL::gslcblas)
 
-# need to point to CUDA include dirs since we're including cuda_runtime.h in some files
-include_directories(${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
+# Eigen
+find_package(Eigen3 3.3 REQUIRED NO_MODULE)
+link_libraries(Eigen3::Eigen)
+
+# Boost
+set(Boost_USE_STATIC_LIBS OFF) 
+set(Boost_USE_MULTITHREADED ON)  
+set(Boost_USE_STATIC_RUNTIME OFF) 
+find_package(Boost 1.71.0 COMPONENTS format program_options)
+link_libraries(${Boost_LIBRARIES})
+
+# need to point to CUDA and Boost include dirs
+include_directories(${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES} ${Boost_INCLUDE_DIRS})
 
 # add the executable
-add_executable(ExactHartreeFockSim main.c randomize.cpp kernel.cu kernel.cu)
+add_executable(ExactHartreeFockSim main.cpp randomize.cpp kernel.cu kernel.cu)
 
 set_target_properties(ExactHartreeFockSim PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 
