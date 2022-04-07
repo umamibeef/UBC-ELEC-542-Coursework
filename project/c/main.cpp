@@ -45,8 +45,13 @@ SOFTWARE.
 
 void console_print(std::string string)
 {
+    std::stringstream ss(string);
+    std::string output;
     boost::posix_time::ptime time_now = boost::posix_time::second_clock::local_time();
-    std::cout << boost::format("[%s]") % boost::posix_time::to_simple_string(time_now) << " " << string << std::endl;
+    while (std::getline(ss, output, '\n'))
+    {
+        std::cout << boost::format("[%s]") % boost::posix_time::to_simple_string(time_now) << " " << output << std::endl;
+    }
 }
 
 void linear_coordinate_index_to_spatial_coordinates_index(grid_cfg_t grid, int coordinate_index, int * coordinate_index_array)
@@ -304,6 +309,28 @@ void generate_exchange_matrix(grid_cfg_t grid, const Eigen::MatrixBase<OrbitalTy
     matrix = exchange_matrix_diagonal.asDiagonal();
 }
 
+template <typename A, typename B, typename C, typename D, typename E>
+double calculate_total_energy(Eigen::MatrixBase<A> &orbital_values, Eigen::MatrixBase<B> &kinetic_matrix, Eigen::MatrixBase<C> &attraction_matrix, Eigen::MatrixBase<D> &repulsion_matrix, Eigen::MatrixBase<E> &exchange_matrix)
+{ 
+    // orbital values are real, so no need to take conjugate
+    Eigen::Matrix<double, 1, Eigen::Dynamic> psi_prime = orbital_values.transpose();
+    Eigen::Matrix<double, Eigen::Dynamic, 1> psi = orbital_values;
+
+    double energy_sum = 0;
+
+    // sum for the total number of electrons in the systems: 2
+    for (int i = 0; i < 2; i++)
+    {
+        console_print("** Computing hermitian energy");
+        auto hermitian_term = psi_prime*(-kinetic_matrix - attraction_matrix)*psi;
+        console_print("** Computing hartree-fock energy");
+        auto hf_term = 0.5*psi_prime*(2*repulsion_matrix - exchange_matrix)*psi;
+        energy_sum += hermitian_term(0) + hf_term(0);
+    }
+
+    return energy_sum;
+}
+
 int main(int argc, char ** argv)
 {
     console_print("** Exact Hartree-Fock simulator **");
@@ -315,6 +342,9 @@ int main(int argc, char ** argv)
     grid.matrix_dim = grid.num_partitions*grid.num_partitions*grid.num_partitions;
     grid.limit = 4;
     grid.step_size = (double)(4<<1)/(double)(grid.num_partitions - 1);
+
+    int num_solutions = 6;
+    double convergence_percentage = 1.0;
 
     console_print(boost::str(boost::format("\tnum_partitions = %d") % grid.num_partitions));
     console_print(boost::str(boost::format("\tmatrix_dim = %d") % grid.matrix_dim));
@@ -333,8 +363,12 @@ int main(int argc, char ** argv)
     Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> exchange_matrix(grid.matrix_dim, grid.matrix_dim);
     Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> fock_matrix(grid.matrix_dim, grid.matrix_dim);
     
-    // Orbital values (will initially be empty)
+    // Orbital values
     Eigen::Matrix<double, Eigen::Dynamic, 1> orbital_values(grid.matrix_dim, 1);
+    // Trimmed eigenvalues
+    Eigen::Matrix<double, Eigen::Dynamic, 1> eigenvalues(num_solutions, 1);
+    // Trimmed eigenvectors
+    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> eigenvectors(grid.matrix_dim, num_solutions);
 
     console_print("** Simulation start!");
 
@@ -348,11 +382,14 @@ int main(int argc, char ** argv)
     generate_attraction_matrix(grid, atomic_structure, attraction_matrix);
 
     // main HF loop
-    int iteration_num = 0;
+    double last_total_energy = 0;
+    double total_energy;
+    double total_energy_percent_diff;
+    int interation_count = 0;
     do
     {
         console_print("** First iteration, zeros used as first guess");
-        console_print(boost::str(boost::format("** Iteration: %d") % iteration_num));
+        console_print(boost::str(boost::format("** Iteration: %d") % interation_count));
 
         auto start = std::chrono::system_clock::now();
 
@@ -370,25 +407,43 @@ int main(int argc, char ** argv)
         // Using the EigenSolver constructor to automatically compute() the eigenvalues and eigenvectors of fock_matrix
         Eigen::EigenSolver<Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic>> solver(fock_matrix);
 
-        if (0)
-        {
-            // string stream for showning eigenvalues and eigenvectors
-            std::stringstream ss;
+        // Extract orbital_values
+        orbital_values = solver.eigenvectors().real().block(0, 0, grid.matrix_dim, 1);
+        // Extract eigenvalues
+        eigenvalues = solver.eigenvalues().real().block(0, 0, num_solutions, 1);
+        // Extract eigenvectors
+        eigenvectors = solver.eigenvectors().real().block(0, 0, grid.matrix_dim, num_solutions);
 
-            console_print("** Eigenvalues:");
-            ss << solver.eigenvalues();
-            console_print(ss.str());
-            console_print("** Eigenvectors:");
-            ss << solver.eigenvectors();
-            console_print(ss.str());
-        }
+        // string stream for showning eigenvalues and eigenvectors
+        std::stringstream ss;
+        console_print("** Eigenvalues:");
+        ss << eigenvalues;
+        console_print(ss.str());
+        ss.str(std::string());
+
+        total_energy = calculate_total_energy(orbital_values, kinetic_matrix, attraction_matrix, repulsion_matrix, exchange_matrix);
+        total_energy_percent_diff = std::abs((total_energy - last_total_energy)/((total_energy + last_total_energy) / 2.0));
+
+        console_print(boost::str(boost::format("** Total energy: %.3f") % (total_energy)));
+        console_print(boost::str(boost::format("** Energy %% diff: %.3f%%") % (total_energy_percent_diff * 100.0)));
+
+        // update last value
+        last_total_energy = total_energy;
+
+        // update iteration count
+        interation_count++;
 
         auto end = std::chrono::system_clock::now();
         auto iteration_time = std::chrono::duration<double>(end - start);
 
         console_print(boost::str(boost::format("** Iteration end! Iteration time: %0.3f seconds**") % (double)(iteration_time.count())));
 
-        break;
+        // check if we meet convergence condition
+        if (abs(total_energy_percent_diff) < (convergence_percentage/100.0))
+        {
+            break;
+        }
+
     } while(1);
     
     // Call CUDA example
