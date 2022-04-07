@@ -25,18 +25,29 @@ SOFTWARE.
 // C++ includes
 #include <iostream>
 #include <cmath>
+#include <chrono>
 
 // Eigen includes
+#define EIGEN_USE_LAPACKE // use LAPACKE C interface to use LAPACK routines
 #include <Eigen/Dense>
+// This is a workaround needed to enable the use of EIGEN_USE_LAPACKE
+// https://github.com/libigl/libigl/issues/651 for more info
+#undef I
 
 // Boost includes
 #include <boost/format.hpp>
 #include <boost/program_options.hpp>
-#include <boost/chrono.hpp>
+#include <boost/date_time.hpp>
 
 // Program includes
 #include "main.hpp"
 #include "kernel.h"
+
+void console_print(std::string string)
+{
+    boost::posix_time::ptime time_now = boost::posix_time::second_clock::local_time();
+    std::cout << boost::format("[%s]") % boost::posix_time::to_simple_string(time_now) << " " << string << std::endl;
+}
 
 void linear_coordinate_index_to_spatial_coordinates_index(grid_cfg_t grid, int coordinate_index, int * coordinate_index_array)
 {
@@ -58,6 +69,7 @@ void linear_coordinate_index_to_spatial_coordinates_values(grid_cfg_t grid, int 
     coordinate_value_array[IDX_Z] = (double)(-grid.limit) + ((double)coordinates_indices[IDX_Z]*grid.step_size);
 }
 
+// TODO: Deprecate, no longer needed
 template <typename Type>
 void generate_coordinates(grid_cfg_t grid, Eigen::Matrix<Type, 1, Eigen::Dynamic> (&row_vector)[IDX_NUM])
 {
@@ -259,17 +271,43 @@ double exchange_matrix_integrand_function(grid_cfg_t grid, const Eigen::MatrixBa
 template <typename OrbitalType, typename MatrixType>
 void generate_repulsion_matrix(grid_cfg_t grid, const Eigen::MatrixBase<OrbitalType> &orbital_values, Eigen::MatrixBase<MatrixType> &matrix)
 {
-    
+    double sum = 0;
+    Eigen::Matrix<double, Eigen::Dynamic, 1> repulsion_matrix_diagonal(grid.matrix_dim, 1);
+    double h_cubed = std::pow(grid.step_size, 3.0);
+    for (int electron_one_coordinate_index = 0; electron_one_coordinate_index < grid.matrix_dim; electron_one_coordinate_index++)
+    {
+        for (int electron_two_coordinate_index = 0; electron_two_coordinate_index < grid.matrix_dim; electron_two_coordinate_index++)
+        {
+            sum += exchange_matrix_integrand_function(grid, orbital_values, electron_one_coordinate_index, electron_two_coordinate_index)*h_cubed;
+        }
+        repulsion_matrix_diagonal(electron_one_coordinate_index);
+    }
+
+    matrix = repulsion_matrix_diagonal.asDiagonal();
 }
 
 template <typename OrbitalType, typename MatrixType>
 void generate_exchange_matrix(grid_cfg_t grid, const Eigen::MatrixBase<OrbitalType> &orbital_values, Eigen::MatrixBase<MatrixType> &matrix)
 {
+    double sum = 0;
+    Eigen::Matrix<double, Eigen::Dynamic, 1> exchange_matrix_diagonal(grid.matrix_dim, 1);
+    double h_cubed = std::pow(grid.step_size, 3.0);
+    for (int electron_one_coordinate_index = 0; electron_one_coordinate_index < grid.matrix_dim; electron_one_coordinate_index++)
+    {
+        for (int electron_two_coordinate_index = 0; electron_two_coordinate_index < grid.matrix_dim; electron_two_coordinate_index++)
+        {
+            sum += exchange_matrix_integrand_function(grid, orbital_values, electron_one_coordinate_index, electron_two_coordinate_index)*h_cubed;
+        }
+        exchange_matrix_diagonal(electron_one_coordinate_index);
+    }
 
+    matrix = exchange_matrix_diagonal.asDiagonal();
 }
 
 int main(int argc, char ** argv)
 {
+    console_print("** Exact Hartree-Fock simulator **");
+
     // number of partitions and limits
     grid_cfg_t grid;
 
@@ -278,20 +316,14 @@ int main(int argc, char ** argv)
     grid.limit = 4;
     grid.step_size = (double)(4<<1)/(double)(grid.num_partitions - 1);
 
-    std::cout << boost::format("num_partitions = %d\n") % grid.num_partitions;
-    std::cout << boost::format("matrix_dim = %d\n") % grid.matrix_dim;
-    std::cout << boost::format("limit = %d\n") % grid.limit;
-    std::cout << boost::format("step_size = %f\n") % grid.step_size;
+    console_print(boost::str(boost::format("\tnum_partitions = %d") % grid.num_partitions));
+    console_print(boost::str(boost::format("\tmatrix_dim = %d") % grid.matrix_dim));
+    console_print(boost::str(boost::format("\tlimit = %d") % grid.limit));
+    console_print(boost::str(boost::format("\tstep_size = %f") % grid.step_size));
 
     // atomic structure to run simulation on
     // atomic_structure_e atomic_structure = HYDROGEN_MOLECULE;
     atomic_structure_e atomic_structure = HELIUM_ATOM;
-
-    // TODO: Does this have to be a vector? Probably not...
-    // 3D coordinates of the solution space
-    Eigen::Matrix<double, 1, Eigen::Dynamic> coords[IDX_NUM];
-    // generate coordinates (will resize and populate)
-    generate_coordinates(grid, coords);
 
     // matrix instantiations
     Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> laplacian_matrix(grid.matrix_dim, grid.matrix_dim);
@@ -304,29 +336,63 @@ int main(int argc, char ** argv)
     // Orbital values (will initially be empty)
     Eigen::Matrix<double, Eigen::Dynamic, 1> orbital_values(grid.matrix_dim, 1);
 
+    console_print("** Simulation start!");
+
     // generate the second order Laplacian matrix for 3D space
+    console_print("** Generating kinetic energy matrix");
     generate_laplacian_matrix(grid, laplacian_matrix);
     // generate the kinetic energy matrix
     kinetic_matrix = (laplacian_matrix/(2.0*grid.step_size*grid.step_size));
     // generate the Coulombic attraction matrix
+    console_print("** Generating electron-nucleus Coulombic attraction matrix");
     generate_attraction_matrix(grid, atomic_structure, attraction_matrix);
 
     // main HF loop
     int iteration_num = 0;
     do
     {
-        auto iteration_start = boost::chrono::system_clock::now();
+        console_print("** First iteration, zeros used as first guess");
+        console_print(boost::str(boost::format("** Iteration: %d") % iteration_num));
+
+        auto start = std::chrono::system_clock::now();
 
         // generate repulsion matrix
+        console_print("** Generating electron-electron Coulombic repulsion matrix");
         generate_repulsion_matrix(grid, orbital_values, repulsion_matrix);
         // generate exchange matrix
+        console_print("** Generating electron-electron exchange matrix");
         generate_exchange_matrix(grid, orbital_values, exchange_matrix);
         // form fock matrix
+        console_print("** Generating Fock matrix");
         fock_matrix = -kinetic_matrix - attraction_matrix + 2.0*repulsion_matrix - exchange_matrix;
+
+        console_print("** Obtaining eigenvalues and eigenvectors...");
+        // Using the EigenSolver constructor to automatically compute() the eigenvalues and eigenvectors of fock_matrix
+        Eigen::EigenSolver<Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic>> solver(fock_matrix);
+
+        if (0)
+        {
+            // string stream for showning eigenvalues and eigenvectors
+            std::stringstream ss;
+
+            console_print("** Eigenvalues:");
+            ss << solver.eigenvalues();
+            console_print(ss.str());
+            console_print("** Eigenvectors:");
+            ss << solver.eigenvectors();
+            console_print(ss.str());
+        }
+
+        auto end = std::chrono::system_clock::now();
+        auto iteration_time = std::chrono::duration<double>(end - start);
+
+        console_print(boost::str(boost::format("** Iteration end! Iteration time: %0.3f seconds**") % (double)(iteration_time.count())));
+
+        break;
     } while(1);
     
     // Call CUDA example
-    cuda_example();
+    // cuda_example();
 
     return 0;
 }
