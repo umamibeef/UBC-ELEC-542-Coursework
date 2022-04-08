@@ -279,20 +279,28 @@ float exchange_matrix_integrand_function(grid_cfg_t grid, const Eigen::MatrixBas
 template <typename OrbitalType, typename MatrixType>
 void generate_repulsion_matrix(grid_cfg_t grid, const Eigen::MatrixBase<OrbitalType> &orbital_values, Eigen::MatrixBase<MatrixType> &matrix)
 {
-
-    Eigen::Matrix<float, Eigen::Dynamic, 1> repulsion_matrix_diagonal(grid.matrix_dim, 1);
     float h_cubed = std::pow(grid.step_size, 3.0);
+
+    // Eigen::Matrix<float, Eigen::Dynamic, 1> repulsion_matrix_diagonal(grid.matrix_dim, 1);
+    // for (int electron_one_coordinate_index = 0; electron_one_coordinate_index < grid.matrix_dim; electron_one_coordinate_index++)
+    // {
+    //     float sum = 0;
+    //     for (int electron_two_coordinate_index = 0; electron_two_coordinate_index < grid.matrix_dim; electron_two_coordinate_index++)
+    //     {
+    //         sum += repulsion_matrix_integrand_function(grid, orbital_values, electron_one_coordinate_index, electron_two_coordinate_index);
+    //     }
+    //     repulsion_matrix_diagonal(electron_one_coordinate_index) = sum*h_cubed;
+    // }
+    // matrix = repulsion_matrix_diagonal.asDiagonal();
+
     for (int electron_one_coordinate_index = 0; electron_one_coordinate_index < grid.matrix_dim; electron_one_coordinate_index++)
     {
-        float sum = 0;
-        for (int electron_two_coordinate_index = 0; electron_two_coordinate_index < grid.matrix_dim; electron_two_coordinate_index++)
+        for (int electron_two_coordinate_index = 0; electron_two_coordinate_index < (electron_one_coordinate_index + 1); electron_two_coordinate_index++)
         {
-            sum += repulsion_matrix_integrand_function(grid, orbital_values, electron_one_coordinate_index, electron_two_coordinate_index);
+            matrix(electron_one_coordinate_index, electron_two_coordinate_index) = repulsion_matrix_integrand_function(grid, orbital_values, electron_one_coordinate_index, electron_two_coordinate_index) * h_cubed;
+            matrix(electron_two_coordinate_index, electron_one_coordinate_index) = matrix(electron_one_coordinate_index, electron_two_coordinate_index);
         }
-        repulsion_matrix_diagonal(electron_one_coordinate_index) = sum*h_cubed;
     }
-
-    matrix = repulsion_matrix_diagonal.asDiagonal();
 }
 
 template <typename OrbitalType, typename MatrixType>
