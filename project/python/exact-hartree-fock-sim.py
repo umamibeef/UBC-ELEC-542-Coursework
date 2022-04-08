@@ -302,7 +302,7 @@ def main(cmd_args):
 
             # turn our eigenvector into a square matrix and square all of the terms
             # orbital_values_squared = numpy.square(eigenvector).reshape((N,N,N)).transpose()
-            orbital_values = eigenvector.reshape(N,N,N) #.transpose()
+            orbital_values = eigenvector.reshape(N,N,N)
 
             # create coulomb repulsion matrix
             console_print(' ** Generating repulsion matrix')
@@ -356,6 +356,9 @@ def main(cmd_args):
             console_print(' ** Iteration end! Iteration time: %.3f seconds**' % iteration_time)
             console_print(' ** Eigenvalues:')
             console_print(eigenvalues)
+
+            # if iteration_count == 2:
+            #     break
 
             # check if we meet convergence condition
             if abs(total_energy_percent_diff) < (convergence_percentage/100.0):
@@ -491,8 +494,8 @@ def attraction_func_hydrogen(coords):
     y = coords[IDX_Y]
     z = coords[IDX_Z]
 
-    denominator_1 = math.sqrt(((H2_BOND_LENGTH_ATOMIC_UNITS/2) - x)**2 + y**2 + (z+0.25)**2)
-    denominator_2 = math.sqrt(((-H2_BOND_LENGTH_ATOMIC_UNITS/2) - x)**2 + y**2 + (z+0.25)**2)
+    denominator_1 = math.sqrt(((H2_BOND_LENGTH_ATOMIC_UNITS/2) - x)**2 + y**2 + (z+0.5)**2)
+    denominator_2 = math.sqrt(((-H2_BOND_LENGTH_ATOMIC_UNITS/2) - x)**2 + y**2 + (z+0.5)**2)
 
     # check if we have infinite solutions
     if not denominator_1:

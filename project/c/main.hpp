@@ -49,5 +49,6 @@ typedef struct
 #define AU_DISTANCE (5.29e-11) // Atomic unit of distance = Bohr radius (m)
 #define H2_BOND_LENGTH_ATOMIC_UNITS (0.74e-10/AU_DISTANCE) // Bond length of Hydrogen atoms in Hydrogen molecule in atomic units
 #define TINY_NUMBER (0.01) // use this number instead if the denominators become too small to help with convergence
-#define EPSILON (1e-9) // any number below this limit will be considered 0
-#define Z_OFFSET (0.25) // add a z offset to the molecular structures to help with convergence
+#define EPSILON (TINY_NUMBER) // any number below this limit will be considered 0
+#define Z_OFFSET (0.5) // add a z offset to the molecular structures to help with convergence
+#define PROGRAM_VERBOSITY (2) // Maximum logging verbosity level
