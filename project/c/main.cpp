@@ -440,6 +440,7 @@ int main(int argc, char ** argv)
     Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic> trimmed_eigenvectors(grid.matrix_dim, num_solutions);
 
     console_print(0, "** Simulation start!");
+    auto sim_start = std::chrono::system_clock::now();
 
     // generate the second order Laplacian matrix for 3D space
     console_print(1, "** Generating kinetic energy matrix");
@@ -457,17 +458,28 @@ int main(int argc, char ** argv)
     int interation_count = 0;
     // initial solution
     fock_matrix = -kinetic_matrix - attraction_matrix;
-    if (!lapack_solve_eigh(fock_matrix, eigenvalues))
-    {
-        console_print(0, "** Something went horribly wrong with the solver, aborting");
-        exit(EXIT_FAILURE);
-    }
+
+    console_print(1, "** Obtaining eigenvalues and eigenvectors for initial solution...");
+    // Builtin Eigen solver (slow)
+    // Using the SelfAdjointEigenSolver constructor to automatically compute() the eigenvalues and eigenvectors of fock_matrix
+    Eigen::SelfAdjointEigenSolver<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic>> solver(fock_matrix);
+    eigenvalues = solver.eigenvalues();
+    eigenvectors = solver.eigenvectors();
+
+    // // LAPACK solver
+    // if (!lapack_solve_eigh(fock_matrix, eigenvalues))
+    // {
+    //     console_print(0, "** Something went horribly wrong with the solver, aborting");
+    //     exit(EXIT_FAILURE);
+    // }
+
     orbital_values = eigenvectors.col(0);
+
     do
     {
         console_print(0, boost::str(boost::format("** Iteration: %d") % interation_count));
 
-        auto start = std::chrono::system_clock::now();
+        auto iteration_start = std::chrono::system_clock::now();
 
         // generate repulsion matrix
         console_print(1, "** Generating electron-electron Coulombic repulsion matrix");
@@ -483,18 +495,18 @@ int main(int argc, char ** argv)
 
         // Builtin Eigen solver (slow)
         // Using the SelfAdjointEigenSolver constructor to automatically compute() the eigenvalues and eigenvectors of fock_matrix
-        // Eigen::SelfAdjointEigenSolver<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic>> solver(fock_matrix);
-        // eigenvalues = solver.eigenvalues();
-        // eigenvectors = solver.eigenvectors();
+        Eigen::SelfAdjointEigenSolver<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic>> solver(fock_matrix);
+        eigenvalues = solver.eigenvalues();
+        eigenvectors = solver.eigenvectors();
 
-        // LAPACK solver, the same one used in numpy
-        if (!lapack_solve_eigh(fock_matrix, eigenvalues))
-        {
-            console_print(0, "** Something went horribly wrong with the solver, aborting");
-            exit(EXIT_FAILURE);
-        }
-        // using LAPACK solver, fock matrix now has the eigenvectors
-        eigenvectors = fock_matrix;
+        // // LAPACK solver, the same one used in numpy
+        // if (!lapack_solve_eigh(fock_matrix, eigenvalues))
+        // {
+        //     console_print(0, "** Something went horribly wrong with the solver, aborting");
+        //     exit(EXIT_FAILURE);
+        // }
+        // // using LAPACK solver, fock matrix now has the eigenvectors
+        // eigenvectors = fock_matrix;
 
         // Extract orbital_values
         orbital_values = eigenvectors.col(0)*0.8;
@@ -515,8 +527,8 @@ int main(int argc, char ** argv)
         // update iteration count
         interation_count++;
 
-        auto end = std::chrono::system_clock::now();
-        auto iteration_time = std::chrono::duration<float>(end - start);
+        auto iteration_end = std::chrono::system_clock::now();
+        auto iteration_time = std::chrono::duration<float>(iteration_end - iteration_start);
 
         console_print(0, boost::str(boost::format("** Iteration end! Iteration time: %0.3f seconds**") % (float)(iteration_time.count())));
 
@@ -538,6 +550,10 @@ int main(int argc, char ** argv)
     console_print(0, ss.str());
     ss.str(std::string()); // clear ss
     console_print(0, boost::str(boost::format("** Final Total energy: %.3f") % (total_energy)));
+
+    auto sim_end = std::chrono::system_clock::now();
+    auto sim_time = std::chrono::duration<float>(sim_end - sim_start);
+    console_print(0, boost::str(boost::format("** Simulation end! Total time: %0.3f seconds**") % (float)(sim_time.count())));
     
     // Call CUDA example
     // cuda_example();
