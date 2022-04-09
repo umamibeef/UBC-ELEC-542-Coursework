@@ -45,7 +45,7 @@ SOFTWARE.
 namespace po = boost::program_options;
 
 // OMP includes
-#define OMP_NUM_THREADS 16
+#define OMP_NUM_THREADS (16)
 #include <omp.h>
 
 // CUDA
@@ -55,22 +55,29 @@ namespace po = boost::program_options;
 #include "main.hpp"
 #include "kernel.h"
 
-void console_print(int verbose_level, std::string string)
+// Clean up code a bit by using aliases and typedefs
+using namespace std;
+using namespace boost;
+typedef Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic> eigen_float_matrix;
+typedef Eigen::Matrix<float, Eigen::Dynamic, 1> eigen_float_col_vector;
+typedef Eigen::Matrix<float, 1, Eigen::Dynamic> eigen_float_row_vector;
+
+void console_print(int verbose_level, string input_string)
 {
-    std::time_t time_now = std::time(nullptr);
+    time_t time_now = time(nullptr);
     char time_string[100];
-    std::strftime(time_string, sizeof(time_string), "%Y/%m/%d-%H:%M:%S", std::localtime(&time_now));
+    strftime(time_string, sizeof(time_string), "%Y/%m/%d-%H:%M:%S", localtime(&time_now));
 
     if (verbose_level > PROGRAM_VERBOSITY)
     {
         return;
     }
 
-    std::stringstream ss(string);
-    std::string output;
-    while (std::getline(ss, output, '\n'))
+    stringstream ss(input_string);
+    string output_string;
+    while (getline(ss, output_string, '\n'))
     {
-        std::cout << boost::format("[%s]") % time_string << " " << output << std::endl;
+        cout << format("[%s]") % time_string << " " << output_string << endl;
     }
 }
 
@@ -173,11 +180,11 @@ float attraction_function_helium(grid_cfg_t grid, int linear_coordinates)
     float y = coordinate_values[IDX_Y];
     float z = coordinate_values[IDX_Z];
 
-    float denominator = std::sqrt(std::pow(x, 2.0) + std::pow(y + Y_OFFSET, 2.0) + std::pow(z + Z_OFFSET, 2.0));
+    float denominator = sqrt(pow(x, 2.0) + pow(y + Y_OFFSET, 2.0) + pow(z + Z_OFFSET, 2.0));
 
-    if (std::abs(denominator) < epsilon)
+    if (abs(denominator) < epsilon)
     {
-        denominator = std::sqrt(TINY_NUMBER);
+        denominator = sqrt(TINY_NUMBER);
     }
 
     return (2.0/(denominator));
@@ -195,17 +202,17 @@ float attraction_function_hydrogen(grid_cfg_t grid, int linear_coordinates)
     float y = coordinate_values[IDX_Y];
     float z = coordinate_values[IDX_Z];
 
-    float denominator_1 = std::sqrt(std::pow((H2_BOND_LENGTH_ATOMIC_UNITS/2.0) - x, 2.0) + std::pow(y + Y_OFFSET, 2.0) + std::pow(z + Z_OFFSET, 2.0));
-    float denominator_2 = std::sqrt(std::pow((-H2_BOND_LENGTH_ATOMIC_UNITS/2.0) - x, 2.0) + std::pow(y + Y_OFFSET, 2.0) + std::pow(z + Z_OFFSET, 2.0));
+    float denominator_1 = sqrt(pow((H2_BOND_LENGTH_ATOMIC_UNITS/2.0) - x, 2.0) + pow(y + Y_OFFSET, 2.0) + pow(z + Z_OFFSET, 2.0));
+    float denominator_2 = sqrt(pow((-H2_BOND_LENGTH_ATOMIC_UNITS/2.0) - x, 2.0) + pow(y + Y_OFFSET, 2.0) + pow(z + Z_OFFSET, 2.0));
 
-    if (std::abs(denominator_1) < epsilon)
+    if (abs(denominator_1) < epsilon)
     {
-        denominator_1 = std::sqrt(TINY_NUMBER);
+        denominator_1 = sqrt(TINY_NUMBER);
     }
 
-    if (std::abs(denominator_2) < epsilon)
+    if (abs(denominator_2) < epsilon)
     {
-        denominator_2 = std::sqrt(TINY_NUMBER);
+        denominator_2 = sqrt(TINY_NUMBER);
     }
 
     return ((1.0/(denominator_1)) + (1.0/(denominator_2)));
@@ -218,7 +225,7 @@ void generate_attraction_matrix(grid_cfg_t grid, atomic_structure_e atomic_struc
     matrix.setZero();
 
     // Create the diagonal vector
-    Eigen::Matrix<float, Eigen::Dynamic, 1> attraction_matrix_diagonal(grid.matrix_dim, 1);
+    eigen_float_col_vector attraction_matrix_diagonal(grid.matrix_dim, 1);
 
     if (atomic_structure == HELIUM_ATOM)
     {
@@ -257,79 +264,90 @@ float repulsion_function(grid_cfg_t grid, int linear_coordinates_1, int linear_c
     float y2 = coordinate_values_2[IDX_Y];
     float z2 = coordinate_values_2[IDX_Z];
 
-    float denominator = std::sqrt(std::pow(x2 - x1, 2.0) + std::pow(y2 - y1, 2.0) + std::pow(z2 - z1, 2.0));
+    float denominator = sqrt(pow(x2 - x1, 2.0) + pow(y2 - y1, 2.0) + pow(z2 - z1, 2.0));
 
-    if (std::abs(denominator) < 1e-9)
+    if (abs(denominator) < 1e-9)
     {
-        denominator = std::sqrt(TINY_NUMBER);
+        denominator = sqrt(TINY_NUMBER);
     }
 
     return (1.0/(denominator));
 }
 
-template <typename Type>
-float repulsion_matrix_integrand_function(grid_cfg_t grid, const Eigen::MatrixBase<Type> &orbital_values, int linear_coords_1, int linear_coords_2)
+float repulsion_matrix_integrand_function(grid_cfg_t grid, float * orbital_values, int linear_coords_1, int linear_coords_2)
 {
-    return std::pow(orbital_values(linear_coords_2), 2.0)*repulsion_function(grid, linear_coords_1, linear_coords_2);
+    return pow(orbital_values[linear_coords_2], 2.0)*repulsion_function(grid, linear_coords_1, linear_coords_2);
 }
 
-template <typename Type>
-float exchange_matrix_integrand_function(grid_cfg_t grid, const Eigen::MatrixBase<Type> &orbital_values, int linear_coords_1, int linear_coords_2)
+float exchange_matrix_integrand_function(grid_cfg_t grid, float * orbital_values, int linear_coords_1, int linear_coords_2)
 {
-    return orbital_values(linear_coords_1)*orbital_values(linear_coords_2)*repulsion_function(grid, linear_coords_1, linear_coords_2);
+    return orbital_values[linear_coords_1]*orbital_values[linear_coords_2]*repulsion_function(grid, linear_coords_1, linear_coords_2);
 }
 
-template <typename OrbitalType, typename MatrixType>
-void generate_repulsion_matrix(grid_cfg_t grid, const Eigen::MatrixBase<OrbitalType> &orbital_values, Eigen::MatrixBase<MatrixType> &matrix)
+void generate_repulsion_matrix(grid_cfg_t grid, float * orbital_values, float * matrix)
 {
-    float h_cubed = std::pow(grid.step_size, 3.0);
+    float h_cubed = pow(grid.step_size, 3.0);
 
-    // Eigen::Matrix<float, Eigen::Dynamic, 1> repulsion_matrix_diagonal(grid.matrix_dim, 1);
-    // for (int electron_one_coordinate_index = 0; electron_one_coordinate_index < grid.matrix_dim; electron_one_coordinate_index++)
-    // {
-    //     float sum = 0;
-    //     for (int electron_two_coordinate_index = 0; electron_two_coordinate_index < grid.matrix_dim; electron_two_coordinate_index++)
-    //     {
-    //         sum += repulsion_matrix_integrand_function(grid, orbital_values, electron_one_coordinate_index, electron_two_coordinate_index);
-    //     }
-    //     repulsion_matrix_diagonal(electron_one_coordinate_index) = sum*h_cubed;
-    // }
-    // matrix = repulsion_matrix_diagonal.asDiagonal();
+    // Copying what happens in the exchange matrix...
+#if 0
+    eigen_float_col_vector repulsion_matrix_diagonal(grid.matrix_dim, 1);
+    for (int electron_one_coordinate_index = 0; electron_one_coordinate_index < grid.matrix_dim; electron_one_coordinate_index++)
+    {
+        float sum = 0;
+        for (int electron_two_coordinate_index = 0; electron_two_coordinate_index < grid.matrix_dim; electron_two_coordinate_index++)
+        {
+            sum += repulsion_matrix_integrand_function(grid, orbital_values, electron_one_coordinate_index, electron_two_coordinate_index);
+        }
+        repulsion_matrix_diagonal(electron_one_coordinate_index) = sum*h_cubed;
+    }
+    matrix = repulsion_matrix_diagonal.asDiagonal();
+#endif
 
     for (int electron_one_coordinate_index = 0; electron_one_coordinate_index < grid.matrix_dim; electron_one_coordinate_index++)
     {
         for (int electron_two_coordinate_index = 0; electron_two_coordinate_index < (electron_one_coordinate_index + 1); electron_two_coordinate_index++)
         {
-            matrix(electron_one_coordinate_index, electron_two_coordinate_index) = repulsion_matrix_integrand_function(grid, orbital_values, electron_one_coordinate_index, electron_two_coordinate_index) * h_cubed;
-            matrix(electron_two_coordinate_index, electron_one_coordinate_index) = matrix(electron_one_coordinate_index, electron_two_coordinate_index);
+            matrix[electron_one_coordinate_index + electron_two_coordinate_index*grid.matrix_dim] = repulsion_matrix_integrand_function(grid, orbital_values, electron_one_coordinate_index, electron_two_coordinate_index) * h_cubed;
+            matrix[electron_two_coordinate_index + electron_one_coordinate_index*grid.matrix_dim] = matrix[electron_one_coordinate_index + electron_two_coordinate_index*grid.matrix_dim];
         }
     }
 }
 
-template <typename OrbitalType, typename MatrixType>
-void generate_exchange_matrix(grid_cfg_t grid, const Eigen::MatrixBase<OrbitalType> &orbital_values, Eigen::MatrixBase<MatrixType> &matrix)
+
+void generate_exchange_matrix(grid_cfg_t grid, float * orbital_values, float * matrix)
 {
-    float h_cubed = std::pow(grid.step_size, 3.0);
+    float h_cubed = pow(grid.step_size, 3.0);
 
     // Why doesn't this work?! It's in the math!
-    // Eigen::Matrix<float, Eigen::Dynamic, 1> exchange_matrix_diagonal(grid.matrix_dim, 1);
-    // for (int electron_one_coordinate_index = 0; electron_one_coordinate_index < grid.matrix_dim; electron_one_coordinate_index++)
-    // {
-    //     float sum = 0;
-    //     for (int electron_two_coordinate_index = 0; electron_two_coordinate_index < grid.matrix_dim; electron_two_coordinate_index++)
-    //     {
-    //         sum += exchange_matrix_integrand_function(grid, orbital_values, electron_one_coordinate_index, electron_two_coordinate_index);
-    //     }
-    //     exchange_matrix_diagonal(electron_one_coordinate_index) = sum*h_cubed;
-    // }
-    // matrix = exchange_matrix_diagonal.asDiagonal();
+#if 0
+    eigen_float_col_vector exchange_matrix_diagonal(grid.matrix_dim, 1);
+    for (int electron_one_coordinate_index = 0; electron_one_coordinate_index < grid.matrix_dim; electron_one_coordinate_index++)
+    {
+        float sum = 0;
+        for (int electron_two_coordinate_index = 0; electron_two_coordinate_index < grid.matrix_dim; electron_two_coordinate_index++)
+        {
+            sum += exchange_matrix_integrand_function(grid, orbital_values, electron_one_coordinate_index, electron_two_coordinate_index);
+        }
+        exchange_matrix_diagonal(electron_one_coordinate_index) = sum*h_cubed;
+    }
+    matrix = exchange_matrix_diagonal.asDiagonal();
+#endif
     
     for (int electron_one_coordinate_index = 0; electron_one_coordinate_index < grid.matrix_dim; electron_one_coordinate_index++)
     {
         for (int electron_two_coordinate_index = 0; electron_two_coordinate_index < (electron_one_coordinate_index + 1); electron_two_coordinate_index++)
         {
-            matrix(electron_one_coordinate_index, electron_two_coordinate_index) = exchange_matrix_integrand_function(grid, orbital_values, electron_one_coordinate_index, electron_two_coordinate_index) * h_cubed;
-            matrix(electron_two_coordinate_index, electron_one_coordinate_index) = matrix(electron_one_coordinate_index, electron_two_coordinate_index);
+            // data in matrix is column major order, make sure we write the same way
+            // e.g.:
+            //  matrix in memory: 0 1 2 3 4 5 6 7 8
+            //  data as matrix:
+            //  0 3 6
+            //  1 4 7  matrix(2,1) = 5
+            //  2 5 8
+            // matrix(electron_one_coordinate_index, electron_two_coordinate_index)
+            // matrix(electron_two_coordinate_index, electron_one_coordinate_index)
+            matrix[electron_one_coordinate_index + electron_two_coordinate_index*grid.matrix_dim] = exchange_matrix_integrand_function(grid, orbital_values, electron_one_coordinate_index, electron_two_coordinate_index) * h_cubed;
+            matrix[electron_two_coordinate_index + electron_one_coordinate_index*grid.matrix_dim] = matrix[electron_one_coordinate_index + electron_two_coordinate_index*grid.matrix_dim];
         }
     }
 }
@@ -338,8 +356,8 @@ template <typename A, typename B, typename C, typename D, typename E>
 float calculate_total_energy(Eigen::MatrixBase<A> &orbital_values, Eigen::MatrixBase<B> &kinetic_matrix, Eigen::MatrixBase<C> &attraction_matrix, Eigen::MatrixBase<D> &repulsion_matrix, Eigen::MatrixBase<E> &exchange_matrix)
 { 
     // orbital values are real, so no need to take conjugate
-    Eigen::Matrix<float, 1, Eigen::Dynamic> psi_prime = orbital_values.transpose();
-    Eigen::Matrix<float, Eigen::Dynamic, 1> psi = orbital_values;
+    eigen_float_row_vector psi_prime = orbital_values.transpose();
+    eigen_float_col_vector psi = orbital_values;
 
     float energy_sum = 0;
 
@@ -368,8 +386,8 @@ bool lapack_solve_eigh_old(Eigen::Matrix<A, Eigen::Dynamic, Eigen::Dynamic> &mat
     lapack_int lda = matrix.outerStride(); // the leading dimension of the array A. LDA >= max(1,N).
     lapack_int info = 0;
 
-    console_print(2, boost::str(boost::format("\tn = matrix.cols() = %d") % n));
-    console_print(2, boost::str(boost::format("\tlda = matrix.outerStride() = %d") % lda));
+    console_print(2, str(format("\tn = matrix.cols() = %d") % n));
+    console_print(2, str(format("\tlda = matrix.outerStride() = %d") % lda));
 
     float* a = matrix.data(); // pointer to fock/eigenvector data
     float* w = eigenvalues.data(); // pointer to eigenvalue data
@@ -386,7 +404,7 @@ bool lapack_solve_eigh_old(Eigen::Matrix<A, Eigen::Dynamic, Eigen::Dynamic> &mat
     // the work area.
     info = LAPACKE_ssyevd(matrix_layout, jobz, uplo, n, a, lda, w);
 
-    console_print(2, boost::str(boost::format("\tinfo = %d") % info));
+    console_print(2, str(format("\tinfo = %d") % info));
 
     return (info == 0);
 }
@@ -409,15 +427,15 @@ bool lapack_solve_eigh(Eigen::Matrix<A, Eigen::Dynamic, Eigen::Dynamic> &matrix,
     float* w_ptr = eigenvalues.data(); // pointer to eigenvalue data
 
     console_print(2, "\t** LAPACK solver debug");
-    console_print(2, boost::str(boost::format("\tn = matrix.cols() = %d") % n));
-    console_print(2, boost::str(boost::format("\tlda = matrix.outerStride() = %d") % lda));
+    console_print(2, str(format("\tn = matrix.cols() = %d") % n));
+    console_print(2, str(format("\tlda = matrix.outerStride() = %d") % lda));
 
     // Setting lwork and liwork manually based on the LAPACK documentation
     lwork = 1 + 6*n + 2*n*n;
     liwork = 3 + 5*n;
 
-    console_print(2, boost::str(boost::format("\tliwork = %d") % liwork));
-    console_print(2, boost::str(boost::format("\tlwork = %d") % lwork));
+    console_print(2, str(format("\tliwork = %d") % liwork));
+    console_print(2, str(format("\tlwork = %d") % lwork));
 
     // Allocate memory for work arrays
     iwork = (lapack_int*)LAPACKE_malloc(sizeof(lapack_int) * liwork);
@@ -447,7 +465,7 @@ bool lapack_solve_eigh(Eigen::Matrix<A, Eigen::Dynamic, Eigen::Dynamic> &matrix,
     LAPACKE_free(iwork);
     LAPACKE_free(work);
 
-    console_print(2, boost::str(boost::format("\tinfo = %d") % info));
+    console_print(2, str(format("\tinfo = %d") % info));
     return (info==0);
 }
 
@@ -457,7 +475,7 @@ int main(int argc, char *argv[])
 
     omp_set_num_threads(OMP_NUM_THREADS); // Set the number of maximum threads to use for OMP
     Eigen::setNbThreads(OMP_NUM_THREADS); // Set the number of maximum threads to use for Eigen
-    std::stringstream ss; // Used to form strings using cout
+    stringstream ss; // Used to form strings using cout
 
     // Program options
     po::options_description desc("Allowed options");
@@ -476,15 +494,15 @@ int main(int argc, char *argv[])
 
     if (vm.count("help"))
     {
-        std::cout << desc << "\n";
+        cout << desc << "\n";
         return 1;
     }
 
     atomic_structure_e atomic_structure;
     if (vm["structure"].as<int>() >= ATOMIC_STRUCTURE_NUM)
     {
-        std::cout << "Invalid atomic structure selection: " << vm["structure"].as<int>() << std::endl;
-        std::cout << "Valid options: (0:He, 1:H2)" << std::endl;
+        cout << "Invalid atomic structure selection: " << vm["structure"].as<int>() << endl;
+        cout << "Valid options: (0:He, 1:H2)" << endl;
         return 0;
     }
     else
@@ -492,7 +510,7 @@ int main(int argc, char *argv[])
         atomic_structure = (atomic_structure_e)(vm["structure"].as<int>());
     }
 
-    // program settings
+    // Program settings
     grid_cfg_t grid;
     grid.num_partitions = vm["partitions"].as<int>();
     grid.limit = vm["limit"].as<int>();
@@ -502,11 +520,11 @@ int main(int argc, char *argv[])
     int num_solutions = 6;
     float convergence_percentage = vm["convergence"].as<float>();
 
-    console_print(0, boost::str(boost::format("\titerations = %d") % max_iterations));
-    console_print(0, boost::str(boost::format("\tnum_partitions = %d") % grid.num_partitions));
-    console_print(0, boost::str(boost::format("\tmatrix_dim = %d") % grid.matrix_dim));
-    console_print(0, boost::str(boost::format("\tlimit = %d") % grid.limit));
-    console_print(0, boost::str(boost::format("\tstep_size = %f") % grid.step_size));
+    console_print(0, str(format("\titerations = %d") % max_iterations));
+    console_print(0, str(format("\tnum_partitions = %d") % grid.num_partitions));
+    console_print(0, str(format("\tmatrix_dim = %d") % grid.matrix_dim));
+    console_print(0, str(format("\tlimit = %d") % grid.limit));
+    console_print(0, str(format("\tstep_size = %f") % grid.step_size));
     if (atomic_structure == HELIUM_ATOM)
     {
         console_print(0, "\tatomic structure: Helium Atom");
@@ -516,25 +534,24 @@ int main(int argc, char *argv[])
         console_print(0, "\tatomic structure: Hydrogen Molecule");
     }
 
-    // matrix instantiations
-    Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic> laplacian_matrix(grid.matrix_dim, grid.matrix_dim);
-    Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic> kinetic_matrix(grid.matrix_dim, grid.matrix_dim);
-    Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic> attraction_matrix(grid.matrix_dim, grid.matrix_dim);
-    Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic> repulsion_matrix(grid.matrix_dim, grid.matrix_dim);
-    Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic> exchange_matrix(grid.matrix_dim, grid.matrix_dim);
-    Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic> fock_matrix(grid.matrix_dim, grid.matrix_dim);
-    
+    // Matrix instantiations
+    eigen_float_matrix laplacian_matrix(grid.matrix_dim, grid.matrix_dim);
+    eigen_float_matrix kinetic_matrix(grid.matrix_dim, grid.matrix_dim);
+    eigen_float_matrix attraction_matrix(grid.matrix_dim, grid.matrix_dim);
+    eigen_float_matrix repulsion_matrix(grid.matrix_dim, grid.matrix_dim);
+    eigen_float_matrix exchange_matrix(grid.matrix_dim, grid.matrix_dim);
+    eigen_float_matrix fock_matrix(grid.matrix_dim, grid.matrix_dim);
     // Orbital values
-    Eigen::Matrix<float, Eigen::Dynamic, 1> orbital_values(grid.matrix_dim, 1);
+    eigen_float_col_vector orbital_values(grid.matrix_dim, 1);
     // Eigenvectors and eigenvalues
-    Eigen::Matrix<float, Eigen::Dynamic, 1> eigenvalues(grid.matrix_dim, 1);
-    Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic> eigenvectors(grid.matrix_dim, grid.matrix_dim);
+    eigen_float_col_vector eigenvalues(grid.matrix_dim, 1);
+    eigen_float_matrix eigenvectors(grid.matrix_dim, grid.matrix_dim);
     // Trimmed eigenvectors and eigenvalues
-    Eigen::Matrix<float, Eigen::Dynamic, 1> trimmed_eigenvalues(num_solutions, 1);
-    Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic> trimmed_eigenvectors(grid.matrix_dim, num_solutions);
+    eigen_float_col_vector trimmed_eigenvalues(num_solutions, 1);
+    eigen_float_matrix trimmed_eigenvectors(grid.matrix_dim, num_solutions);
 
     console_print(0, "** Simulation start!");
-    auto sim_start = std::chrono::system_clock::now();
+    auto sim_start = chrono::system_clock::now();
 
     // generate the second order Laplacian matrix for 3D space
     console_print(1, "** Generating kinetic energy matrix");
@@ -545,21 +562,14 @@ int main(int argc, char *argv[])
     console_print(1, "** Generating electron-nucleus Coulombic attraction matrix");
     generate_attraction_matrix(grid, atomic_structure, attraction_matrix);
 
-    // main HF loop
+    // Main HF loop
     float last_total_energy = 0;
     float total_energy;
     float total_energy_percent_diff;
     int interation_count = 0;
     // initial solution
     fock_matrix = -kinetic_matrix - attraction_matrix;
-
     console_print(1, "** Obtaining eigenvalues and eigenvectors for initial solution...");
-    // // Builtin Eigen solver (slow)
-    // // Using the SelfAdjointEigenSolver constructor to automatically compute() the eigenvalues and eigenvectors of fock_matrix
-    // Eigen::SelfAdjointEigenSolver<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic>> solver(fock_matrix);
-    // eigenvalues = solver.eigenvalues();
-    // eigenvectors = solver.eigenvectors();
-
     // LAPACK solver
     if (!lapack_solve_eigh(fock_matrix, eigenvalues))
     {
@@ -571,27 +581,21 @@ int main(int argc, char *argv[])
 
     do
     {
-        console_print(0, boost::str(boost::format("** Iteration: %d") % interation_count));
+        console_print(0, str(format("** Iteration: %d") % interation_count));
 
-        auto iteration_start = std::chrono::system_clock::now();
+        auto iteration_start = chrono::system_clock::now();
 
         // generate repulsion matrix
         console_print(1, "** Generating electron-electron Coulombic repulsion matrix");
-        generate_repulsion_matrix(grid, orbital_values, repulsion_matrix);
+        generate_repulsion_matrix(grid, orbital_values.data(), repulsion_matrix.data());
         // generate exchange matrix
         console_print(1, "** Generating electron-electron exchange matrix");
-        generate_exchange_matrix(grid, orbital_values, exchange_matrix);
+        generate_exchange_matrix(grid, orbital_values.data(), exchange_matrix.data());
         // form fock matrix
         console_print(1, "** Generating Fock matrix");
         fock_matrix = -kinetic_matrix - attraction_matrix + 2.0*repulsion_matrix - exchange_matrix;
 
         console_print(1, "** Obtaining eigenvalues and eigenvectors...");
-
-        // // Builtin Eigen solver (slow)
-        // // Using the SelfAdjointEigenSolver constructor to automatically compute() the eigenvalues and eigenvectors of fock_matrix
-        // Eigen::SelfAdjointEigenSolver<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic>> solver(fock_matrix);
-        // eigenvalues = solver.eigenvalues();
-        // eigenvectors = solver.eigenvectors();
 
         // LAPACK solver, the same one used in numpy
         if (!lapack_solve_eigh(fock_matrix, eigenvalues))
@@ -610,10 +614,10 @@ int main(int argc, char *argv[])
         trimmed_eigenvectors = eigenvectors.block(0, 0, grid.matrix_dim, num_solutions);
 
         total_energy = calculate_total_energy(orbital_values, kinetic_matrix, attraction_matrix, repulsion_matrix, exchange_matrix);
-        total_energy_percent_diff = std::abs((total_energy - last_total_energy)/((total_energy + last_total_energy) / 2.0));
+        total_energy_percent_diff = abs((total_energy - last_total_energy)/((total_energy + last_total_energy) / 2.0));
 
-        console_print(0, boost::str(boost::format("** Total energy: %.3f") % (total_energy)));
-        console_print(0, boost::str(boost::format("** Energy %% diff: %.3f%%") % (total_energy_percent_diff * 100.0)));
+        console_print(0, str(format("** Total energy: %.3f") % (total_energy)));
+        console_print(0, str(format("** Energy %% diff: %.3f%%") % (total_energy_percent_diff * 100.0)));
 
         // update last value
         last_total_energy = total_energy;
@@ -621,10 +625,10 @@ int main(int argc, char *argv[])
         // update iteration count
         interation_count++;
 
-        auto iteration_end = std::chrono::system_clock::now();
-        auto iteration_time = std::chrono::duration<float>(iteration_end - iteration_start);
+        auto iteration_end = chrono::system_clock::now();
+        auto iteration_time = chrono::duration<float>(iteration_end - iteration_start);
 
-        console_print(0, boost::str(boost::format("** Iteration end! Iteration time: %0.3f seconds**") % (float)(iteration_time.count())));
+        console_print(0, str(format("** Iteration end! Iteration time: %0.3f seconds**") % (float)(iteration_time.count())));
 
         // check if we've hit the maximum iteration limit
         if (interation_count == max_iterations)
@@ -643,12 +647,12 @@ int main(int argc, char *argv[])
     console_print(0, "** Final Eigenvalues:");
     ss << trimmed_eigenvalues;
     console_print(0, ss.str());
-    ss.str(std::string()); // clear ss
-    console_print(0, boost::str(boost::format("** Final Total energy: %.3f") % (total_energy)));
+    ss.str(string()); // clear ss
+    console_print(0, str(format("** Final Total energy: %.3f") % (total_energy)));
 
-    auto sim_end = std::chrono::system_clock::now();
-    auto sim_time = std::chrono::duration<float>(sim_end - sim_start);
-    console_print(0, boost::str(boost::format("** Simulation end! Total time: %0.3f seconds**") % (float)(sim_time.count())));
+    auto sim_end = chrono::system_clock::now();
+    auto sim_time = chrono::duration<float>(sim_end - sim_start);
+    console_print(0, str(format("** Simulation end! Total time: %0.3f seconds**") % (float)(sim_time.count())));
     
     // Call CUDA example
     // cuda_example();
