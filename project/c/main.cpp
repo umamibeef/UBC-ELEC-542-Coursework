@@ -130,6 +130,9 @@ void linear_coordinate_index_to_spatial_coordinates_values(cfg_t &config, int co
 // Generate the 3D Laplacian matrix for the given number of partitions
 void generate_laplacian_matrix(cfg_t &config, float *matrix)
 {
+    // Set matrix to 0
+    memset(matrix,0.0,config.matrix_dim*config.matrix_dim*sizeof(float));
+
     int col_index_x;
     int col_index_y;
     int col_index_z;
@@ -245,31 +248,25 @@ float attraction_function_hydrogen(cfg_t &config, int linear_coordinates)
 }
 
 // Generate the attraction matrix
-template <typename Type>
-void generate_attraction_matrix(cfg_t &config, atomic_structure_e atomic_structure, Eigen::MatrixBase<Type> &matrix)
+void generate_attraction_matrix(cfg_t &config, atomic_structure_e atomic_structure, float *matrix)
 {
-    matrix.setZero();
-
-    // Create the diagonal vector
-    eigen_float_col_vector attraction_matrix_diagonal(config.matrix_dim, 1);
+    // Set matrix to 0
+    memset(matrix,0.0,config.matrix_dim*config.matrix_dim*sizeof(float));
 
     if (atomic_structure == HELIUM_ATOM)
     {
         for (int diagonal_index = 0; diagonal_index < config.matrix_dim; diagonal_index++)
         {
-            attraction_matrix_diagonal(diagonal_index) = attraction_function_helium(config, diagonal_index);
+            matrix[diagonal_index + diagonal_index*config.matrix_dim] = attraction_function_helium(config, diagonal_index);
         }
     }
     else if (atomic_structure == HYDROGEN_MOLECULE)
     {
         for (int diagonal_index = 0; diagonal_index < config.matrix_dim; diagonal_index++)
         {
-            attraction_matrix_diagonal(diagonal_index) = attraction_function_hydrogen(config, diagonal_index);
+            matrix[diagonal_index + diagonal_index*config.matrix_dim] = attraction_function_hydrogen(config, diagonal_index);
         }
     }
-
-    // copy the resulting diagonal matrix into the attraction matrix that was passed in
-    matrix = attraction_matrix_diagonal.asDiagonal();
 }
 
 // Electron-electron Coulombic repulsion function
@@ -565,7 +562,7 @@ int main(int argc, char *argv[])
     kinetic_matrix = (laplacian_matrix/(2.0*config.step_size*config.step_size));
     // generate the Coulombic attraction matrix
     console_print(1, "** Generating electron-nucleus Coulombic attraction matrix");
-    generate_attraction_matrix(config, atomic_structure, attraction_matrix);
+    generate_attraction_matrix(config, atomic_structure, attraction_matrix.data());
 
     // Main HF loop
     float last_total_energy = 0;
