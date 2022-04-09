@@ -28,170 +28,65 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-#include "randomize.h"
-
 #include "kernel.h"
 
+// void cuda_example(void)
+// {
+//     cudaError_t error;
 
-// v3.h
+//     error = cudaGetLastError();
+//     if (error != cudaSuccess)
+//     {
+//         printf("0 %s\n",cudaGetErrorString(error));
+//         exit(1);
+//     }
 
-class v3
-{
-public:
-    float x;
-    float y;
-    float z;
-    
-    v3();
-    v3(float xIn, float yIn, float zIn);
-    void randomize();
-    __host__ __device__ void normalize();
-    __host__ __device__ void scramble();
+//     cudaMalloc(&devPArray, n*sizeof(particle));
+//     cudaDeviceSynchronize(); error = cudaGetLastError();
+//     if (error != cudaSuccess)
+//     {
+//         printf("1 %s\n",cudaGetErrorString(error));
+//         exit(1);
+//     }
 
-};
+//     cudaMemcpy(devPArray, pArray, n*sizeof(particle), cudaMemcpyHostToDevice);
+//     cudaDeviceSynchronize();
+//     error = cudaGetLastError();
 
-// particle.h
+//     if (error != cudaSuccess)
+//     {
+//         printf("2 %s\n",cudaGetErrorString(error));
+//         exit(1);
+//     }
 
-class particle
-{
-    private:
-        v3 position;
-        v3 velocity;
-        v3 totalDistance;
+//     for(int i=0; i<100; i++)
+//     {
+//         float dt = (float)rand()/(float) RAND_MAX; // Random distance each step
+//         advanceParticles<<< 1 +  n/256, 256>>>(dt, devPArray, n);
+//         error = cudaGetLastError();
+//         if (error != cudaSuccess)
+//         {
+//             printf("3 %s\n",cudaGetErrorString(error));
+//             exit(1);
+//         }
 
-    public:
-        particle();
-        __host__ __device__ void advance(float dist);
-        const v3& getTotalDistance() const;
+//         cudaDeviceSynchronize();
+//     }
+//     cudaMemcpy(pArray, devPArray, n*sizeof(particle), cudaMemcpyDeviceToHost);
 
-};
-
-
-// v3.cu
-
-v3::v3()
-{
-    ::randomize(x, y, z);
-}
-
-v3::v3(float xIn, float yIn, float zIn) : x(xIn), y(yIn), z(zIn)
-{}
-
-void v3::randomize()
-{
-    ::randomize(x, y, z);
-}
-
-// particle.cu
-
-particle::particle() :  position(), velocity(), totalDistance(1,0,0)
-{
-}
-
-__device__ __host__
-void particle::advance(float d)
-{
-  velocity.normalize();
-  auto dx = d * velocity.x;
-  position.x += dx;
-  totalDistance.x += dx;
-  auto dy = d * velocity.y;
-  position.y += dy;
-  totalDistance.y += dy;
-  auto dz = d * velocity.z;
-  position.z += dz;
-  totalDistance.z += dz;
-  velocity.scramble();
-}
-
-const v3& particle::getTotalDistance() const
-{   return totalDistance; }
-
-__host__ __device__ void v3::normalize()
-{
-    float t = sqrt(x*x + y*y + z*z);
-    x /= t;
-    y /= t;
-    z /= t;
-}
-
-__host__ __device__ void v3::scramble()
-{
-    float tx = 0.317f*(x + 1.0) + y + z * x * x + y + z;
-    float ty = 0.619f*(y + 1.0) + y * y + x * y * z + y + x;
-    float tz = 0.124f*(z + 1.0) + z * y + x * y * z + y + x;
-    x = tx;
-    y = ty;
-    z = tz;
-}
-
-__global__ void advanceParticles(float dt, particle * pArray, int nParticles)
-{
-    int idx = threadIdx.x + blockIdx.x*blockDim.x;
-    if(idx < nParticles)
-    {
-        pArray[idx].advance(dt);
-    }
-}
-
-void cuda_example(void)
-{
-    cudaError_t error;
-    int n = 1000000;
-
-    error = cudaGetLastError();
-    if (error != cudaSuccess)
-    {
-    printf("0 %s\n",cudaGetErrorString(error));
-    exit(1);
-    }
-
-    particle * pArray = new particle[n];
-    particle * devPArray = NULL;
-    cudaMalloc(&devPArray, n*sizeof(particle));
-    cudaDeviceSynchronize(); error = cudaGetLastError();
-    if (error != cudaSuccess)
-    {
-    printf("1 %s\n",cudaGetErrorString(error));
-    exit(1);
-    }
-
-    cudaMemcpy(devPArray, pArray, n*sizeof(particle), cudaMemcpyHostToDevice);
-    cudaDeviceSynchronize(); error = cudaGetLastError();
-    if (error != cudaSuccess)
-    {
-    printf("2 %s\n",cudaGetErrorString(error));
-    exit(1);
-    }
-
-    for(int i=0; i<100; i++)
-    {
-        float dt = (float)rand()/(float) RAND_MAX; // Random distance each step
-        advanceParticles<<< 1 +  n/256, 256>>>(dt, devPArray, n);
-        error = cudaGetLastError();
-        if (error != cudaSuccess)
-        {
-        printf("3 %s\n",cudaGetErrorString(error));
-        exit(1);
-        }
-
-        cudaDeviceSynchronize();
-    }
-    cudaMemcpy(pArray, devPArray, n*sizeof(particle), cudaMemcpyDeviceToHost);
-
-    v3 totalDistance(0,0,0);
-    v3 temp;
-    for(int i=0; i<n; i++)
-    {
-        temp = pArray[i].getTotalDistance();
-        totalDistance.x += temp.x;
-        totalDistance.y += temp.y;
-        totalDistance.z += temp.z;
-    }
-    float avgX = totalDistance.x /(float)n;
-    float avgY = totalDistance.y /(float)n;
-    float avgZ = totalDistance.z /(float)n;
-    float avgNorm = sqrt(avgX*avgX + avgY*avgY + avgZ*avgZ);
-    printf( "Moved %d particles 100 steps. Average distance traveled is |(%f, %f, %f)| = %f\n",
-                    n, avgX, avgY, avgZ, avgNorm);
-}
+//     v3 totalDistance(0,0,0);
+//     v3 temp;
+//     for(int i=0; i<n; i++)
+//     {
+//         temp = pArray[i].getTotalDistance();
+//         totalDistance.x += temp.x;
+//         totalDistance.y += temp.y;
+//         totalDistance.z += temp.z;
+//     }
+//     float avgX = totalDistance.x /(float)n;
+//     float avgY = totalDistance.y /(float)n;
+//     float avgZ = totalDistance.z /(float)n;
+//     float avgNorm = sqrt(avgX*avgX + avgY*avgY + avgZ*avgZ);
+//     printf( "Moved %d particles 100 steps. Average distance traveled is |(%f, %f, %f)| = %f\n",
+//                     n, avgX, avgY, avgZ, avgNorm);
+// }

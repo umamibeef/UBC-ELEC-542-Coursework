@@ -31,7 +31,7 @@ link_libraries(${lapackblas_libraries})
 set(Boost_USE_STATIC_LIBS OFF) 
 set(Boost_USE_MULTITHREADED ON)  
 set(Boost_USE_STATIC_RUNTIME OFF) 
-find_package(Boost 1.71.0 COMPONENTS program_options format)
+find_package(Boost 1.71.0 COMPONENTS program_options date_time)
 link_libraries(${Boost_LIBRARIES})
 
 # OpenMP
@@ -44,7 +44,7 @@ endif()
 include_directories(${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES} ${Boost_INCLUDE_DIRS})
 
 # add the executable
-add_executable(ExactHartreeFockSim main.cpp randomize.cpp kernel.cu kernel.cu)
+add_executable(ExactHartreeFockSim main.cpp kernel.cu kernel.cu)
 
 set_target_properties(ExactHartreeFockSim PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 

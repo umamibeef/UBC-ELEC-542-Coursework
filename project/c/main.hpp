@@ -53,4 +53,4 @@ typedef struct
 #define EPSILON (TINY_NUMBER) // any number below this limit will be considered 0
 #define Z_OFFSET (0.5) // add a z offset to the molecular structures to help with convergence
 #define Y_OFFSET (0) // add a z offset to the molecular structures to help with convergence
-#define PROGRAM_VERBOSITY (0) // Maximum logging verbosity level
+#define PROGRAM_VERBOSITY (2) // Maximum logging verbosity level

@@ -24,6 +24,7 @@ SOFTWARE.
  
 // C/C++ includes
 #include <iostream>
+#include <fstream>
 #include <cmath>
 #include <chrono>
 #include <ctime>
@@ -38,9 +39,6 @@ SOFTWARE.
 // https://github.com/libigl/libigl/issues/651 for more info
 #undef I
 
-// LAPACKE include (C API for LAPACK fortran library)
-#include <lapacke.h>
-
 // Boost includes
 #include <boost/format.hpp>
 #include <boost/program_options.hpp>
@@ -49,6 +47,9 @@ namespace po = boost::program_options;
 // OMP includes
 #define OMP_NUM_THREADS 16
 #include <omp.h>
+
+// CUDA
+#include <cuda.h>
 
 // Program includes
 #include "main.hpp"
@@ -358,7 +359,7 @@ float calculate_total_energy(Eigen::MatrixBase<A> &orbital_values, Eigen::Matrix
 // https://eigen.tuxfamily.org/index.php?title=Lapack#Create_the_C.2B.2B_Function_Declaration.
 // 
 template <typename A, typename B>
-bool lapack_solve_eigh(Eigen::Matrix<A, Eigen::Dynamic, Eigen::Dynamic> &matrix, Eigen::Matrix<B, Eigen::Dynamic, 1> &eigenvalues)
+bool lapack_solve_eigh_old(Eigen::Matrix<A, Eigen::Dynamic, Eigen::Dynamic> &matrix, Eigen::Matrix<B, Eigen::Dynamic, 1> &eigenvalues)
 {
     int matrix_layout = LAPACK_COL_MAJOR; // column major ordering, default for eigen
     char jobz = 'V'; // compute eigenvalues and eigenvectors.
@@ -380,11 +381,74 @@ bool lapack_solve_eigh(Eigen::Matrix<A, Eigen::Dynamic, Eigen::Dynamic> &matrix,
     // lapack_int LAPACKE_dsyevd(int matrix_layout, char jobz, char uplo, lapack_int n,
     //                         double* a, lapack_int lda, double* w);
 
+    // Unfortunately this wrapper doesn't work for matrix sizes larger than a
+    // certain amount,  because the querying reports back an incorrect value for
+    // the work area.
     info = LAPACKE_ssyevd(matrix_layout, jobz, uplo, n, a, lda, w);
 
     console_print(2, boost::str(boost::format("\tinfo = %d") % info));
 
     return (info == 0);
+}
+
+// Using the LAPACK routines directly by reimplementing the LAPACKE wrapper (to avoid the broken querying)
+template <typename A, typename B>
+bool lapack_solve_eigh(Eigen::Matrix<A, Eigen::Dynamic, Eigen::Dynamic> &matrix, Eigen::Matrix<B, Eigen::Dynamic, 1> &eigenvalues)
+{
+    int matrix_layout = LAPACK_COL_MAJOR; // column major ordering, default for eigen
+    char jobz = 'V'; // compute eigenvalues and eigenvectors.
+    char uplo = 'U'; // perform calculation on upper triangle of matrix
+    lapack_int n = matrix.cols(); // order of the matrix (size)
+    lapack_int lda = matrix.outerStride(); // the leading dimension of the array A. LDA >= max(1,N).
+    lapack_int info = 0;
+    lapack_int liwork;
+    lapack_int lwork;
+    lapack_int* iwork = NULL;
+    float* work = NULL;
+    float* a_ptr = matrix.data(); // pointer to fock/eigenvector data
+    float* w_ptr = eigenvalues.data(); // pointer to eigenvalue data
+
+    console_print(2, "\t** LAPACK solver debug");
+    console_print(2, boost::str(boost::format("\tn = matrix.cols() = %d") % n));
+    console_print(2, boost::str(boost::format("\tlda = matrix.outerStride() = %d") % lda));
+
+    // Setting lwork and liwork manually based on the LAPACK documentation
+    lwork = 1 + 6*n + 2*n*n;
+    liwork = 3 + 5*n;
+
+    console_print(2, boost::str(boost::format("\tliwork = %d") % liwork));
+    console_print(2, boost::str(boost::format("\tlwork = %d") % lwork));
+
+    // Allocate memory for work arrays
+    iwork = (lapack_int*)LAPACKE_malloc(sizeof(lapack_int) * liwork);
+    if(iwork == NULL)
+    {
+        info = LAPACK_WORK_MEMORY_ERROR;
+        console_print(2, "\tFATAL! Could not allocate iwork array");
+    }
+    work = (float*)LAPACKE_malloc(sizeof(float) * lwork);
+    if(work == NULL)
+    {
+        info = LAPACK_WORK_MEMORY_ERROR;
+        console_print(2, "\tFATAL! Could not allocate work array");
+    }
+
+    // Call LAPACK function and adjust info if our work areas are OK
+    if ((iwork != NULL) && (work != NULL))
+    {
+        console_print(2, "\tcalling LAPACK function");
+        LAPACK_ssyevd(&jobz, &uplo, &n, a_ptr, &lda, w_ptr, work, &lwork, iwork, &liwork, &info);
+        if( info < 0 ) {
+            info = info - 1;
+        }
+    }
+
+    // Release memory and exit
+    LAPACKE_free(iwork);
+    LAPACKE_free(work);
+
+    console_print(2, boost::str(boost::format("\tinfo = %d") % info));
+    return (info==0);
 }
 
 int main(int argc, char *argv[])
@@ -539,7 +603,7 @@ int main(int argc, char *argv[])
         eigenvectors = fock_matrix;
 
         // Extract orbital_values
-        orbital_values = eigenvectors.col(0)*0.8;
+        orbital_values = eigenvectors.col(0);
         // Extract num_solutions eigenvalues
         trimmed_eigenvalues = eigenvalues.block(0, 0, num_solutions, 1);
         // Extract num_solutions eigenvectors

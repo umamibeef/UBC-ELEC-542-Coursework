@@ -25,9 +25,6 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __kernel_h_
-#define __kernel_h_
+#pragma once
 
-void cuda_example(void);
-
-#endif // __kernel_h__
+void cuda_numerical_integration_kernel(float * orbital_values);
