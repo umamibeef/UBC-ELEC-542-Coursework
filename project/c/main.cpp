@@ -128,66 +128,72 @@ void linear_coordinate_index_to_spatial_coordinates_values(cfg_t &config, int co
 }
 
 // Generate the 3D Laplacian matrix for the given number of partitions
-template <typename Type>
-void generate_laplacian_matrix(cfg_t &config, Eigen::MatrixBase<Type> &matrix)
+void generate_laplacian_matrix(cfg_t &config, float *matrix)
 {
-    int row_coordinates[IDX_NUM];
-    int col_coordinates[IDX_NUM];
-
-    matrix.setZero();
+    int col_index_x;
+    int col_index_y;
+    int col_index_z;
+    int row_index_x;
+    int row_index_y;
+    int row_index_z;
 
     for (int row_coordinate_index = 0; row_coordinate_index < config.matrix_dim; row_coordinate_index++)
     {
-        linear_coordinate_index_to_spatial_coordinates_index(config, row_coordinate_index, row_coordinates);
         for (int col_coordinate_index = 0; col_coordinate_index < config.matrix_dim; col_coordinate_index++)
         {
-            linear_coordinate_index_to_spatial_coordinates_index(config, col_coordinate_index, col_coordinates);
+            col_index_x = config.coordinate_index_array[IDX_X][col_coordinate_index];
+            col_index_y = config.coordinate_index_array[IDX_Y][col_coordinate_index];
+            col_index_z = config.coordinate_index_array[IDX_Z][col_coordinate_index];
+
+            row_index_x = config.coordinate_index_array[IDX_X][row_coordinate_index];
+            row_index_y = config.coordinate_index_array[IDX_Y][row_coordinate_index];
+            row_index_z = config.coordinate_index_array[IDX_Z][row_coordinate_index];
 
             // U(x,y,z)
             if (row_coordinate_index == col_coordinate_index)
             {
-                matrix(row_coordinate_index, col_coordinate_index) = -6.0;
+                matrix[row_coordinate_index + col_coordinate_index*config.matrix_dim] = -6.0;
             }
 
-            if ((row_coordinates[IDX_Y] == col_coordinates[IDX_Y]) && (row_coordinates[IDX_Z] == col_coordinates[IDX_Z]))
+            if ((row_index_y == col_index_y) && (row_index_z == col_index_z))
             {
                 // U(x-1,y,z)
-                if (row_coordinates[IDX_X] == col_coordinates[IDX_X] + 1)
+                if (row_index_x == col_index_x + 1)
                 {
-                    matrix(row_coordinate_index, col_coordinate_index) = 1.0;
+                    matrix[row_coordinate_index + col_coordinate_index*config.matrix_dim] = 1.0;
                 }
                 // U(x+1,y,z)
-                if (row_coordinates[IDX_X] == col_coordinates[IDX_X] - 1)
+                if (row_index_x == col_index_x - 1)
                 {
-                    matrix(row_coordinate_index, col_coordinate_index) = 1.0;
+                    matrix[row_coordinate_index + col_coordinate_index*config.matrix_dim] = 1.0;
                 }
             }
 
-            if ((row_coordinates[IDX_X] == col_coordinates[IDX_X]) && (row_coordinates[IDX_Z] == col_coordinates[IDX_Z]))
+            if ((row_index_x == col_index_x) && (row_index_z == col_index_z))
             {
                 // U(x,y-1,z)
-                if (row_coordinates[IDX_Y] == col_coordinates[IDX_Y] + 1)
+                if (row_index_y == col_index_y + 1)
                 {
-                    matrix(row_coordinate_index, col_coordinate_index) = 1.0;
+                    matrix[row_coordinate_index + col_coordinate_index*config.matrix_dim] = 1.0;
                 }
                 // U(x,y+1,z)
-                if (row_coordinates[IDX_Y] == col_coordinates[IDX_Y] - 1)
+                if (row_index_y == col_index_y - 1)
                 {
-                    matrix(row_coordinate_index, col_coordinate_index) = 1.0;
+                    matrix[row_coordinate_index + col_coordinate_index*config.matrix_dim] = 1.0;
                 }
             }
 
-            if ((row_coordinates[IDX_X] == col_coordinates[IDX_X]) && (row_coordinates[IDX_Y] == col_coordinates[IDX_Y]))
+            if ((row_index_x == col_index_x) && (row_index_y == col_index_y))
             {
                 // U(x,y,z-1)
-                if (row_coordinates[IDX_Z] == col_coordinates[IDX_Z] + 1)
+                if (row_index_z == col_index_z + 1)
                 {
-                    matrix(row_coordinate_index, col_coordinate_index) = 1.0;
+                    matrix[row_coordinate_index + col_coordinate_index*config.matrix_dim] = 1.0;
                 }
                 // U(x,y,z+1)
-                if (row_coordinates[IDX_Z] == col_coordinates[IDX_Z] - 1)
+                if (row_index_z == col_index_z - 1)
                 {
-                    matrix(row_coordinate_index, col_coordinate_index) = 1.0;
+                    matrix[row_coordinate_index + col_coordinate_index*config.matrix_dim] = 1.0;
                 }
             }
         }
@@ -390,29 +396,28 @@ float calculate_total_energy(Eigen::MatrixBase<A> &orbital_values, Eigen::Matrix
 // Using LAPACKE C wrapper for faster solving of eigenvalues and eigenvectors. A
 // tutorial on how to do this is implemented here:
 // https://eigen.tuxfamily.org/index.php?title=Lapack#Create_the_C.2B.2B_Function_Declaration.
-// 
-template <typename A, typename B>
-bool lapack_solve_eigh_old(Eigen::Matrix<A, Eigen::Dynamic, Eigen::Dynamic> &matrix, Eigen::Matrix<B, Eigen::Dynamic, 1> &eigenvalues)
-{
-    int matrix_layout = LAPACK_COL_MAJOR; // column major ordering, default for eigen
-    char jobz = 'V'; // compute eigenvalues and eigenvectors.
-    char uplo = 'U'; // perform calculation on upper triangle of matrix
-    lapack_int n = matrix.cols(); // order of the matrix (size)
-    lapack_int lda = matrix.outerStride(); // the leading dimension of the array A. LDA >= max(1,N).
-    lapack_int info = 0;
+// template <typename A, typename B>
+// bool lapack_solve_eigh_old(Eigen::Matrix<A, Eigen::Dynamic, Eigen::Dynamic> &matrix, Eigen::Matrix<B, Eigen::Dynamic, 1> &eigenvalues)
+// {
+//     int matrix_layout = LAPACK_COL_MAJOR; // column major ordering, default for eigen
+//     char jobz = 'V'; // compute eigenvalues and eigenvectors.
+//     char uplo = 'U'; // perform calculation on upper triangle of matrix
+//     lapack_int n = matrix.cols(); // order of the matrix (size)
+//     lapack_int lda = matrix.outerStride(); // the leading dimension of the array A. LDA >= max(1,N).
+//     lapack_int info = 0;
 
-    float* a = matrix.data(); // pointer to fock/eigenvector data
-    float* w = eigenvalues.data(); // pointer to eigenvalue data
+//     float* a = matrix.data(); // pointer to fock/eigenvector data
+//     float* w = eigenvalues.data(); // pointer to eigenvalue data
 
-    // Unfortunately this wrapper doesn't work for matrix sizes larger than a
-    // certain amount, because the querying reports back an incorrect value for
-    // the work area.
-    info = LAPACKE_ssyevd(matrix_layout, jobz, uplo, n, a, lda, w);
+//     // Unfortunately this wrapper doesn't work for matrix sizes larger than a
+//     // certain amount, because the querying reports back an incorrect value for
+//     // the work area.
+//     info = LAPACKE_ssyevd(matrix_layout, jobz, uplo, n, a, lda, w);
 
-    return (info == 0);
-}
+//     return (info == 0);
+// }
 
-// Using the LAPACK routines directly by reimplementing the LAPACKE wrapper w/o querying for sizes
+// Using the LAPACK routines directly by reimplementing the LAPACKE wrapper without querying for sizes
 bool lapack_solve_eigh(cfg_t &config, float *matrix, float *eigenvalues)
 {
     char jobz = 'V'; // compute eigenvalues and eigenvectors.
@@ -555,7 +560,7 @@ int main(int argc, char *argv[])
 
     // generate the second order Laplacian matrix for 3D space
     console_print(1, "** Generating kinetic energy matrix");
-    generate_laplacian_matrix(config, laplacian_matrix);
+    generate_laplacian_matrix(config, laplacian_matrix.data());
     // generate the kinetic energy matrix
     kinetic_matrix = (laplacian_matrix/(2.0*config.step_size*config.step_size));
     // generate the Coulombic attraction matrix
