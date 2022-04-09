@@ -81,41 +81,67 @@ void console_print(int verbose_level, string input_string)
     }
 }
 
-void linear_coordinate_index_to_spatial_coordinates_index(grid_cfg_t grid, int coordinate_index, int * coordinate_index_array)
+void populate_lookup_tables(cfg_t &config)
+{
+    // Resize LUTs
+    config.coordinate_value_array.resize(IDX_NUM);
+    config.coordinate_index_array.resize(IDX_NUM);
+    for (int i = 0; i < IDX_NUM; i++)
+    {
+        config.coordinate_value_array[i].resize(config.matrix_dim);
+        config.coordinate_index_array[i].resize(config.matrix_dim);
+    }
+
+    // Populate LUTs
+    for (int coordinate_index = 0; coordinate_index < config.matrix_dim; coordinate_index++)
+    {
+        // convert coordinate index to x,y,z coordinate indices
+        int base_10_num = coordinate_index;
+        for (int i = 0; i < IDX_NUM; i++)
+        {
+            config.coordinate_index_array[i][coordinate_index] = base_10_num % config.num_partitions;
+            base_10_num /= config.num_partitions;
+
+            config.coordinate_value_array[i][coordinate_index] = (float)(-config.limit) + ((float)config.coordinate_index_array[i][coordinate_index]*config.step_size);
+        }
+    }
+}
+
+void linear_coordinate_index_to_spatial_coordinates_index(cfg_t &config, int coordinate_index, int * coordinate_index_array)
 {
     // convert coordinate index to x,y,z coordinate indices
     int base_10_num = coordinate_index;
     for (int i = 0; i < IDX_NUM; i++)
     {
-        coordinate_index_array[i] = base_10_num % grid.num_partitions;
-        base_10_num /= grid.num_partitions;
+        coordinate_index_array[i] = base_10_num % config.num_partitions;
+        base_10_num /= config.num_partitions;
     }
 }
 
-void linear_coordinate_index_to_spatial_coordinates_values(grid_cfg_t grid, int coordinate_index, float * coordinate_value_array)
+void linear_coordinate_index_to_spatial_coordinates_values(cfg_t &config, int coordinate_index, float *coordinate_value_array)
 {
     int coordinates_indices[IDX_NUM];
-    linear_coordinate_index_to_spatial_coordinates_index(grid, coordinate_index, coordinates_indices);
-    coordinate_value_array[IDX_X] = (float)(-grid.limit) + ((float)coordinates_indices[IDX_X]*grid.step_size);
-    coordinate_value_array[IDX_Y] = (float)(-grid.limit) + ((float)coordinates_indices[IDX_Y]*grid.step_size);
-    coordinate_value_array[IDX_Z] = (float)(-grid.limit) + ((float)coordinates_indices[IDX_Z]*grid.step_size);
+    linear_coordinate_index_to_spatial_coordinates_index(config, coordinate_index, coordinates_indices);
+    coordinate_value_array[IDX_X] = (float)(-config.limit) + ((float)coordinates_indices[IDX_X]*config.step_size);
+    coordinate_value_array[IDX_Y] = (float)(-config.limit) + ((float)coordinates_indices[IDX_Y]*config.step_size);
+    coordinate_value_array[IDX_Z] = (float)(-config.limit) + ((float)coordinates_indices[IDX_Z]*config.step_size);
 }
 
 // Generate the 3D Laplacian matrix for the given number of partitions
 template <typename Type>
-void generate_laplacian_matrix(grid_cfg_t grid, Eigen::MatrixBase<Type> &matrix)
+void generate_laplacian_matrix(cfg_t &config, Eigen::MatrixBase<Type> &matrix)
 {
     int row_coordinates[IDX_NUM];
     int col_coordinates[IDX_NUM];
 
     matrix.setZero();
 
-    for (int row_coordinate_index = 0; row_coordinate_index < grid.matrix_dim; row_coordinate_index++)
+    for (int row_coordinate_index = 0; row_coordinate_index < config.matrix_dim; row_coordinate_index++)
     {
-        linear_coordinate_index_to_spatial_coordinates_index(grid, row_coordinate_index, row_coordinates);
-        for (int col_coordinate_index = 0; col_coordinate_index < grid.matrix_dim; col_coordinate_index++)
+        linear_coordinate_index_to_spatial_coordinates_index(config, row_coordinate_index, row_coordinates);
+        for (int col_coordinate_index = 0; col_coordinate_index < config.matrix_dim; col_coordinate_index++)
         {
-            linear_coordinate_index_to_spatial_coordinates_index(grid, col_coordinate_index, col_coordinates);
+            linear_coordinate_index_to_spatial_coordinates_index(config, col_coordinate_index, col_coordinates);
 
             // U(x,y,z)
             if (row_coordinate_index == col_coordinate_index)
@@ -169,16 +195,13 @@ void generate_laplacian_matrix(grid_cfg_t grid, Eigen::MatrixBase<Type> &matrix)
 }
 
 // Helium atom nucleus-electron Coulombic attraction function
-float attraction_function_helium(grid_cfg_t grid, int linear_coordinates)
+float attraction_function_helium(cfg_t &config, int linear_coordinates)
 {
     const float epsilon = EPSILON;
 
-    float coordinate_values[IDX_NUM];
-    linear_coordinate_index_to_spatial_coordinates_values(grid, linear_coordinates, coordinate_values);
-
-    float x = coordinate_values[IDX_X];
-    float y = coordinate_values[IDX_Y];
-    float z = coordinate_values[IDX_Z];
+    float x = config.coordinate_value_array[IDX_X][linear_coordinates];
+    float y = config.coordinate_value_array[IDX_Y][linear_coordinates];
+    float z = config.coordinate_value_array[IDX_Z][linear_coordinates];
 
     float denominator = sqrt(pow(x, 2.0) + pow(y + Y_OFFSET, 2.0) + pow(z + Z_OFFSET, 2.0));
 
@@ -191,16 +214,13 @@ float attraction_function_helium(grid_cfg_t grid, int linear_coordinates)
 }
 
 // Hydrogen molecule nucleus-electron Coulombic attraction function
-float attraction_function_hydrogen(grid_cfg_t grid, int linear_coordinates)
+float attraction_function_hydrogen(cfg_t &config, int linear_coordinates)
 {
     const float epsilon = EPSILON;
 
-    float coordinate_values[IDX_NUM];
-    linear_coordinate_index_to_spatial_coordinates_values(grid, linear_coordinates, coordinate_values);
-
-    float x = coordinate_values[IDX_X];
-    float y = coordinate_values[IDX_Y];
-    float z = coordinate_values[IDX_Z];
+    float x = config.coordinate_value_array[IDX_X][linear_coordinates];
+    float y = config.coordinate_value_array[IDX_Y][linear_coordinates];
+    float z = config.coordinate_value_array[IDX_Z][linear_coordinates];
 
     float denominator_1 = sqrt(pow((H2_BOND_LENGTH_ATOMIC_UNITS/2.0) - x, 2.0) + pow(y + Y_OFFSET, 2.0) + pow(z + Z_OFFSET, 2.0));
     float denominator_2 = sqrt(pow((-H2_BOND_LENGTH_ATOMIC_UNITS/2.0) - x, 2.0) + pow(y + Y_OFFSET, 2.0) + pow(z + Z_OFFSET, 2.0));
@@ -220,25 +240,25 @@ float attraction_function_hydrogen(grid_cfg_t grid, int linear_coordinates)
 
 // Generate the attraction matrix
 template <typename Type>
-void generate_attraction_matrix(grid_cfg_t grid, atomic_structure_e atomic_structure, Eigen::MatrixBase<Type> &matrix)
+void generate_attraction_matrix(cfg_t &config, atomic_structure_e atomic_structure, Eigen::MatrixBase<Type> &matrix)
 {
     matrix.setZero();
 
     // Create the diagonal vector
-    eigen_float_col_vector attraction_matrix_diagonal(grid.matrix_dim, 1);
+    eigen_float_col_vector attraction_matrix_diagonal(config.matrix_dim, 1);
 
     if (atomic_structure == HELIUM_ATOM)
     {
-        for (int diagonal_index = 0; diagonal_index < grid.matrix_dim; diagonal_index++)
+        for (int diagonal_index = 0; diagonal_index < config.matrix_dim; diagonal_index++)
         {
-            attraction_matrix_diagonal(diagonal_index) = attraction_function_helium(grid, diagonal_index);
+            attraction_matrix_diagonal(diagonal_index) = attraction_function_helium(config, diagonal_index);
         }
     }
     else if (atomic_structure == HYDROGEN_MOLECULE)
     {
-        for (int diagonal_index = 0; diagonal_index < grid.matrix_dim; diagonal_index++)
+        for (int diagonal_index = 0; diagonal_index < config.matrix_dim; diagonal_index++)
         {
-            attraction_matrix_diagonal(diagonal_index) = attraction_function_hydrogen(grid, diagonal_index);
+            attraction_matrix_diagonal(diagonal_index) = attraction_function_hydrogen(config, diagonal_index);
         }
     }
 
@@ -247,22 +267,17 @@ void generate_attraction_matrix(grid_cfg_t grid, atomic_structure_e atomic_struc
 }
 
 // Electron-electron Coulombic repulsion function
-float repulsion_function(grid_cfg_t grid, int linear_coordinates_1, int linear_coordinates_2)
+float repulsion_function(cfg_t &config, int linear_coordinates_1, int linear_coordinates_2)
 {
     const float epsilon = EPSILON;
 
-    float coordinate_values_1[IDX_NUM];
-    float coordinate_values_2[IDX_NUM];
-    linear_coordinate_index_to_spatial_coordinates_values(grid, linear_coordinates_1, coordinate_values_1);
-    linear_coordinate_index_to_spatial_coordinates_values(grid, linear_coordinates_2, coordinate_values_2);
+    float x1 = config.coordinate_value_array[IDX_X][linear_coordinates_1];
+    float y1 = config.coordinate_value_array[IDX_Y][linear_coordinates_1];
+    float z1 = config.coordinate_value_array[IDX_Z][linear_coordinates_1];
 
-    float x1 = coordinate_values_1[IDX_X];
-    float y1 = coordinate_values_1[IDX_Y];
-    float z1 = coordinate_values_1[IDX_Z];
-
-    float x2 = coordinate_values_2[IDX_X];
-    float y2 = coordinate_values_2[IDX_Y];
-    float z2 = coordinate_values_2[IDX_Z];
+    float x2 = config.coordinate_value_array[IDX_X][linear_coordinates_2];
+    float y2 = config.coordinate_value_array[IDX_Y][linear_coordinates_2];
+    float z2 = config.coordinate_value_array[IDX_Z][linear_coordinates_2];
 
     float denominator = sqrt(pow(x2 - x1, 2.0) + pow(y2 - y1, 2.0) + pow(z2 - z1, 2.0));
 
@@ -274,66 +289,66 @@ float repulsion_function(grid_cfg_t grid, int linear_coordinates_1, int linear_c
     return (1.0/(denominator));
 }
 
-float repulsion_matrix_integrand_function(grid_cfg_t grid, float * orbital_values, int linear_coords_1, int linear_coords_2)
+float repulsion_matrix_integrand_function(cfg_t &config, float *orbital_values, int linear_coords_1, int linear_coords_2)
 {
-    return pow(orbital_values[linear_coords_2], 2.0)*repulsion_function(grid, linear_coords_1, linear_coords_2);
+    return pow(orbital_values[linear_coords_2], 2.0)*repulsion_function(config, linear_coords_1, linear_coords_2);
 }
 
-float exchange_matrix_integrand_function(grid_cfg_t grid, float * orbital_values, int linear_coords_1, int linear_coords_2)
+float exchange_matrix_integrand_function(cfg_t &config, float *orbital_values, int linear_coords_1, int linear_coords_2)
 {
-    return orbital_values[linear_coords_1]*orbital_values[linear_coords_2]*repulsion_function(grid, linear_coords_1, linear_coords_2);
+    return orbital_values[linear_coords_1]*orbital_values[linear_coords_2]*repulsion_function(config, linear_coords_1, linear_coords_2);
 }
 
-void generate_repulsion_matrix(grid_cfg_t grid, float * orbital_values, float * matrix)
+void generate_repulsion_matrix(cfg_t &config, float *orbital_values, float *matrix)
 {
-    float h_cubed = pow(grid.step_size, 3.0);
+    float h_cubed = pow(config.step_size, 3.0);
 
     // Copying what happens in the exchange matrix...
 #if 0
-    eigen_float_col_vector repulsion_matrix_diagonal(grid.matrix_dim, 1);
-    for (int electron_one_coordinate_index = 0; electron_one_coordinate_index < grid.matrix_dim; electron_one_coordinate_index++)
+    eigen_float_col_vector repulsion_matrix_diagonal(config.matrix_dim, 1);
+    for (int electron_one_coordinate_index = 0; electron_one_coordinate_index < config.matrix_dim; electron_one_coordinate_index++)
     {
         float sum = 0;
-        for (int electron_two_coordinate_index = 0; electron_two_coordinate_index < grid.matrix_dim; electron_two_coordinate_index++)
+        for (int electron_two_coordinate_index = 0; electron_two_coordinate_index < config.matrix_dim; electron_two_coordinate_index++)
         {
-            sum += repulsion_matrix_integrand_function(grid, orbital_values, electron_one_coordinate_index, electron_two_coordinate_index);
+            sum += repulsion_matrix_integrand_function(config, orbital_values, electron_one_coordinate_index, electron_two_coordinate_index);
         }
         repulsion_matrix_diagonal(electron_one_coordinate_index) = sum*h_cubed;
     }
     matrix = repulsion_matrix_diagonal.asDiagonal();
 #endif
 
-    for (int electron_one_coordinate_index = 0; electron_one_coordinate_index < grid.matrix_dim; electron_one_coordinate_index++)
+    for (int electron_one_coordinate_index = 0; electron_one_coordinate_index < config.matrix_dim; electron_one_coordinate_index++)
     {
         for (int electron_two_coordinate_index = 0; electron_two_coordinate_index < (electron_one_coordinate_index + 1); electron_two_coordinate_index++)
         {
-            matrix[electron_one_coordinate_index + electron_two_coordinate_index*grid.matrix_dim] = repulsion_matrix_integrand_function(grid, orbital_values, electron_one_coordinate_index, electron_two_coordinate_index) * h_cubed;
-            matrix[electron_two_coordinate_index + electron_one_coordinate_index*grid.matrix_dim] = matrix[electron_one_coordinate_index + electron_two_coordinate_index*grid.matrix_dim];
+            matrix[electron_one_coordinate_index + electron_two_coordinate_index*config.matrix_dim] = repulsion_matrix_integrand_function(config, orbital_values, electron_one_coordinate_index, electron_two_coordinate_index) * h_cubed;
+            matrix[electron_two_coordinate_index + electron_one_coordinate_index*config.matrix_dim] = matrix[electron_one_coordinate_index + electron_two_coordinate_index*config.matrix_dim];
         }
     }
 }
 
 
-void generate_exchange_matrix(grid_cfg_t grid, float * orbital_values, float * matrix)
+void generate_exchange_matrix(cfg_t &config, float *orbital_values, float *matrix)
 {
-    float h_cubed = pow(grid.step_size, 3.0);
+    float h_cubed = pow(config.step_size, 3.0);
 
     // Why doesn't this work?! It's in the math!
 #if 0
-    eigen_float_col_vector exchange_matrix_diagonal(grid.matrix_dim, 1);
-    for (int electron_one_coordinate_index = 0; electron_one_coordinate_index < grid.matrix_dim; electron_one_coordinate_index++)
+    eigen_float_col_vector exchange_matrix_diagonal(config.matrix_dim, 1);
+    for (int electron_one_coordinate_index = 0; electron_one_coordinate_index < config.matrix_dim; electron_one_coordinate_index++)
     {
         float sum = 0;
-        for (int electron_two_coordinate_index = 0; electron_two_coordinate_index < grid.matrix_dim; electron_two_coordinate_index++)
+        for (int electron_two_coordinate_index = 0; electron_two_coordinate_index < config.matrix_dim; electron_two_coordinate_index++)
         {
-            sum += exchange_matrix_integrand_function(grid, orbital_values, electron_one_coordinate_index, electron_two_coordinate_index);
+            sum += exchange_matrix_integrand_function(config, orbital_values, electron_one_coordinate_index, electron_two_coordinate_index);
         }
         exchange_matrix_diagonal(electron_one_coordinate_index) = sum*h_cubed;
     }
     matrix = exchange_matrix_diagonal.asDiagonal();
 #endif
     
-    for (int electron_one_coordinate_index = 0; electron_one_coordinate_index < grid.matrix_dim; electron_one_coordinate_index++)
+    for (int electron_one_coordinate_index = 0; electron_one_coordinate_index < config.matrix_dim; electron_one_coordinate_index++)
     {
         for (int electron_two_coordinate_index = 0; electron_two_coordinate_index < (electron_one_coordinate_index + 1); electron_two_coordinate_index++)
         {
@@ -346,8 +361,8 @@ void generate_exchange_matrix(grid_cfg_t grid, float * orbital_values, float * m
             //  2 5 8
             // matrix(electron_one_coordinate_index, electron_two_coordinate_index)
             // matrix(electron_two_coordinate_index, electron_one_coordinate_index)
-            matrix[electron_one_coordinate_index + electron_two_coordinate_index*grid.matrix_dim] = exchange_matrix_integrand_function(grid, orbital_values, electron_one_coordinate_index, electron_two_coordinate_index) * h_cubed;
-            matrix[electron_two_coordinate_index + electron_one_coordinate_index*grid.matrix_dim] = matrix[electron_one_coordinate_index + electron_two_coordinate_index*grid.matrix_dim];
+            matrix[electron_one_coordinate_index + electron_two_coordinate_index*config.matrix_dim] = exchange_matrix_integrand_function(config, orbital_values, electron_one_coordinate_index, electron_two_coordinate_index) * h_cubed;
+            matrix[electron_two_coordinate_index + electron_one_coordinate_index*config.matrix_dim] = matrix[electron_one_coordinate_index + electron_two_coordinate_index*config.matrix_dim];
         }
     }
 }
@@ -366,7 +381,7 @@ float calculate_total_energy(Eigen::MatrixBase<A> &orbital_values, Eigen::Matrix
     {
         auto hermitian_term = psi_prime*(-kinetic_matrix - attraction_matrix)*psi;
         auto hf_term = 0.5*psi_prime*(2*repulsion_matrix - exchange_matrix)*psi;
-        energy_sum += hermitian_term(0) + hf_term(0);
+        energy_sum += (hermitian_term(0) + hf_term(0));
     }
 
     return energy_sum;
@@ -386,76 +401,60 @@ bool lapack_solve_eigh_old(Eigen::Matrix<A, Eigen::Dynamic, Eigen::Dynamic> &mat
     lapack_int lda = matrix.outerStride(); // the leading dimension of the array A. LDA >= max(1,N).
     lapack_int info = 0;
 
-    console_print(2, str(format("\tn = matrix.cols() = %d") % n));
-    console_print(2, str(format("\tlda = matrix.outerStride() = %d") % lda));
-
     float* a = matrix.data(); // pointer to fock/eigenvector data
     float* w = eigenvalues.data(); // pointer to eigenvalue data
 
-    // float
-    // lapack_int LAPACKE_ssyevd(int matrix_layout, char jobz, char uplo, lapack_int n,
-    //                         float* a, lapack_int lda, float* w);
-    // double
-    // lapack_int LAPACKE_dsyevd(int matrix_layout, char jobz, char uplo, lapack_int n,
-    //                         double* a, lapack_int lda, double* w);
-
     // Unfortunately this wrapper doesn't work for matrix sizes larger than a
-    // certain amount,  because the querying reports back an incorrect value for
+    // certain amount, because the querying reports back an incorrect value for
     // the work area.
     info = LAPACKE_ssyevd(matrix_layout, jobz, uplo, n, a, lda, w);
-
-    console_print(2, str(format("\tinfo = %d") % info));
 
     return (info == 0);
 }
 
-// Using the LAPACK routines directly by reimplementing the LAPACKE wrapper (to avoid the broken querying)
-template <typename A, typename B>
-bool lapack_solve_eigh(Eigen::Matrix<A, Eigen::Dynamic, Eigen::Dynamic> &matrix, Eigen::Matrix<B, Eigen::Dynamic, 1> &eigenvalues)
+// Using the LAPACK routines directly by reimplementing the LAPACKE wrapper w/o querying for sizes
+bool lapack_solve_eigh(cfg_t &config, float *matrix, float *eigenvalues)
 {
-    int matrix_layout = LAPACK_COL_MAJOR; // column major ordering, default for eigen
     char jobz = 'V'; // compute eigenvalues and eigenvectors.
     char uplo = 'U'; // perform calculation on upper triangle of matrix
-    lapack_int n = matrix.cols(); // order of the matrix (size)
-    lapack_int lda = matrix.outerStride(); // the leading dimension of the array A. LDA >= max(1,N).
+    lapack_int n = config.matrix_dim; // order of the matrix (size)
+    lapack_int lda = config.matrix_dim; // the leading dimension of the array A. LDA >= max(1,N).
     lapack_int info = 0;
     lapack_int liwork;
     lapack_int lwork;
     lapack_int* iwork = NULL;
     float* work = NULL;
-    float* a_ptr = matrix.data(); // pointer to fock/eigenvector data
-    float* w_ptr = eigenvalues.data(); // pointer to eigenvalue data
 
     console_print(2, "\t** LAPACK solver debug");
-    console_print(2, str(format("\tn = matrix.cols() = %d") % n));
-    console_print(2, str(format("\tlda = matrix.outerStride() = %d") % lda));
+    console_print(2, str(format("\t\tn = matrix.cols() = %d") % n));
+    console_print(2, str(format("\t\tlda = matrix.outerStride() = %d") % lda));
 
     // Setting lwork and liwork manually based on the LAPACK documentation
     lwork = 1 + 6*n + 2*n*n;
     liwork = 3 + 5*n;
 
-    console_print(2, str(format("\tliwork = %d") % liwork));
-    console_print(2, str(format("\tlwork = %d") % lwork));
+    console_print(2, str(format("\t\tliwork = %d") % liwork));
+    console_print(2, str(format("\t\tlwork = %d") % lwork));
 
     // Allocate memory for work arrays
     iwork = (lapack_int*)LAPACKE_malloc(sizeof(lapack_int) * liwork);
     if(iwork == NULL)
     {
         info = LAPACK_WORK_MEMORY_ERROR;
-        console_print(2, "\tFATAL! Could not allocate iwork array");
+        console_print(2, "\t\tFATAL! Could not allocate iwork array");
     }
     work = (float*)LAPACKE_malloc(sizeof(float) * lwork);
     if(work == NULL)
     {
         info = LAPACK_WORK_MEMORY_ERROR;
-        console_print(2, "\tFATAL! Could not allocate work array");
+        console_print(2, "\t\tFATAL! Could not allocate work array");
     }
 
     // Call LAPACK function and adjust info if our work areas are OK
     if ((iwork != NULL) && (work != NULL))
     {
-        console_print(2, "\tcalling LAPACK function");
-        LAPACK_ssyevd(&jobz, &uplo, &n, a_ptr, &lda, w_ptr, work, &lwork, iwork, &liwork, &info);
+        console_print(2, "\t\tcalling LAPACK function");
+        LAPACK_ssyevd(&jobz, &uplo, &n, matrix, &lda, eigenvalues, work, &lwork, iwork, &liwork, &info);
         if( info < 0 ) {
             info = info - 1;
         }
@@ -466,6 +465,7 @@ bool lapack_solve_eigh(Eigen::Matrix<A, Eigen::Dynamic, Eigen::Dynamic> &matrix,
     LAPACKE_free(work);
 
     console_print(2, str(format("\tinfo = %d") % info));
+
     return (info==0);
 }
 
@@ -473,11 +473,11 @@ int main(int argc, char *argv[])
 {
     console_print(0, "** Exact Hartree-Fock simulator **");
 
+    // Set the maximum number of thread to use for OMP and Eigen
     omp_set_num_threads(OMP_NUM_THREADS); // Set the number of maximum threads to use for OMP
     Eigen::setNbThreads(OMP_NUM_THREADS); // Set the number of maximum threads to use for Eigen
-    stringstream ss; // Used to form strings using cout
 
-    // Program options
+    // Boost Program options
     po::options_description desc("Allowed options");
     desc.add_options()
         ("help", "produce help message")
@@ -487,17 +487,14 @@ int main(int argc, char *argv[])
         ("convergence", po::value<float>()->default_value(0.1), "set the convergence condition (%)")
         ("structure", po::value<int>()->default_value(0), "set the atomic structure: (0:He, 1:H2)")
     ;
-
     po::variables_map vm;
     po::store(po::parse_command_line(argc, argv, desc), vm);
     po::notify(vm);    
-
     if (vm.count("help"))
     {
         cout << desc << "\n";
         return 1;
     }
-
     atomic_structure_e atomic_structure;
     if (vm["structure"].as<int>() >= ATOMIC_STRUCTURE_NUM)
     {
@@ -510,21 +507,21 @@ int main(int argc, char *argv[])
         atomic_structure = (atomic_structure_e)(vm["structure"].as<int>());
     }
 
-    // Program settings
-    grid_cfg_t grid;
-    grid.num_partitions = vm["partitions"].as<int>();
-    grid.limit = vm["limit"].as<int>();
-    grid.matrix_dim = grid.num_partitions*grid.num_partitions*grid.num_partitions;
-    grid.step_size = (float)(4<<1)/(float)(grid.num_partitions - 1);
-    int max_iterations = vm["iterations"].as<int>();
-    int num_solutions = 6;
-    float convergence_percentage = vm["convergence"].as<float>();
+    // Program configuration
+    cfg_t config;
+    config.num_partitions = vm["partitions"].as<int>();
+    config.limit = vm["limit"].as<int>();
+    config.matrix_dim = config.num_partitions*config.num_partitions*config.num_partitions;
+    config.step_size = (float)(4<<1)/(float)(config.num_partitions - 1);
+    config.max_iterations = vm["iterations"].as<int>();
+    config.num_solutions = 6;
+    config.convergence_percentage = vm["convergence"].as<float>();
 
-    console_print(0, str(format("\titerations = %d") % max_iterations));
-    console_print(0, str(format("\tnum_partitions = %d") % grid.num_partitions));
-    console_print(0, str(format("\tmatrix_dim = %d") % grid.matrix_dim));
-    console_print(0, str(format("\tlimit = %d") % grid.limit));
-    console_print(0, str(format("\tstep_size = %f") % grid.step_size));
+    console_print(0, str(format("\titerations = %d") % config.max_iterations));
+    console_print(0, str(format("\tnum_partitions = %d") % config.num_partitions));
+    console_print(0, str(format("\tmatrix_dim = %d") % config.matrix_dim));
+    console_print(0, str(format("\tlimit = %d") % config.limit));
+    console_print(0, str(format("\tstep_size = %f") % config.step_size));
     if (atomic_structure == HELIUM_ATOM)
     {
         console_print(0, "\tatomic structure: Helium Atom");
@@ -534,33 +531,36 @@ int main(int argc, char *argv[])
         console_print(0, "\tatomic structure: Hydrogen Molecule");
     }
 
+    // Populate LUTs
+    populate_lookup_tables(config);
+
     // Matrix instantiations
-    eigen_float_matrix laplacian_matrix(grid.matrix_dim, grid.matrix_dim);
-    eigen_float_matrix kinetic_matrix(grid.matrix_dim, grid.matrix_dim);
-    eigen_float_matrix attraction_matrix(grid.matrix_dim, grid.matrix_dim);
-    eigen_float_matrix repulsion_matrix(grid.matrix_dim, grid.matrix_dim);
-    eigen_float_matrix exchange_matrix(grid.matrix_dim, grid.matrix_dim);
-    eigen_float_matrix fock_matrix(grid.matrix_dim, grid.matrix_dim);
+    eigen_float_matrix laplacian_matrix(config.matrix_dim, config.matrix_dim);
+    eigen_float_matrix kinetic_matrix(config.matrix_dim, config.matrix_dim);
+    eigen_float_matrix attraction_matrix(config.matrix_dim, config.matrix_dim);
+    eigen_float_matrix repulsion_matrix(config.matrix_dim, config.matrix_dim);
+    eigen_float_matrix exchange_matrix(config.matrix_dim, config.matrix_dim);
+    eigen_float_matrix fock_matrix(config.matrix_dim, config.matrix_dim);
     // Orbital values
-    eigen_float_col_vector orbital_values(grid.matrix_dim, 1);
+    eigen_float_col_vector orbital_values(config.matrix_dim, 1);
     // Eigenvectors and eigenvalues
-    eigen_float_col_vector eigenvalues(grid.matrix_dim, 1);
-    eigen_float_matrix eigenvectors(grid.matrix_dim, grid.matrix_dim);
+    eigen_float_col_vector eigenvalues(config.matrix_dim, 1);
+    eigen_float_matrix eigenvectors(config.matrix_dim, config.matrix_dim);
     // Trimmed eigenvectors and eigenvalues
-    eigen_float_col_vector trimmed_eigenvalues(num_solutions, 1);
-    eigen_float_matrix trimmed_eigenvectors(grid.matrix_dim, num_solutions);
+    eigen_float_col_vector trimmed_eigenvalues(config.num_solutions, 1);
+    eigen_float_matrix trimmed_eigenvectors(config.matrix_dim, config.num_solutions);
 
     console_print(0, "** Simulation start!");
     auto sim_start = chrono::system_clock::now();
 
     // generate the second order Laplacian matrix for 3D space
     console_print(1, "** Generating kinetic energy matrix");
-    generate_laplacian_matrix(grid, laplacian_matrix);
+    generate_laplacian_matrix(config, laplacian_matrix);
     // generate the kinetic energy matrix
-    kinetic_matrix = (laplacian_matrix/(2.0*grid.step_size*grid.step_size));
+    kinetic_matrix = (laplacian_matrix/(2.0*config.step_size*config.step_size));
     // generate the Coulombic attraction matrix
     console_print(1, "** Generating electron-nucleus Coulombic attraction matrix");
-    generate_attraction_matrix(grid, atomic_structure, attraction_matrix);
+    generate_attraction_matrix(config, atomic_structure, attraction_matrix);
 
     // Main HF loop
     float last_total_energy = 0;
@@ -571,7 +571,7 @@ int main(int argc, char *argv[])
     fock_matrix = -kinetic_matrix - attraction_matrix;
     console_print(1, "** Obtaining eigenvalues and eigenvectors for initial solution...");
     // LAPACK solver
-    if (!lapack_solve_eigh(fock_matrix, eigenvalues))
+    if (!lapack_solve_eigh(config, fock_matrix.data(), eigenvalues.data()))
     {
         console_print(0, "** Something went horribly wrong with the solver, aborting");
         exit(EXIT_FAILURE);
@@ -587,10 +587,10 @@ int main(int argc, char *argv[])
 
         // generate repulsion matrix
         console_print(1, "** Generating electron-electron Coulombic repulsion matrix");
-        generate_repulsion_matrix(grid, orbital_values.data(), repulsion_matrix.data());
+        generate_repulsion_matrix(config, orbital_values.data(), repulsion_matrix.data());
         // generate exchange matrix
         console_print(1, "** Generating electron-electron exchange matrix");
-        generate_exchange_matrix(grid, orbital_values.data(), exchange_matrix.data());
+        generate_exchange_matrix(config, orbital_values.data(), exchange_matrix.data());
         // form fock matrix
         console_print(1, "** Generating Fock matrix");
         fock_matrix = -kinetic_matrix - attraction_matrix + 2.0*repulsion_matrix - exchange_matrix;
@@ -598,7 +598,7 @@ int main(int argc, char *argv[])
         console_print(1, "** Obtaining eigenvalues and eigenvectors...");
 
         // LAPACK solver, the same one used in numpy
-        if (!lapack_solve_eigh(fock_matrix, eigenvalues))
+        if (!lapack_solve_eigh(config, fock_matrix.data(), eigenvalues.data()))
         {
             console_print(0, "** Something went horribly wrong with the solver, aborting");
             exit(EXIT_FAILURE);
@@ -609,9 +609,9 @@ int main(int argc, char *argv[])
         // Extract orbital_values
         orbital_values = eigenvectors.col(0);
         // Extract num_solutions eigenvalues
-        trimmed_eigenvalues = eigenvalues.block(0, 0, num_solutions, 1);
+        trimmed_eigenvalues = eigenvalues.block(0, 0, config.num_solutions, 1);
         // Extract num_solutions eigenvectors
-        trimmed_eigenvectors = eigenvectors.block(0, 0, grid.matrix_dim, num_solutions);
+        trimmed_eigenvectors = eigenvectors.block(0, 0, config.matrix_dim, config.num_solutions);
 
         total_energy = calculate_total_energy(orbital_values, kinetic_matrix, attraction_matrix, repulsion_matrix, exchange_matrix);
         total_energy_percent_diff = abs((total_energy - last_total_energy)/((total_energy + last_total_energy) / 2.0));
@@ -631,13 +631,13 @@ int main(int argc, char *argv[])
         console_print(0, str(format("** Iteration end! Iteration time: %0.3f seconds**") % (float)(iteration_time.count())));
 
         // check if we've hit the maximum iteration limit
-        if (interation_count == max_iterations)
+        if (interation_count == config.max_iterations)
         {
             break;
         }
 
         // check if we meet convergence condition
-        if (abs(total_energy_percent_diff) < (convergence_percentage/100.0))
+        if (abs(total_energy_percent_diff) < (config.convergence_percentage/100.0))
         {
             break;
         }
@@ -645,6 +645,7 @@ int main(int argc, char *argv[])
     } while(1);
 
     console_print(0, "** Final Eigenvalues:");
+    stringstream ss;
     ss << trimmed_eigenvalues;
     console_print(0, ss.str());
     ss.str(string()); // clear ss

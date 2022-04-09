@@ -45,7 +45,13 @@ typedef struct
     int matrix_dim; // The resulting dimensions of the solution matrices
     int limit; // The x,y,z limits of the solution space
     double step_size; // The resulting step size for the given number of partitions and limits
-} grid_cfg_t;
+    int max_iterations; // Maximum number of HF interations to perform
+    int num_solutions; // The number of eigenvalues and eigenvectors to keep from the solution
+    float convergence_percentage; // The convergence percentage for total energy change, used for terminating the main loop
+    // lookup tables to speed up calculations
+    std::vector<std::vector<float>> coordinate_value_array;
+    std::vector<std::vector<float>> coordinate_index_array;
+} cfg_t;
 
 #define AU_DISTANCE (5.29e-11) // Atomic unit of distance = Bohr radius (m)
 #define H2_BOND_LENGTH_ATOMIC_UNITS (0.74e-10/AU_DISTANCE) // Bond length of Hydrogen atoms in Hydrogen molecule in atomic units
