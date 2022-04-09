@@ -36,6 +36,7 @@ typedef enum
 {
     HELIUM_ATOM = 0,
     HYDROGEN_MOLECULE,
+    ATOMIC_STRUCTURE_NUM,
 } atomic_structure_e;
 
 typedef struct
@@ -51,4 +52,5 @@ typedef struct
 #define TINY_NUMBER (0.01) // use this number instead if the denominators become too small to help with convergence
 #define EPSILON (TINY_NUMBER) // any number below this limit will be considered 0
 #define Z_OFFSET (0.5) // add a z offset to the molecular structures to help with convergence
-#define PROGRAM_VERBOSITY (2) // Maximum logging verbosity level
+#define Y_OFFSET (0) // add a z offset to the molecular structures to help with convergence
+#define PROGRAM_VERBOSITY (0) // Maximum logging verbosity level

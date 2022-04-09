@@ -22,13 +22,12 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 **/
  
-// C++ includes
+// C/C++ includes
 #include <iostream>
 #include <cmath>
 #include <chrono>
-
-// C includes
-#include <stdlib.h>
+#include <ctime>
+#include <locale>
 
 // Eigen includes
 #define EIGEN_USE_BLAS // use external BLAS routines
@@ -39,13 +38,13 @@ SOFTWARE.
 // https://github.com/libigl/libigl/issues/651 for more info
 #undef I
 
-// LAPACKE include
+// LAPACKE include (C API for LAPACK fortran library)
 #include <lapacke.h>
 
 // Boost includes
 #include <boost/format.hpp>
 #include <boost/program_options.hpp>
-#include <boost/date_time.hpp>
+namespace po = boost::program_options;
 
 // OMP includes
 #define OMP_NUM_THREADS 16
@@ -57,6 +56,10 @@ SOFTWARE.
 
 void console_print(int verbose_level, std::string string)
 {
+    std::time_t time_now = std::time(nullptr);
+    char time_string[100];
+    std::strftime(time_string, sizeof(time_string), "%Y/%m/%d-%H:%M:%S", std::localtime(&time_now));
+
     if (verbose_level > PROGRAM_VERBOSITY)
     {
         return;
@@ -64,10 +67,9 @@ void console_print(int verbose_level, std::string string)
 
     std::stringstream ss(string);
     std::string output;
-    boost::posix_time::ptime time_now = boost::posix_time::second_clock::local_time();
     while (std::getline(ss, output, '\n'))
     {
-        std::cout << boost::format("[%s]") % boost::posix_time::to_simple_string(time_now) << " " << output << std::endl;
+        std::cout << boost::format("[%s]") % time_string << " " << output << std::endl;
     }
 }
 
@@ -170,7 +172,7 @@ float attraction_function_helium(grid_cfg_t grid, int linear_coordinates)
     float y = coordinate_values[IDX_Y];
     float z = coordinate_values[IDX_Z];
 
-    float denominator = std::sqrt(std::pow(x, 2.0) + std::pow(y, 2.0) + std::pow(z + Z_OFFSET, 2.0));
+    float denominator = std::sqrt(std::pow(x, 2.0) + std::pow(y + Y_OFFSET, 2.0) + std::pow(z + Z_OFFSET, 2.0));
 
     if (std::abs(denominator) < epsilon)
     {
@@ -192,8 +194,8 @@ float attraction_function_hydrogen(grid_cfg_t grid, int linear_coordinates)
     float y = coordinate_values[IDX_Y];
     float z = coordinate_values[IDX_Z];
 
-    float denominator_1 = std::sqrt(std::pow((H2_BOND_LENGTH_ATOMIC_UNITS/2.0) - x, 2.0) + std::pow(y, 2.0) + std::pow(z + Z_OFFSET, 2.0));
-    float denominator_2 = std::sqrt(std::pow((-H2_BOND_LENGTH_ATOMIC_UNITS/2.0) - x, 2.0) + std::pow(y, 2.0) + std::pow(z + Z_OFFSET, 2.0));
+    float denominator_1 = std::sqrt(std::pow((H2_BOND_LENGTH_ATOMIC_UNITS/2.0) - x, 2.0) + std::pow(y + Y_OFFSET, 2.0) + std::pow(z + Z_OFFSET, 2.0));
+    float denominator_2 = std::sqrt(std::pow((-H2_BOND_LENGTH_ATOMIC_UNITS/2.0) - x, 2.0) + std::pow(y + Y_OFFSET, 2.0) + std::pow(z + Z_OFFSET, 2.0));
 
     if (std::abs(denominator_1) < epsilon)
     {
@@ -354,16 +356,7 @@ float calculate_total_energy(Eigen::MatrixBase<A> &orbital_values, Eigen::Matrix
 // Using LAPACKE C wrapper for faster solving of eigenvalues and eigenvectors. A
 // tutorial on how to do this is implemented here:
 // https://eigen.tuxfamily.org/index.php?title=Lapack#Create_the_C.2B.2B_Function_Declaration.
-//
-// @param      matrix       The matrix
-// @param      eigenvalues  The eigenvalues
-//
-// @tparam     A            { description }
-// @tparam     B            { description }
-//
-// @return     { description_of_the_return_value }
-//
-
+// 
 template <typename A, typename B>
 bool lapack_solve_eigh(Eigen::Matrix<A, Eigen::Dynamic, Eigen::Dynamic> &matrix, Eigen::Matrix<B, Eigen::Dynamic, 1> &eigenvalues)
 {
@@ -394,40 +387,69 @@ bool lapack_solve_eigh(Eigen::Matrix<A, Eigen::Dynamic, Eigen::Dynamic> &matrix,
     return (info == 0);
 }
 
-int main(int argc, char ** argv)
+int main(int argc, char *argv[])
 {
-    std::stringstream ss;
-    omp_set_num_threads(OMP_NUM_THREADS);
-    Eigen::setNbThreads(OMP_NUM_THREADS);
-
     console_print(0, "** Exact Hartree-Fock simulator **");
 
-    // number of partitions and limits
+    omp_set_num_threads(OMP_NUM_THREADS); // Set the number of maximum threads to use for OMP
+    Eigen::setNbThreads(OMP_NUM_THREADS); // Set the number of maximum threads to use for Eigen
+    std::stringstream ss; // Used to form strings using cout
+
+    // Program options
+    po::options_description desc("Allowed options");
+    desc.add_options()
+        ("help", "produce help message")
+        ("iterations", po::value<int>()->default_value(50), "set maximum number of iterations")
+        ("partitions", po::value<int>()->default_value(11), "set number of partitions to divide solution space")
+        ("limit", po::value<int>()->default_value(4), "set the solution space maximum x=y=z limit")
+        ("convergence", po::value<float>()->default_value(0.1), "set the convergence condition (%)")
+        ("structure", po::value<int>()->default_value(0), "set the atomic structure: (0:He, 1:H2)")
+    ;
+
+    po::variables_map vm;
+    po::store(po::parse_command_line(argc, argv, desc), vm);
+    po::notify(vm);    
+
+    if (vm.count("help"))
+    {
+        std::cout << desc << "\n";
+        return 1;
+    }
+
+    atomic_structure_e atomic_structure;
+    if (vm["structure"].as<int>() >= ATOMIC_STRUCTURE_NUM)
+    {
+        std::cout << "Invalid atomic structure selection: " << vm["structure"].as<int>() << std::endl;
+        std::cout << "Valid options: (0:He, 1:H2)" << std::endl;
+        return 0;
+    }
+    else
+    {
+        atomic_structure = (atomic_structure_e)(vm["structure"].as<int>());
+    }
+
+    // program settings
     grid_cfg_t grid;
-
-    grid.num_partitions = 11;
+    grid.num_partitions = vm["partitions"].as<int>();
+    grid.limit = vm["limit"].as<int>();
     grid.matrix_dim = grid.num_partitions*grid.num_partitions*grid.num_partitions;
-    grid.limit = 4;
     grid.step_size = (float)(4<<1)/(float)(grid.num_partitions - 1);
-
+    int max_iterations = vm["iterations"].as<int>();
     int num_solutions = 6;
-    float convergence_percentage = 0.1;
+    float convergence_percentage = vm["convergence"].as<float>();
 
+    console_print(0, boost::str(boost::format("\titerations = %d") % max_iterations));
     console_print(0, boost::str(boost::format("\tnum_partitions = %d") % grid.num_partitions));
     console_print(0, boost::str(boost::format("\tmatrix_dim = %d") % grid.matrix_dim));
     console_print(0, boost::str(boost::format("\tlimit = %d") % grid.limit));
     console_print(0, boost::str(boost::format("\tstep_size = %f") % grid.step_size));
-
-    // atomic structure to run simulation on
-    // atomic_structure_e atomic_structure = HYDROGEN_MOLECULE;
-    atomic_structure_e atomic_structure = HELIUM_ATOM;
     if (atomic_structure == HELIUM_ATOM)
     {
-        console_print(0, "** Atomic structure: Helium Atom");
+        console_print(0, "\tatomic structure: Helium Atom");
     }
     else if (atomic_structure == HYDROGEN_MOLECULE)
     {
-        console_print(0, "** Atomic structure: Hydrogen Molecule");
+        console_print(0, "\tatomic structure: Hydrogen Molecule");
     }
 
     // matrix instantiations
@@ -468,18 +490,18 @@ int main(int argc, char ** argv)
     fock_matrix = -kinetic_matrix - attraction_matrix;
 
     console_print(1, "** Obtaining eigenvalues and eigenvectors for initial solution...");
-    // Builtin Eigen solver (slow)
-    // Using the SelfAdjointEigenSolver constructor to automatically compute() the eigenvalues and eigenvectors of fock_matrix
-    Eigen::SelfAdjointEigenSolver<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic>> solver(fock_matrix);
-    eigenvalues = solver.eigenvalues();
-    eigenvectors = solver.eigenvectors();
+    // // Builtin Eigen solver (slow)
+    // // Using the SelfAdjointEigenSolver constructor to automatically compute() the eigenvalues and eigenvectors of fock_matrix
+    // Eigen::SelfAdjointEigenSolver<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic>> solver(fock_matrix);
+    // eigenvalues = solver.eigenvalues();
+    // eigenvectors = solver.eigenvectors();
 
-    // // LAPACK solver
-    // if (!lapack_solve_eigh(fock_matrix, eigenvalues))
-    // {
-    //     console_print(0, "** Something went horribly wrong with the solver, aborting");
-    //     exit(EXIT_FAILURE);
-    // }
+    // LAPACK solver
+    if (!lapack_solve_eigh(fock_matrix, eigenvalues))
+    {
+        console_print(0, "** Something went horribly wrong with the solver, aborting");
+        exit(EXIT_FAILURE);
+    }
 
     orbital_values = eigenvectors.col(0);
 
@@ -501,20 +523,20 @@ int main(int argc, char ** argv)
 
         console_print(1, "** Obtaining eigenvalues and eigenvectors...");
 
-        // Builtin Eigen solver (slow)
-        // Using the SelfAdjointEigenSolver constructor to automatically compute() the eigenvalues and eigenvectors of fock_matrix
-        Eigen::SelfAdjointEigenSolver<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic>> solver(fock_matrix);
-        eigenvalues = solver.eigenvalues();
-        eigenvectors = solver.eigenvectors();
+        // // Builtin Eigen solver (slow)
+        // // Using the SelfAdjointEigenSolver constructor to automatically compute() the eigenvalues and eigenvectors of fock_matrix
+        // Eigen::SelfAdjointEigenSolver<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic>> solver(fock_matrix);
+        // eigenvalues = solver.eigenvalues();
+        // eigenvectors = solver.eigenvectors();
 
-        // // LAPACK solver, the same one used in numpy
-        // if (!lapack_solve_eigh(fock_matrix, eigenvalues))
-        // {
-        //     console_print(0, "** Something went horribly wrong with the solver, aborting");
-        //     exit(EXIT_FAILURE);
-        // }
-        // // using LAPACK solver, fock matrix now has the eigenvectors
-        // eigenvectors = fock_matrix;
+        // LAPACK solver, the same one used in numpy
+        if (!lapack_solve_eigh(fock_matrix, eigenvalues))
+        {
+            console_print(0, "** Something went horribly wrong with the solver, aborting");
+            exit(EXIT_FAILURE);
+        }
+        // using LAPACK solver, fock matrix now has the eigenvectors
+        eigenvectors = fock_matrix;
 
         // Extract orbital_values
         orbital_values = eigenvectors.col(0)*0.8;
@@ -540,10 +562,11 @@ int main(int argc, char ** argv)
 
         console_print(0, boost::str(boost::format("** Iteration end! Iteration time: %0.3f seconds**") % (float)(iteration_time.count())));
 
-        // if (interation_count == 1)
-        // {
-        //     break;
-        // }
+        // check if we've hit the maximum iteration limit
+        if (interation_count == max_iterations)
+        {
+            break;
+        }
 
         // check if we meet convergence condition
         if (abs(total_energy_percent_diff) < (convergence_percentage/100.0))

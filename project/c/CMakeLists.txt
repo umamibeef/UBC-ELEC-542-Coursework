@@ -31,7 +31,7 @@ link_libraries(${lapackblas_libraries})
 set(Boost_USE_STATIC_LIBS OFF) 
 set(Boost_USE_MULTITHREADED ON)  
 set(Boost_USE_STATIC_RUNTIME OFF) 
-find_package(Boost 1.71.0 COMPONENTS program_options date_time)
+find_package(Boost 1.71.0 COMPONENTS program_options format)
 link_libraries(${Boost_LIBRARIES})
 
 # OpenMP
