@@ -284,7 +284,7 @@ float repulsion_function(cfg_t &config, int linear_coordinates_1, int linear_coo
 
     float denominator = sqrt(pow(x2 - x1, 2.0) + pow(y2 - y1, 2.0) + pow(z2 - z1, 2.0));
 
-    if (abs(denominator) < 1e-9)
+    if (abs(denominator) < epsilon)
     {
         denominator = sqrt(TINY_NUMBER);
     }
