@@ -50,11 +50,11 @@ float cuda_repulsion_function(cfg_t &config, int linear_coordinates_1, int linea
     float y2 = config.coordinate_value_array[IDX_Y][linear_coordinates_2];
     float z2 = config.coordinate_value_array[IDX_Z][linear_coordinates_2];
 
-    float denominator = sqrt(pow(x2 - x1, 2.0) + pow(y2 - y1, 2.0) + pow(z2 - z1, 2.0));
+    float denominator = sqrtf((x2 - x1)*(x2 - x1) + (y2 - y1)*(y2 - y1) + (z2 - z1)*(z2 - z1));
 
     if (abs(denominator) < epsilon)
     {
-        denominator = sqrt(TINY_NUMBER);
+        denominator = sqrtf(TINY_NUMBER);
     }
 
     return (1.0/(denominator));
@@ -62,7 +62,7 @@ float cuda_repulsion_function(cfg_t &config, int linear_coordinates_1, int linea
 
 float cuda_repulsion_matrix_integrand_function(cfg_t &config, float *orbital_values, int linear_coords_1, int linear_coords_2)
 {
-    return pow(orbital_values[linear_coords_2], 2.0)*cuda_repulsion_function(config, linear_coords_1, linear_coords_2);
+    return orbital_values[linear_coords_2]*orbital_values[linear_coords_2]*cuda_repulsion_function(config, linear_coords_1, linear_coords_2);
 }
 
 float cuda_exchange_matrix_integrand_function(cfg_t &config, float *orbital_values, int linear_coords_1, int linear_coords_2)
@@ -72,11 +72,6 @@ float cuda_exchange_matrix_integrand_function(cfg_t &config, float *orbital_valu
 
 void cuda_generate_repulsion_matrix(cfg_t &config, float *orbital_values, float *matrix)
 {
-    float h_cubed = pow(config.step_size, 3.0);
-
-    // Set matrix to 0
-    memset(matrix,0.0,config.matrix_dim*config.matrix_dim*sizeof(float));
-
     for (int electron_one_coordinate_index = 0; electron_one_coordinate_index < config.matrix_dim; electron_one_coordinate_index++)
     {
         float sum = 0;
@@ -84,18 +79,13 @@ void cuda_generate_repulsion_matrix(cfg_t &config, float *orbital_values, float 
         {
             sum += cuda_repulsion_matrix_integrand_function(config, orbital_values, electron_one_coordinate_index, electron_two_coordinate_index);
         }
-        matrix[electron_one_coordinate_index + electron_one_coordinate_index*config.matrix_dim] = sum*h_cubed;
+        matrix[electron_one_coordinate_index + electron_one_coordinate_index*config.matrix_dim] = sum*config.step_size_cubed;
     }
 }
 
 
 void cuda_generate_exchange_matrix(cfg_t &config, float *orbital_values, float *matrix)
 {
-    float h_cubed = pow(config.step_size, 3.0);
-
-    // Set matrix to 0
-    memset(matrix,0.0,config.matrix_dim*config.matrix_dim*sizeof(float));
-
     for (int electron_one_coordinate_index = 0; electron_one_coordinate_index < config.matrix_dim; electron_one_coordinate_index++)
     {
         float sum = 0;
@@ -103,7 +93,7 @@ void cuda_generate_exchange_matrix(cfg_t &config, float *orbital_values, float *
         {
             sum += cuda_exchange_matrix_integrand_function(config, orbital_values, electron_one_coordinate_index, electron_two_coordinate_index);
         }
-        matrix[electron_one_coordinate_index + electron_one_coordinate_index*config.matrix_dim] = sum*h_cubed;
+        matrix[electron_one_coordinate_index + electron_one_coordinate_index*config.matrix_dim] = sum*config.step_size_cubed;
     }
 }
 
@@ -114,13 +104,19 @@ void cuda_print_device_info(void)
     cudaGetDeviceCount(&num_devices);
     for (int i = 0; i < num_devices; i++)
     {
-      cudaDeviceProp prop;
-      cudaGetDeviceProperties(&prop, i);
-      console_print(0, str(format("\tDevice Number: %d\n") % i), CUDA);
-      console_print(0, str(format("\t\tDevice name: %s\n") % prop.name), CUDA);
-      console_print(0, str(format("\t\tMemory Clock Rate (KHz): %d\n") % prop.memoryClockRate), CUDA);
-      console_print(0, str(format("\t\tMemory Bus Width (bits): %d\n") % prop.memoryBusWidth), CUDA);
-      console_print(0, str(format("\t\tPeak Memory Bandwidth (GB/s): %f\n\n") % (2.0*prop.memoryClockRate*(prop.memoryBusWidth/8)/1.0e6)), CUDA);
+        cudaDeviceProp prop;
+        cudaGetDeviceProperties(&prop, i);
+        console_print(0, str(format(TAB1 "Device Number: %d\n") % i), CUDA);
+        console_print(0, str(format(TAB2 "Device name: %s\n") % prop.name), CUDA);
+        console_print(0, str(format(TAB2 "CUDA Capability %d.%d\n") % prop.major % prop.minor), CUDA);
+        console_print(0, str(format(TAB2 "Memory Clock Rate (kHz): %d\n") % prop.memoryClockRate), CUDA);
+        console_print(0, str(format(TAB2 "Memory Bus Width (bits): %d\n") % prop.memoryBusWidth), CUDA);
+        console_print(0, str(format(TAB2 "Peak Memory Bandwidth (GB/s): %f\n") % (2.0*prop.memoryClockRate*(prop.memoryBusWidth/8)/1.0e6)), CUDA);
+        console_print(0, str(format(TAB2 "MP Count: %d\n") % prop.multiProcessorCount), CUDA);
+        console_print(0, str(format(TAB2 "Max Blocks per MP: %d\n") % prop.maxBlocksPerMultiProcessor), CUDA);
+        console_print(0, str(format(TAB2 "Max Threads per MP: %d\n") % prop.maxThreadsPerMultiProcessor), CUDA);
+        console_print(0, str(format(TAB2 "Max dimension size of a thread block (x,y,z): (%d, %d, %d)\n") % prop.maxThreadsDim[0] % prop.maxThreadsDim[1] % prop.maxThreadsDim[2]), CUDA);
+        console_print(0, str(format(TAB2 "Max dimension size of a grid size (x,y,z): (%d, %d, %d)\n") % prop.maxGridSize[0] % prop.maxGridSize[1] % prop.maxGridSize[2]), CUDA);
     }
 }
 

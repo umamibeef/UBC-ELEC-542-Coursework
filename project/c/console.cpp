@@ -34,10 +34,10 @@ using namespace std;
 using namespace boost;
 
 static const string none_string = " ";
-static const string sim_string = ANSI_COLOR_CYAN "[SIM]" ANSI_COLOR_RESET " ";
-static const string cuda_string = ANSI_COLOR_GREEN "[CUDA]" ANSI_COLOR_RESET " ";
-static const string lapack_string = ANSI_COLOR_YELLOW "[LAPACK]" ANSI_COLOR_RESET " ";
-static const string error_string = ANSI_COLOR_RED "[ERROR]" ANSI_COLOR_RESET " ";
+static const string sim_string = ANSI_FG_COLOR_CYAN         "|SIM   |" ANSI_COLOR_RESET;
+static const string cuda_string = ANSI_FG_COLOR_GREEN       "|CUDA  |" ANSI_COLOR_RESET;
+static const string lapack_string = ANSI_FG_COLOR_YELLOW    "|LAPACK|" ANSI_COLOR_RESET;
+static const string error_string = ANSI_FG_COLOR_RED        "|ERROR |" ANSI_COLOR_RESET;
 
 void console_print_internal(int verbose_level, std::string input_string, client_e client, bool error)
 {
@@ -45,7 +45,7 @@ void console_print_internal(int verbose_level, std::string input_string, client_
     {
         return;
     }
-    
+
     time_t time_now = time(nullptr);
     char time_string[100];
     strftime(time_string, sizeof(time_string), "%Y/%m/%d-%H:%M:%S", localtime(&time_now));
@@ -77,7 +77,7 @@ void console_print_internal(int verbose_level, std::string input_string, client_
     string output_string;
     while (getline(ss, output_string, '\n'))
     {
-        cout << format("[%s] ") % time_string << client_string << output_string << endl;
+        cout << format("[%s]") % time_string << client_string << " " << output_string << endl;
     }
 }
 

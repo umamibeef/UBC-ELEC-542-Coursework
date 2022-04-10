@@ -57,6 +57,7 @@ namespace po = boost::program_options;
 #include "config.hpp"
 #include "console.hpp"
 #include "kernel.h"
+#include "version.hpp"
 
 // Clean up code a bit by using aliases and typedefs
 using namespace std;
@@ -68,7 +69,28 @@ typedef Eigen::Matrix<float, 1, Eigen::Dynamic> eigen_float_row_vector;
 // Naughty naughty global!!!
 int program_verbosity;
 
-void populate_lookup_tables(cfg_t &config)
+void print_header(void)
+{
+    stringstream ss;
+
+    ss  << ANSI_FG_COLOR_MAGENTA "                                      " ANSI_COLOR_RESET << endl
+        << ANSI_FG_COLOR_MAGENTA "   ███████╗██╗  ██╗███████╗███████╗   " ANSI_COLOR_RESET << endl
+        << ANSI_FG_COLOR_MAGENTA "   ██╔════╝██║  ██║██╔════╝██╔════╝   " ANSI_COLOR_RESET << endl
+        << ANSI_FG_COLOR_MAGENTA "   █████╗  ███████║█████╗  ███████╗   " ANSI_COLOR_RESET << endl
+        << ANSI_FG_COLOR_MAGENTA "   ██╔══╝  ██╔══██║██╔══╝  ╚════██║   " ANSI_COLOR_RESET << endl
+        << ANSI_FG_COLOR_MAGENTA "   ███████╗██║  ██║██║     ███████║   " ANSI_COLOR_RESET << endl
+        << ANSI_FG_COLOR_MAGENTA "   ╚══════╝╚═╝  ╚═╝╚═╝     ╚══════╝   " ANSI_COLOR_RESET << endl
+        << ANSI_FG_COLOR_MAGENTA "                                      " ANSI_COLOR_RESET << endl
+        <<                       "   < Exact Hartree-Fock Simulator >   " << endl << endl
+        << "Author: Michel Kakulphimp" << endl
+        << "Build Date: " __DATE__ " " __TIME__ << endl
+        << "Git Branch: " << GIT_BRANCH << endl
+        << "Git Hash: " << GIT_COMMIT_HASH << endl << endl;
+
+    console_print(0, ss.str(), SIM);
+}
+
+void populate_lookup_values(cfg_t &config)
 {
     // Resize LUTs
     config.coordinate_value_array.resize(IDX_NUM);
@@ -92,6 +114,9 @@ void populate_lookup_tables(cfg_t &config)
             config.coordinate_value_array[i][coordinate_index] = (float)(-config.limit) + ((float)config.coordinate_index_array[i][coordinate_index]*config.step_size);
         }
     }
+
+    // Calculate step_size_cubed
+    config.step_size_cubed = pow(config.step_size, 3.0);
 }
 
 void linear_coordinate_index_to_spatial_coordinates_index(cfg_t &config, int coordinate_index, int * coordinate_index_array)
@@ -291,11 +316,6 @@ float exchange_matrix_integrand_function(cfg_t &config, float *orbital_values, i
 
 void generate_repulsion_matrix(cfg_t &config, float *orbital_values, float *matrix)
 {
-    float h_cubed = pow(config.step_size, 3.0);
-
-    // Set matrix to 0
-    memset(matrix,0.0,config.matrix_dim*config.matrix_dim*sizeof(float));
-
     for (int electron_one_coordinate_index = 0; electron_one_coordinate_index < config.matrix_dim; electron_one_coordinate_index++)
     {
         float sum = 0;
@@ -303,32 +323,13 @@ void generate_repulsion_matrix(cfg_t &config, float *orbital_values, float *matr
         {
             sum += repulsion_matrix_integrand_function(config, orbital_values, electron_one_coordinate_index, electron_two_coordinate_index);
         }
-        matrix[electron_one_coordinate_index + electron_one_coordinate_index*config.matrix_dim] = sum*h_cubed;
+        matrix[electron_one_coordinate_index + electron_one_coordinate_index*config.matrix_dim] = sum*config.step_size_cubed;
     }
-
-    // Just to see what would happen, I tried implementing the same thing in the Coulomb repulsion matrix as in the exchange. This led to incorrect results.
-    #if 0
-    for (int electron_one_coordinate_index = 0; electron_one_coordinate_index < config.matrix_dim; electron_one_coordinate_index++)
-    {
-        for (int electron_two_coordinate_index = 0; electron_two_coordinate_index < (electron_one_coordinate_index + 1); electron_two_coordinate_index++)
-        {
-            matrix[electron_one_coordinate_index + electron_two_coordinate_index*config.matrix_dim] = repulsion_matrix_integrand_function(config, orbital_values, electron_one_coordinate_index, electron_two_coordinate_index) * h_cubed;
-            matrix[electron_two_coordinate_index + electron_one_coordinate_index*config.matrix_dim] = matrix[electron_one_coordinate_index + electron_two_coordinate_index*config.matrix_dim];
-        }
-    }
-    #endif
 }
 
 
 void generate_exchange_matrix(cfg_t &config, float *orbital_values, float *matrix)
 {
-    float h_cubed = pow(config.step_size, 3.0);
-
-    // Set matrix to 0
-    memset(matrix,0.0,config.matrix_dim*config.matrix_dim*sizeof(float));
-
-    // Why doesn't this work?! It's in the math!
-
     for (int electron_one_coordinate_index = 0; electron_one_coordinate_index < config.matrix_dim; electron_one_coordinate_index++)
     {
         float sum = 0;
@@ -336,28 +337,8 @@ void generate_exchange_matrix(cfg_t &config, float *orbital_values, float *matri
         {
             sum += exchange_matrix_integrand_function(config, orbital_values, electron_one_coordinate_index, electron_two_coordinate_index);
         }
-        matrix[electron_one_coordinate_index + electron_one_coordinate_index*config.matrix_dim] = sum*h_cubed;
+        matrix[electron_one_coordinate_index + electron_one_coordinate_index*config.matrix_dim] = sum*config.step_size_cubed;
     }
-    
-    #if 0
-    for (int electron_one_coordinate_index = 0; electron_one_coordinate_index < config.matrix_dim; electron_one_coordinate_index++)
-    {
-        for (int electron_two_coordinate_index = 0; electron_two_coordinate_index < (electron_one_coordinate_index + 1); electron_two_coordinate_index++)
-        {
-            // data in matrix is column major order, make sure we write the same way
-            // e.g.:
-            //  matrix in memory: 0 1 2 3 4 5 6 7 8
-            //  data as matrix:
-            //  0 3 6
-            //  1 4 7  matrix(2,1) = 5
-            //  2 5 8
-            // matrix(electron_one_coordinate_index, electron_two_coordinate_index)
-            // matrix(electron_two_coordinate_index, electron_one_coordinate_index)
-            matrix[electron_one_coordinate_index + electron_two_coordinate_index*config.matrix_dim] = exchange_matrix_integrand_function(config, orbital_values, electron_one_coordinate_index, electron_two_coordinate_index) * h_cubed;
-            matrix[electron_two_coordinate_index + electron_one_coordinate_index*config.matrix_dim] = matrix[electron_one_coordinate_index + electron_two_coordinate_index*config.matrix_dim];
-        }
-    }
-    #endif
 }
 
 template <typename A, typename B, typename C, typename D, typename E>
@@ -380,31 +361,24 @@ float calculate_total_energy(Eigen::MatrixBase<A> &orbital_values, Eigen::Matrix
     return energy_sum;
 }
 
-// Using LAPACKE C wrapper for faster solving of eigenvalues and eigenvectors. A
-// tutorial on how to do this is implemented here:
-// https://eigen.tuxfamily.org/index.php?title=Lapack#Create_the_C.2B.2B_Function_Declaration.
-// template <typename A, typename B>
-// bool lapack_solve_eigh_old(Eigen::Matrix<A, Eigen::Dynamic, Eigen::Dynamic> &matrix, Eigen::Matrix<B, Eigen::Dynamic, 1> &eigenvalues)
-// {
-//     int matrix_layout = LAPACK_COL_MAJOR; // column major ordering, default for eigen
-//     char jobz = 'V'; // compute eigenvalues and eigenvectors.
-//     char uplo = 'U'; // perform calculation on upper triangle of matrix
-//     lapack_int n = matrix.cols(); // order of the matrix (size)
-//     lapack_int lda = matrix.outerStride(); // the leading dimension of the array A. LDA >= max(1,N).
-//     lapack_int info = 0;
-
-//     float* a = matrix.data(); // pointer to fock/eigenvector data
-//     float* w = eigenvalues.data(); // pointer to eigenvalue data
-
-//     // Unfortunately this wrapper doesn't work for matrix sizes larger than a
-//     // certain amount, because the querying reports back an incorrect value for
-//     // the work area.
-//     info = LAPACKE_ssyevd(matrix_layout, jobz, uplo, n, a, lda, w);
-
-//     return (info == 0);
-// }
-
-// Using the LAPACK routines directly by reimplementing the LAPACKE wrapper without querying for sizes
+// Using the LAPACK routines directly by reimplementing the LAPACKE wrapper
+// without querying for sizes. I was originally using LAPACKE_ssyevd directly
+// from LAPACKE.h, but for some reason, the automatic work size was returning an
+// invalid number. I'm re-implementing the core of that function in this
+// version, but I'm using manual lwork and liwork calculations instead. From the
+// LAPACK documentation on ssyevd(): SSYEVD computes all eigenvalues and,
+// optionally, eigenvectors of a real symmetric matrix A. If eigenvectors are
+// desired, it uses a divide and conquer algorithm.The divide and conquer
+// algorithm makes very mild assumptions about floating point arithmetic.
+//
+// @param      config       The program config struct
+// @param      matrix       The matrix originally containing the matrix to be
+//                          solved and the resulting eigenvectors
+// @param      eigenvalues  The eigenvalues of the solution
+//
+// @return     True if the solver found solutions, false if the solver failed
+//             for some reason
+//
 bool lapack_solve_eigh(cfg_t &config, float *matrix, float *eigenvalues)
 {
     char jobz = 'V'; // compute eigenvalues and eigenvectors.
@@ -417,35 +391,35 @@ bool lapack_solve_eigh(cfg_t &config, float *matrix, float *eigenvalues)
     lapack_int* iwork = NULL;
     float* work = NULL;
 
-    console_print(2, "\t** LAPACK solver debug", LAPACK);
-    console_print(2, str(format("\t\tn = %d") % n), LAPACK);
-    console_print(2, str(format("\t\tlda = %d") % lda), LAPACK);
+    console_print(2, TAB1 "** LAPACK solver debug", LAPACK);
+    console_print(2, str(format(TAB2 "n = %d") % n), LAPACK);
+    console_print(2, str(format(TAB2 "lda = %d") % lda), LAPACK);
 
     // Setting lwork and liwork manually based on the LAPACK documentation
     lwork = 1 + 6*n + 2*n*n;
     liwork = 3 + 5*n;
 
-    console_print(2, str(format("\t\tliwork = %d") % liwork), LAPACK);
-    console_print(2, str(format("\t\tlwork = %d") % lwork), LAPACK);
+    console_print(2, str(format(TAB2 "liwork = %d") % liwork), LAPACK);
+    console_print(2, str(format(TAB2 "lwork = %d") % lwork), LAPACK);
 
     // Allocate memory for work arrays
     iwork = (lapack_int*)LAPACKE_malloc(sizeof(lapack_int) * liwork);
     if(iwork == NULL)
     {
         info = LAPACK_WORK_MEMORY_ERROR;
-        console_print(2, "\t\tFATAL! Could not allocate iwork array", LAPACK);
+        console_print(2, TAB2 "FATAL! Could not allocate iwork array", LAPACK);
     }
     work = (float*)LAPACKE_malloc(sizeof(float) * lwork);
     if(work == NULL)
     {
         info = LAPACK_WORK_MEMORY_ERROR;
-        console_print(2, "\t\tFATAL! Could not allocate work array", LAPACK);
+        console_print(2, TAB2 "FATAL! Could not allocate work array", LAPACK);
     }
 
     // Call LAPACK function and adjust info if our work areas are OK
     if ((iwork != NULL) && (work != NULL))
     {
-        console_print(2, "\t\tcalling LAPACK function", LAPACK);
+        console_print(2, TAB2 "calling LAPACK function", LAPACK);
         LAPACK_ssyevd(&jobz, &uplo, &n, matrix, &lda, eigenvalues, work, &lwork, iwork, &liwork, &info);
         if( info < 0 ) {
             info = info - 1;
@@ -456,14 +430,15 @@ bool lapack_solve_eigh(cfg_t &config, float *matrix, float *eigenvalues)
     LAPACKE_free(iwork);
     LAPACKE_free(work);
 
-    console_print(2, str(format("\tinfo = %d") % info), LAPACK);
+    console_print(2, str(format(TAB2 "info = %d") % info), LAPACK);
 
     return (info==0);
 }
 
 int main(int argc, char *argv[])
 {
-    console_print(0, "** Exact Hartree-Fock simulator **", SIM);
+    // Print the header
+    print_header();
 
     // Set the maximum number of thread to use for OMP and Eigen
     omp_set_num_threads(OMP_NUM_THREADS); // Set the number of maximum threads to use for OMP
@@ -512,24 +487,26 @@ int main(int argc, char *argv[])
     program_verbosity = vm["verbosity"].as<int>();
 
     // Print program information
-    console_print(0, str(format("\titerations = %d") % config.max_iterations), SIM);
-    console_print(0, str(format("\tnum_partitions = %d") % config.num_partitions), SIM);
-    console_print(0, str(format("\tmatrix_dim = %d") % config.matrix_dim), SIM);
-    console_print(0, str(format("\tlimit = %d") % config.limit), SIM);
-    console_print(0, str(format("\tstep_size = %f") % config.step_size), SIM);
+    console_print(0, "Program Configurations:\n", SIM);
+    console_print(0, str(format(TAB1 "Iterations = %d") % config.max_iterations), SIM);
+    console_print(0, str(format(TAB1 "Num Partitions = %d") % config.num_partitions), SIM);
+    console_print(0, str(format(TAB1 "Matrix Dimension = %d") % config.matrix_dim), SIM);
+    console_print(0, str(format(TAB1 "Limits = %d") % config.limit), SIM);
+    console_print(0, str(format(TAB1 "Step Size = %f") % config.step_size), SIM);
     if (atomic_structure == HELIUM_ATOM)
     {
-        console_print(0, "\tatomic structure: Helium Atom", SIM);
+        console_print(0, TAB1 "Atomic Structure: Helium Atom", SIM);
     }
     else if (atomic_structure == HYDROGEN_MOLECULE)
     {
-        console_print(0, "\tatomic structure: Hydrogen Molecule", SIM);
+        console_print(0, TAB1 "Atomic Structure: Hydrogen Molecule", SIM);
     }
+    console_print(0, " ", SIM);
     // Print CUDA information
     cuda_print_device_info();
 
     // Populate LUTs
-    populate_lookup_tables(config);
+    populate_lookup_values(config);
 
     // Matrix instantiations
     eigen_float_matrix laplacian_matrix(config.matrix_dim, config.matrix_dim);
@@ -583,6 +560,10 @@ int main(int argc, char *argv[])
         console_print(0, str(format("** Iteration: %d") % interation_count), SIM);
 
         auto iteration_start = chrono::system_clock::now();
+
+        // zero out matrices
+        repulsion_matrix.Zero(config.matrix_dim, config.matrix_dim);
+        exchange_matrix.Zero(config.matrix_dim, config.matrix_dim);
 
         // generate repulsion matrix
         console_print(1, "** Generating electron-electron Coulombic repulsion matrix", SIM);

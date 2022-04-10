@@ -1,5 +1,6 @@
 ## Project Misc.
 project/c/build/
+project/c/generated/
 
 ## CMake
 CMakeLists.txt.user

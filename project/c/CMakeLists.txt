@@ -23,7 +23,7 @@ find_package(BLAS)
 find_package(LAPACK)
 find_package(LAPACKE)
 if(LAPACK_FOUND AND BLAS_FOUND AND LAPACKE_FOUND)
-   set(lapackblas_libraries ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES} ${LAPACKE_LIBRARIES})
+    set(lapackblas_libraries ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES} ${LAPACKE_LIBRARIES})
 endif()
 link_libraries(${lapackblas_libraries})
 
@@ -50,3 +50,27 @@ set_target_properties(ExactHartreeFockSim PROPERTIES CUDA_SEPARABLE_COMPILATION 
 
 # add compile options to enable GSL library
 add_compile_options(`gsl-config --cflags --libs`)
+
+# Getting git hash and branch into C++ as a define
+# http://xit0.org/2013/04/cmake-use-git-branch-and-commit-details-in-project/
+
+# get the current working branch
+execute_process(
+    COMMAND git rev-parse --abbrev-ref HEAD
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    OUTPUT_VARIABLE GIT_BRANCH
+    OUTPUT_STRIP_TRAILING_WHITESPACE)
+
+# get the latest commit hash
+execute_process(
+    COMMAND git rev-parse HEAD
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    OUTPUT_VARIABLE GIT_COMMIT_HASH
+    OUTPUT_STRIP_TRAILING_WHITESPACE)
+
+configure_file(
+    ${CMAKE_SOURCE_DIR}/version.hpp.in
+    ${CMAKE_BINARY_DIR}/generated/version.hpp
+)
+
+include_directories(${CMAKE_BINARY_DIR}/generated)
