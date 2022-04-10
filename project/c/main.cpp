@@ -55,6 +55,7 @@ namespace po = boost::program_options;
 // Program includes
 #include "main.hpp"
 #include "config.hpp"
+#include "console.hpp"
 #include "kernel.h"
 
 // Clean up code a bit by using aliases and typedefs
@@ -66,25 +67,6 @@ typedef Eigen::Matrix<float, 1, Eigen::Dynamic> eigen_float_row_vector;
 
 // Naughty naughty global!!!
 int program_verbosity;
-
-void console_print(int verbose_level, string input_string)
-{
-    time_t time_now = time(nullptr);
-    char time_string[100];
-    strftime(time_string, sizeof(time_string), "%Y/%m/%d-%H:%M:%S", localtime(&time_now));
-
-    if (verbose_level > program_verbosity)
-    {
-        return;
-    }
-
-    stringstream ss(input_string);
-    string output_string;
-    while (getline(ss, output_string, '\n'))
-    {
-        cout << format("[%s]") % time_string << " " << output_string << endl;
-    }
-}
 
 void populate_lookup_tables(cfg_t &config)
 {
@@ -435,35 +417,35 @@ bool lapack_solve_eigh(cfg_t &config, float *matrix, float *eigenvalues)
     lapack_int* iwork = NULL;
     float* work = NULL;
 
-    console_print(2, "\t** LAPACK solver debug");
-    console_print(2, str(format("\t\tn = %d") % n));
-    console_print(2, str(format("\t\tlda = %d") % lda));
+    console_print(2, "\t** LAPACK solver debug", LAPACK);
+    console_print(2, str(format("\t\tn = %d") % n), LAPACK);
+    console_print(2, str(format("\t\tlda = %d") % lda), LAPACK);
 
     // Setting lwork and liwork manually based on the LAPACK documentation
     lwork = 1 + 6*n + 2*n*n;
     liwork = 3 + 5*n;
 
-    console_print(2, str(format("\t\tliwork = %d") % liwork));
-    console_print(2, str(format("\t\tlwork = %d") % lwork));
+    console_print(2, str(format("\t\tliwork = %d") % liwork), LAPACK);
+    console_print(2, str(format("\t\tlwork = %d") % lwork), LAPACK);
 
     // Allocate memory for work arrays
     iwork = (lapack_int*)LAPACKE_malloc(sizeof(lapack_int) * liwork);
     if(iwork == NULL)
     {
         info = LAPACK_WORK_MEMORY_ERROR;
-        console_print(2, "\t\tFATAL! Could not allocate iwork array");
+        console_print(2, "\t\tFATAL! Could not allocate iwork array", LAPACK);
     }
     work = (float*)LAPACKE_malloc(sizeof(float) * lwork);
     if(work == NULL)
     {
         info = LAPACK_WORK_MEMORY_ERROR;
-        console_print(2, "\t\tFATAL! Could not allocate work array");
+        console_print(2, "\t\tFATAL! Could not allocate work array", LAPACK);
     }
 
     // Call LAPACK function and adjust info if our work areas are OK
     if ((iwork != NULL) && (work != NULL))
     {
-        console_print(2, "\t\tcalling LAPACK function");
+        console_print(2, "\t\tcalling LAPACK function", LAPACK);
         LAPACK_ssyevd(&jobz, &uplo, &n, matrix, &lda, eigenvalues, work, &lwork, iwork, &liwork, &info);
         if( info < 0 ) {
             info = info - 1;
@@ -474,14 +456,14 @@ bool lapack_solve_eigh(cfg_t &config, float *matrix, float *eigenvalues)
     LAPACKE_free(iwork);
     LAPACKE_free(work);
 
-    console_print(2, str(format("\tinfo = %d") % info));
+    console_print(2, str(format("\tinfo = %d") % info), LAPACK);
 
     return (info==0);
 }
 
 int main(int argc, char *argv[])
 {
-    console_print(0, "** Exact Hartree-Fock simulator **");
+    console_print(0, "** Exact Hartree-Fock simulator **", SIM);
 
     // Set the maximum number of thread to use for OMP and Eigen
     omp_set_num_threads(OMP_NUM_THREADS); // Set the number of maximum threads to use for OMP
@@ -529,19 +511,22 @@ int main(int argc, char *argv[])
     config.convergence_percentage = vm["convergence"].as<float>();
     program_verbosity = vm["verbosity"].as<int>();
 
-    console_print(0, str(format("\titerations = %d") % config.max_iterations));
-    console_print(0, str(format("\tnum_partitions = %d") % config.num_partitions));
-    console_print(0, str(format("\tmatrix_dim = %d") % config.matrix_dim));
-    console_print(0, str(format("\tlimit = %d") % config.limit));
-    console_print(0, str(format("\tstep_size = %f") % config.step_size));
+    // Print program information
+    console_print(0, str(format("\titerations = %d") % config.max_iterations), SIM);
+    console_print(0, str(format("\tnum_partitions = %d") % config.num_partitions), SIM);
+    console_print(0, str(format("\tmatrix_dim = %d") % config.matrix_dim), SIM);
+    console_print(0, str(format("\tlimit = %d") % config.limit), SIM);
+    console_print(0, str(format("\tstep_size = %f") % config.step_size), SIM);
     if (atomic_structure == HELIUM_ATOM)
     {
-        console_print(0, "\tatomic structure: Helium Atom");
+        console_print(0, "\tatomic structure: Helium Atom", SIM);
     }
     else if (atomic_structure == HYDROGEN_MOLECULE)
     {
-        console_print(0, "\tatomic structure: Hydrogen Molecule");
+        console_print(0, "\tatomic structure: Hydrogen Molecule", SIM);
     }
+    // Print CUDA information
+    cuda_print_device_info();
 
     // Populate LUTs
     populate_lookup_tables(config);
@@ -562,16 +547,16 @@ int main(int argc, char *argv[])
     eigen_float_col_vector trimmed_eigenvalues(config.num_solutions, 1);
     eigen_float_matrix trimmed_eigenvectors(config.matrix_dim, config.num_solutions);
 
-    console_print(0, "** Simulation start!");
+    console_print(0, "** Simulation start!", SIM);
     auto sim_start = chrono::system_clock::now();
 
     // generate the second order Laplacian matrix for 3D space
-    console_print(1, "** Generating kinetic energy matrix");
+    console_print(1, "** Generating kinetic energy matrix", SIM);
     generate_laplacian_matrix(config, laplacian_matrix.data());
     // generate the kinetic energy matrix
     kinetic_matrix = (laplacian_matrix/(2.0*config.step_size*config.step_size));
     // generate the Coulombic attraction matrix
-    console_print(1, "** Generating electron-nucleus Coulombic attraction matrix");
+    console_print(1, "** Generating electron-nucleus Coulombic attraction matrix", SIM);
     generate_attraction_matrix(config, atomic_structure, attraction_matrix.data());
 
     // Main HF loop
@@ -583,39 +568,39 @@ int main(int argc, char *argv[])
     // initial solution
     fock_matrix = -kinetic_matrix - attraction_matrix;
 
-    console_print(1, "** Obtaining eigenvalues and eigenvectors for initial solution...");
+    console_print(1, "** Obtaining eigenvalues and eigenvectors for initial solution...", SIM);
     // LAPACK solver
     eigenvectors = fock_matrix;
     if (!lapack_solve_eigh(config, eigenvectors.data(), eigenvalues.data()))
     {
-        console_print(0, "** Something went horribly wrong with the solver, aborting");
+        console_print(0, "** Something went horribly wrong with the solver, aborting", SIM);
         exit(EXIT_FAILURE);
     }
     orbital_values = eigenvectors.col(0);
 
     do
     {
-        console_print(0, str(format("** Iteration: %d") % interation_count));
+        console_print(0, str(format("** Iteration: %d") % interation_count), SIM);
 
         auto iteration_start = chrono::system_clock::now();
 
         // generate repulsion matrix
-        console_print(1, "** Generating electron-electron Coulombic repulsion matrix");
+        console_print(1, "** Generating electron-electron Coulombic repulsion matrix", SIM);
         generate_repulsion_matrix(config, orbital_values.data(), repulsion_matrix.data());
         // generate exchange matrix
-        console_print(1, "** Generating electron-electron exchange matrix");
+        console_print(1, "** Generating electron-electron exchange matrix", SIM);
         generate_exchange_matrix(config, orbital_values.data(), exchange_matrix.data());
         // form fock matrix
-        console_print(1, "** Generating Fock matrix");
+        console_print(1, "** Generating Fock matrix", SIM);
         fock_matrix = -kinetic_matrix - attraction_matrix + 2.0*repulsion_matrix - exchange_matrix;
 
-        console_print(1, "** Obtaining eigenvalues and eigenvectors...");
+        console_print(1, "** Obtaining eigenvalues and eigenvectors...", SIM);
 
         // LAPACK solver, the same one used in numpy
         eigenvectors = fock_matrix;
         if (!lapack_solve_eigh(config, eigenvectors.data(), eigenvalues.data()))
         {
-            console_print(0, "** Something went horribly wrong with the solver, aborting");
+            console_print(0, "** Something went horribly wrong with the solver, aborting", SIM);
             exit(EXIT_FAILURE);
         }
 
@@ -629,8 +614,8 @@ int main(int argc, char *argv[])
         total_energy = calculate_total_energy(orbital_values, kinetic_matrix, attraction_matrix, repulsion_matrix, exchange_matrix);
         total_energy_percent_diff = abs((total_energy - last_total_energy)/((total_energy + last_total_energy) / 2.0));
 
-        console_print(0, str(format("** Total energy: %.3f") % (total_energy)));
-        console_print(0, str(format("** Energy %% diff: %.3f%%") % (total_energy_percent_diff * 100.0)));
+        console_print(0, str(format("** Total energy: %.3f") % (total_energy)), SIM);
+        console_print(0, str(format("** Energy %% diff: %.3f%%") % (total_energy_percent_diff * 100.0)), SIM);
 
         // update last value
         last_total_energy = total_energy;
@@ -641,7 +626,7 @@ int main(int argc, char *argv[])
         auto iteration_end = chrono::system_clock::now();
         auto iteration_time = chrono::duration<float>(iteration_end - iteration_start);
 
-        console_print(0, str(format("** Iteration end! Iteration time: %0.3f seconds**") % (float)(iteration_time.count())));
+        console_print(0, str(format("** Iteration end! Iteration time: %0.3f seconds**") % (float)(iteration_time.count())), SIM);
 
         // check if we've hit the maximum iteration limit
         if (interation_count == config.max_iterations)
@@ -658,16 +643,16 @@ int main(int argc, char *argv[])
     }
     while(1);
 
-    console_print(0, "** Final Eigenvalues:");
+    console_print(0, "** Final Eigenvalues:", SIM);
     stringstream ss;
     ss << trimmed_eigenvalues;
-    console_print(0, ss.str());
+    console_print(0, ss.str(), SIM);
     ss.str(string()); // clear ss
-    console_print(0, str(format("** Final Total energy: %.3f") % (total_energy)));
+    console_print(0, str(format("** Final Total energy: %.3f") % (total_energy)), SIM);
 
     auto sim_end = chrono::system_clock::now();
     auto sim_time = chrono::duration<float>(sim_end - sim_start);
-    console_print(0, str(format("** Simulation end! Total time: %0.3f seconds**") % (float)(sim_time.count())));
+    console_print(0, str(format("** Simulation end! Total time: %0.3f seconds**") % (float)(sim_time.count())), SIM);
     
     cuda_numerical_integration_kernel(orbital_values.data());
 

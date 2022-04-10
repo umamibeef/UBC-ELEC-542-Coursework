@@ -24,5 +24,29 @@ SOFTWARE.
 
 #pragma once
 
-void cuda_print_device_info(void);
-int cuda_numerical_integration_kernel(float * orbital_values);
+extern int program_verbosity;
+
+// Console ANSI colors
+#define ANSI_COLOR_RED     "\x1b[31m"
+#define ANSI_COLOR_GREEN   "\x1b[32m"
+#define ANSI_COLOR_YELLOW  "\x1b[33m"
+#define ANSI_COLOR_BLUE    "\x1b[34m"
+#define ANSI_COLOR_MAGENTA "\x1b[35m"
+#define ANSI_COLOR_CYAN    "\x1b[36m"
+#define ANSI_COLOR_RESET   "\x1b[0m"
+#define ERASE_SCREEN       "\x1b[2J"
+
+typedef enum
+{
+    NONE = 0,
+    SIM,
+    CUDA,
+    LAPACK,
+} client_e;
+
+// Headers
+#include <iostream>
+
+// Functions
+void console_print(int verbose_level, std::string input_string, client_e client = NONE);
+void console_print_err(int verbose_level, std::string input_string, client_e client = NONE);

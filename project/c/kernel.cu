@@ -22,12 +22,20 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 **/
 
+// C/C++ includes
 #include <stdlib.h>
 #include <stdio.h>
 
+// Boost includes
+#include <boost/format.hpp>
+
+// Program includes
 #include "main.hpp"
 #include "config.hpp"
+#include "console.hpp"
 #include "kernel.h"
+
+using namespace boost;
 
 // Electron-electron Coulombic repulsion function
 float cuda_repulsion_function(cfg_t &config, int linear_coordinates_1, int linear_coordinates_2)
@@ -96,6 +104,23 @@ void cuda_generate_exchange_matrix(cfg_t &config, float *orbital_values, float *
             sum += cuda_exchange_matrix_integrand_function(config, orbital_values, electron_one_coordinate_index, electron_two_coordinate_index);
         }
         matrix[electron_one_coordinate_index + electron_one_coordinate_index*config.matrix_dim] = sum*h_cubed;
+    }
+}
+
+void cuda_print_device_info(void)
+{
+    int num_devices;
+
+    cudaGetDeviceCount(&num_devices);
+    for (int i = 0; i < num_devices; i++)
+    {
+      cudaDeviceProp prop;
+      cudaGetDeviceProperties(&prop, i);
+      console_print(0, str(format("\tDevice Number: %d\n") % i), CUDA);
+      console_print(0, str(format("\t\tDevice name: %s\n") % prop.name), CUDA);
+      console_print(0, str(format("\t\tMemory Clock Rate (KHz): %d\n") % prop.memoryClockRate), CUDA);
+      console_print(0, str(format("\t\tMemory Bus Width (bits): %d\n") % prop.memoryBusWidth), CUDA);
+      console_print(0, str(format("\t\tPeak Memory Bandwidth (GB/s): %f\n\n") % (2.0*prop.memoryClockRate*(prop.memoryBusWidth/8)/1.0e6)), CUDA);
     }
 }
 

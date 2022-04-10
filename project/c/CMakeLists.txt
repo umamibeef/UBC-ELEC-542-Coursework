@@ -44,7 +44,7 @@ endif()
 include_directories(${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES} ${Boost_INCLUDE_DIRS})
 
 # add the executable
-add_executable(ExactHartreeFockSim main.cpp kernel.cu kernel.cu)
+add_executable(ExactHartreeFockSim main.cpp console.cpp kernel.cu kernel.cu)
 
 set_target_properties(ExactHartreeFockSim PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 
