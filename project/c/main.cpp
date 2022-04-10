@@ -29,6 +29,7 @@ SOFTWARE.
 #include <chrono>
 #include <ctime>
 #include <locale>
+#include <vector>
 
 // Eigen includes
 #define EIGEN_USE_BLAS // use external BLAS routines
@@ -53,6 +54,7 @@ namespace po = boost::program_options;
 
 // Program includes
 #include "main.hpp"
+#include "config.hpp"
 #include "kernel.h"
 
 // Clean up code a bit by using aliases and typedefs
@@ -62,13 +64,16 @@ typedef Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic> eigen_float_matrix;
 typedef Eigen::Matrix<float, Eigen::Dynamic, 1> eigen_float_col_vector;
 typedef Eigen::Matrix<float, 1, Eigen::Dynamic> eigen_float_row_vector;
 
+// Naughty naughty global!!!
+int program_verbosity;
+
 void console_print(int verbose_level, string input_string)
 {
     time_t time_now = time(nullptr);
     char time_string[100];
     strftime(time_string, sizeof(time_string), "%Y/%m/%d-%H:%M:%S", localtime(&time_now));
 
-    if (verbose_level > PROGRAM_VERBOSITY)
+    if (verbose_level > program_verbosity)
     {
         return;
     }
@@ -306,9 +311,9 @@ void generate_repulsion_matrix(cfg_t &config, float *orbital_values, float *matr
 {
     float h_cubed = pow(config.step_size, 3.0);
 
-    // Copying what happens in the exchange matrix...
-#if 0
-    eigen_float_col_vector repulsion_matrix_diagonal(config.matrix_dim, 1);
+    // Set matrix to 0
+    memset(matrix,0.0,config.matrix_dim*config.matrix_dim*sizeof(float));
+
     for (int electron_one_coordinate_index = 0; electron_one_coordinate_index < config.matrix_dim; electron_one_coordinate_index++)
     {
         float sum = 0;
@@ -316,11 +321,11 @@ void generate_repulsion_matrix(cfg_t &config, float *orbital_values, float *matr
         {
             sum += repulsion_matrix_integrand_function(config, orbital_values, electron_one_coordinate_index, electron_two_coordinate_index);
         }
-        repulsion_matrix_diagonal(electron_one_coordinate_index) = sum*h_cubed;
+        matrix[electron_one_coordinate_index + electron_one_coordinate_index*config.matrix_dim] = sum*h_cubed;
     }
-    matrix = repulsion_matrix_diagonal.asDiagonal();
-#endif
 
+    // Just to see what would happen, I tried implementing the same thing in the Coulomb repulsion matrix as in the exchange. This led to incorrect results.
+    #if 0
     for (int electron_one_coordinate_index = 0; electron_one_coordinate_index < config.matrix_dim; electron_one_coordinate_index++)
     {
         for (int electron_two_coordinate_index = 0; electron_two_coordinate_index < (electron_one_coordinate_index + 1); electron_two_coordinate_index++)
@@ -329,6 +334,7 @@ void generate_repulsion_matrix(cfg_t &config, float *orbital_values, float *matr
             matrix[electron_two_coordinate_index + electron_one_coordinate_index*config.matrix_dim] = matrix[electron_one_coordinate_index + electron_two_coordinate_index*config.matrix_dim];
         }
     }
+    #endif
 }
 
 
@@ -336,9 +342,11 @@ void generate_exchange_matrix(cfg_t &config, float *orbital_values, float *matri
 {
     float h_cubed = pow(config.step_size, 3.0);
 
+    // Set matrix to 0
+    memset(matrix,0.0,config.matrix_dim*config.matrix_dim*sizeof(float));
+
     // Why doesn't this work?! It's in the math!
-#if 0
-    eigen_float_col_vector exchange_matrix_diagonal(config.matrix_dim, 1);
+
     for (int electron_one_coordinate_index = 0; electron_one_coordinate_index < config.matrix_dim; electron_one_coordinate_index++)
     {
         float sum = 0;
@@ -346,11 +354,10 @@ void generate_exchange_matrix(cfg_t &config, float *orbital_values, float *matri
         {
             sum += exchange_matrix_integrand_function(config, orbital_values, electron_one_coordinate_index, electron_two_coordinate_index);
         }
-        exchange_matrix_diagonal(electron_one_coordinate_index) = sum*h_cubed;
+        matrix[electron_one_coordinate_index + electron_one_coordinate_index*config.matrix_dim] = sum*h_cubed;
     }
-    matrix = exchange_matrix_diagonal.asDiagonal();
-#endif
     
+    #if 0
     for (int electron_one_coordinate_index = 0; electron_one_coordinate_index < config.matrix_dim; electron_one_coordinate_index++)
     {
         for (int electron_two_coordinate_index = 0; electron_two_coordinate_index < (electron_one_coordinate_index + 1); electron_two_coordinate_index++)
@@ -368,6 +375,7 @@ void generate_exchange_matrix(cfg_t &config, float *orbital_values, float *matri
             matrix[electron_two_coordinate_index + electron_one_coordinate_index*config.matrix_dim] = matrix[electron_one_coordinate_index + electron_two_coordinate_index*config.matrix_dim];
         }
     }
+    #endif
 }
 
 template <typename A, typename B, typename C, typename D, typename E>
@@ -428,8 +436,8 @@ bool lapack_solve_eigh(cfg_t &config, float *matrix, float *eigenvalues)
     float* work = NULL;
 
     console_print(2, "\t** LAPACK solver debug");
-    console_print(2, str(format("\t\tn = matrix.cols() = %d") % n));
-    console_print(2, str(format("\t\tlda = matrix.outerStride() = %d") % lda));
+    console_print(2, str(format("\t\tn = %d") % n));
+    console_print(2, str(format("\t\tlda = %d") % lda));
 
     // Setting lwork and liwork manually based on the LAPACK documentation
     lwork = 1 + 6*n + 2*n*n;
@@ -484,10 +492,11 @@ int main(int argc, char *argv[])
     desc.add_options()
         ("help", "produce help message")
         ("iterations", po::value<int>()->default_value(50), "set maximum number of iterations")
-        ("partitions", po::value<int>()->default_value(11), "set number of partitions to divide solution space")
+        ("partitions", po::value<int>()->default_value(12), "set number of partitions to divide solution space")
         ("limit", po::value<int>()->default_value(4), "set the solution space maximum x=y=z limit")
-        ("convergence", po::value<float>()->default_value(0.1), "set the convergence condition (%)")
+        ("convergence", po::value<float>()->default_value(0.01), "set the convergence condition (%)")
         ("structure", po::value<int>()->default_value(0), "set the atomic structure: (0:He, 1:H2)")
+        ("verbosity", po::value<int>()->default_value(0), "set the verbosity of the program")
     ;
     po::variables_map vm;
     po::store(po::parse_command_line(argc, argv, desc), vm);
@@ -518,6 +527,7 @@ int main(int argc, char *argv[])
     config.max_iterations = vm["iterations"].as<int>();
     config.num_solutions = 6;
     config.convergence_percentage = vm["convergence"].as<float>();
+    program_verbosity = vm["verbosity"].as<int>();
 
     console_print(0, str(format("\titerations = %d") % config.max_iterations));
     console_print(0, str(format("\tnum_partitions = %d") % config.num_partitions));
@@ -569,16 +579,18 @@ int main(int argc, char *argv[])
     float total_energy;
     float total_energy_percent_diff;
     int interation_count = 0;
+
     // initial solution
     fock_matrix = -kinetic_matrix - attraction_matrix;
+
     console_print(1, "** Obtaining eigenvalues and eigenvectors for initial solution...");
     // LAPACK solver
-    if (!lapack_solve_eigh(config, fock_matrix.data(), eigenvalues.data()))
+    eigenvectors = fock_matrix;
+    if (!lapack_solve_eigh(config, eigenvectors.data(), eigenvalues.data()))
     {
         console_print(0, "** Something went horribly wrong with the solver, aborting");
         exit(EXIT_FAILURE);
     }
-
     orbital_values = eigenvectors.col(0);
 
     do
@@ -600,13 +612,12 @@ int main(int argc, char *argv[])
         console_print(1, "** Obtaining eigenvalues and eigenvectors...");
 
         // LAPACK solver, the same one used in numpy
-        if (!lapack_solve_eigh(config, fock_matrix.data(), eigenvalues.data()))
+        eigenvectors = fock_matrix;
+        if (!lapack_solve_eigh(config, eigenvectors.data(), eigenvalues.data()))
         {
             console_print(0, "** Something went horribly wrong with the solver, aborting");
             exit(EXIT_FAILURE);
         }
-        // using LAPACK solver, fock matrix now has the eigenvectors
-        eigenvectors = fock_matrix;
 
         // Extract orbital_values
         orbital_values = eigenvectors.col(0);
@@ -644,7 +655,8 @@ int main(int argc, char *argv[])
             break;
         }
 
-    } while(1);
+    }
+    while(1);
 
     console_print(0, "** Final Eigenvalues:");
     stringstream ss;
@@ -657,8 +669,7 @@ int main(int argc, char *argv[])
     auto sim_time = chrono::duration<float>(sim_end - sim_start);
     console_print(0, str(format("** Simulation end! Total time: %0.3f seconds**") % (float)(sim_time.count())));
     
-    // Call CUDA example
-    // cuda_example();
+    cuda_numerical_integration_kernel(orbital_values.data());
 
     return 0;
 }
