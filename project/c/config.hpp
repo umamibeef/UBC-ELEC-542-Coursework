@@ -40,4 +40,4 @@ typedef struct
     // lookup tables to speed up calculations
     std::vector<std::vector<float>> coordinate_value_array;
     std::vector<std::vector<float>> coordinate_index_array;
-} cfg_t;
+} Cfg_t;

@@ -34,10 +34,10 @@ using namespace std;
 using namespace boost;
 
 static const string none_string = " ";
-static const string sim_string = ANSI_FG_COLOR_CYAN         "|SIM   |" ANSI_COLOR_RESET;
-static const string cuda_string = ANSI_FG_COLOR_GREEN       "|CUDA  |" ANSI_COLOR_RESET;
+static const string sim_string = ANSI_FG_COLOR_CYAN         "|EHFSIM|" ANSI_COLOR_RESET;
+static const string cuda_string = ANSI_FG_COLOR_GREEN       "| CUDA |" ANSI_COLOR_RESET;
 static const string lapack_string = ANSI_FG_COLOR_YELLOW    "|LAPACK|" ANSI_COLOR_RESET;
-static const string error_string = ANSI_FG_COLOR_RED        "|ERROR |" ANSI_COLOR_RESET;
+static const string error_string = ANSI_FG_COLOR_RED        "|ERROR!|" ANSI_COLOR_RESET;
 
 void console_print_internal(int verbose_level, std::string input_string, client_e client, bool error)
 {
@@ -89,4 +89,9 @@ void console_print(int verbose_level, std::string input_string, client_e client)
 void console_print_err(int verbose_level, std::string input_string, client_e client)
 {
     console_print_internal(verbose_level, input_string, client, true);
+}
+
+void console_print_spacer(int verbose_level, client_e client)
+{
+    console_print_internal(verbose_level, " ", client, false);
 }

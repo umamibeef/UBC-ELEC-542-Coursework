@@ -47,7 +47,7 @@ extern int program_verbosity;
 #define ERASE_SCREEN            "\x1b[2J"
 
 #define TAB1                    "  "
-#define TAB2                    "     "
+#define TAB2                    "    "
 
 typedef enum
 {
@@ -63,3 +63,4 @@ typedef enum
 // Functions
 void console_print(int verbose_level, std::string input_string, client_e client = NONE);
 void console_print_err(int verbose_level, std::string input_string, client_e client = NONE);
+void console_print_spacer(int verbose_level, client_e client);

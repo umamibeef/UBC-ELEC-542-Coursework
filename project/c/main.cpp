@@ -62,9 +62,11 @@ namespace po = boost::program_options;
 // Clean up code a bit by using aliases and typedefs
 using namespace std;
 using namespace boost;
-typedef Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic> eigen_float_matrix;
-typedef Eigen::Matrix<float, Eigen::Dynamic, 1> eigen_float_col_vector;
-typedef Eigen::Matrix<float, 1, Eigen::Dynamic> eigen_float_row_vector;
+typedef Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic> EigenFloatMatrix_t;
+typedef Eigen::Matrix<float, Eigen::Dynamic, 1> EigenFloatColVector_t;
+typedef Eigen::Matrix<float, 1, Eigen::Dynamic> EigenFloatRowVector_t;
+typedef Eigen::Map<EigenFloatMatrix_t> EigenFloatMatrixMap_t;
+typedef Eigen::Map<EigenFloatColVector_t> EigenFloatColVectorMap_t;
 
 // Naughty naughty global!!!
 int program_verbosity;
@@ -90,7 +92,7 @@ void print_header(void)
     console_print(0, ss.str(), SIM);
 }
 
-void populate_lookup_values(cfg_t &config)
+void populate_lookup_values(Cfg_t &config)
 {
     // Resize LUTs
     config.coordinate_value_array.resize(IDX_NUM);
@@ -119,7 +121,7 @@ void populate_lookup_values(cfg_t &config)
     config.step_size_cubed = pow(config.step_size, 3.0);
 }
 
-void linear_coordinate_index_to_spatial_coordinates_index(cfg_t &config, int coordinate_index, int * coordinate_index_array)
+void linear_coordinate_index_to_spatial_coordinates_index(Cfg_t &config, int coordinate_index, int * coordinate_index_array)
 {
     // convert coordinate index to x,y,z coordinate indices
     int base_10_num = coordinate_index;
@@ -130,7 +132,7 @@ void linear_coordinate_index_to_spatial_coordinates_index(cfg_t &config, int coo
     }
 }
 
-void linear_coordinate_index_to_spatial_coordinates_values(cfg_t &config, int coordinate_index, float *coordinate_value_array)
+void linear_coordinate_index_to_spatial_coordinates_values(Cfg_t &config, int coordinate_index, float *coordinate_value_array)
 {
     int coordinates_indices[IDX_NUM];
     linear_coordinate_index_to_spatial_coordinates_index(config, coordinate_index, coordinates_indices);
@@ -140,7 +142,7 @@ void linear_coordinate_index_to_spatial_coordinates_values(cfg_t &config, int co
 }
 
 // Generate the 3D Laplacian matrix for the given number of partitions
-void generate_laplacian_matrix(cfg_t &config, float *matrix)
+void generate_laplacian_matrix(Cfg_t &config, float *matrix)
 {
     // Set matrix to 0
     memset(matrix,0.0,config.matrix_dim*config.matrix_dim*sizeof(float));
@@ -216,7 +218,7 @@ void generate_laplacian_matrix(cfg_t &config, float *matrix)
 }
 
 // Helium atom nucleus-electron Coulombic attraction function
-float attraction_function_helium(cfg_t &config, int linear_coordinates)
+float attraction_function_helium(Cfg_t &config, int linear_coordinates)
 {
     const float epsilon = EPSILON;
 
@@ -235,7 +237,7 @@ float attraction_function_helium(cfg_t &config, int linear_coordinates)
 }
 
 // Hydrogen molecule nucleus-electron Coulombic attraction function
-float attraction_function_hydrogen(cfg_t &config, int linear_coordinates)
+float attraction_function_hydrogen(Cfg_t &config, int linear_coordinates)
 {
     const float epsilon = EPSILON;
 
@@ -260,7 +262,7 @@ float attraction_function_hydrogen(cfg_t &config, int linear_coordinates)
 }
 
 // Generate the attraction matrix
-void generate_attraction_matrix(cfg_t &config, atomic_structure_e atomic_structure, float *matrix)
+void generate_attraction_matrix(Cfg_t &config, atomic_structure_e atomic_structure, float *matrix)
 {
     // Set matrix to 0
     memset(matrix,0.0,config.matrix_dim*config.matrix_dim*sizeof(float));
@@ -282,7 +284,7 @@ void generate_attraction_matrix(cfg_t &config, atomic_structure_e atomic_structu
 }
 
 // Electron-electron Coulombic repulsion function
-float repulsion_function(cfg_t &config, int linear_coordinates_1, int linear_coordinates_2)
+float repulsion_function(Cfg_t &config, int linear_coordinates_1, int linear_coordinates_2)
 {
     const float epsilon = EPSILON;
 
@@ -304,17 +306,17 @@ float repulsion_function(cfg_t &config, int linear_coordinates_1, int linear_coo
     return (1.0/(denominator));
 }
 
-float repulsion_matrix_integrand_function(cfg_t &config, float *orbital_values, int linear_coords_1, int linear_coords_2)
+float repulsion_matrix_integrand_function(Cfg_t &config, float *orbital_values, int linear_coords_1, int linear_coords_2)
 {
     return pow(orbital_values[linear_coords_2], 2.0)*repulsion_function(config, linear_coords_1, linear_coords_2);
 }
 
-float exchange_matrix_integrand_function(cfg_t &config, float *orbital_values, int linear_coords_1, int linear_coords_2)
+float exchange_matrix_integrand_function(Cfg_t &config, float *orbital_values, int linear_coords_1, int linear_coords_2)
 {
     return orbital_values[linear_coords_1]*orbital_values[linear_coords_2]*repulsion_function(config, linear_coords_1, linear_coords_2);
 }
 
-void generate_repulsion_matrix(cfg_t &config, float *orbital_values, float *matrix)
+void generate_repulsion_matrix(Cfg_t &config, float *orbital_values, float *matrix)
 {
     for (int electron_one_coordinate_index = 0; electron_one_coordinate_index < config.matrix_dim; electron_one_coordinate_index++)
     {
@@ -328,7 +330,7 @@ void generate_repulsion_matrix(cfg_t &config, float *orbital_values, float *matr
 }
 
 
-void generate_exchange_matrix(cfg_t &config, float *orbital_values, float *matrix)
+void generate_exchange_matrix(Cfg_t &config, float *orbital_values, float *matrix)
 {
     for (int electron_one_coordinate_index = 0; electron_one_coordinate_index < config.matrix_dim; electron_one_coordinate_index++)
     {
@@ -345,8 +347,8 @@ template <typename A, typename B, typename C, typename D, typename E>
 float calculate_total_energy(Eigen::MatrixBase<A> &orbital_values, Eigen::MatrixBase<B> &kinetic_matrix, Eigen::MatrixBase<C> &attraction_matrix, Eigen::MatrixBase<D> &repulsion_matrix, Eigen::MatrixBase<E> &exchange_matrix)
 { 
     // orbital values are real, so no need to take conjugate
-    eigen_float_row_vector psi_prime = orbital_values.transpose();
-    eigen_float_col_vector psi = orbital_values;
+    EigenFloatRowVector_t psi_prime = orbital_values.transpose();
+    EigenFloatColVector_t psi = orbital_values;
 
     float energy_sum = 0;
 
@@ -379,7 +381,7 @@ float calculate_total_energy(Eigen::MatrixBase<A> &orbital_values, Eigen::Matrix
 // @return     True if the solver found solutions, false if the solver failed
 //             for some reason
 //
-bool lapack_solve_eigh(cfg_t &config, float *matrix, float *eigenvalues)
+bool lapack_solve_eigh(Cfg_t &config, float *matrix, float *eigenvalues)
 {
     char jobz = 'V'; // compute eigenvalues and eigenvectors.
     char uplo = 'U'; // perform calculation on upper triangle of matrix
@@ -388,10 +390,10 @@ bool lapack_solve_eigh(cfg_t &config, float *matrix, float *eigenvalues)
     lapack_int info = 0;
     lapack_int liwork;
     lapack_int lwork;
-    lapack_int* iwork = NULL;
-    float* work = NULL;
+    lapack_int* iwork = nullptr;
+    float* work = nullptr;
 
-    console_print(2, TAB1 "** LAPACK solver debug", LAPACK);
+    console_print(2, TAB1 "LAPACK solver debug", LAPACK);
     console_print(2, str(format(TAB2 "n = %d") % n), LAPACK);
     console_print(2, str(format(TAB2 "lda = %d") % lda), LAPACK);
 
@@ -404,20 +406,20 @@ bool lapack_solve_eigh(cfg_t &config, float *matrix, float *eigenvalues)
 
     // Allocate memory for work arrays
     iwork = (lapack_int*)LAPACKE_malloc(sizeof(lapack_int) * liwork);
-    if(iwork == NULL)
+    if(iwork == nullptr)
     {
         info = LAPACK_WORK_MEMORY_ERROR;
         console_print(2, TAB2 "FATAL! Could not allocate iwork array", LAPACK);
     }
     work = (float*)LAPACKE_malloc(sizeof(float) * lwork);
-    if(work == NULL)
+    if(work == nullptr)
     {
         info = LAPACK_WORK_MEMORY_ERROR;
         console_print(2, TAB2 "FATAL! Could not allocate work array", LAPACK);
     }
 
     // Call LAPACK function and adjust info if our work areas are OK
-    if ((iwork != NULL) && (work != NULL))
+    if ((iwork != nullptr) && (work != nullptr))
     {
         console_print(2, TAB2 "calling LAPACK function", LAPACK);
         LAPACK_ssyevd(&jobz, &uplo, &n, matrix, &lda, eigenvalues, work, &lwork, iwork, &liwork, &info);
@@ -476,7 +478,7 @@ int main(int argc, char *argv[])
     }
 
     // Program configuration
-    cfg_t config;
+    Cfg_t config;
     config.num_partitions = vm["partitions"].as<int>();
     config.limit = vm["limit"].as<int>();
     config.matrix_dim = config.num_partitions*config.num_partitions*config.num_partitions;
@@ -501,39 +503,67 @@ int main(int argc, char *argv[])
     {
         console_print(0, TAB1 "Atomic Structure: Hydrogen Molecule", SIM);
     }
-    console_print(0, " ", SIM);
+    console_print_spacer(0, SIM);
     // Print CUDA information
     cuda_print_device_info();
 
     // Populate LUTs
     populate_lookup_values(config);
 
-    // Matrix instantiations
-    eigen_float_matrix laplacian_matrix(config.matrix_dim, config.matrix_dim);
-    eigen_float_matrix kinetic_matrix(config.matrix_dim, config.matrix_dim);
-    eigen_float_matrix attraction_matrix(config.matrix_dim, config.matrix_dim);
-    eigen_float_matrix repulsion_matrix(config.matrix_dim, config.matrix_dim);
-    eigen_float_matrix exchange_matrix(config.matrix_dim, config.matrix_dim);
-    eigen_float_matrix fock_matrix(config.matrix_dim, config.matrix_dim);
+    // Matrix declarations
+    EigenFloatMatrix_t laplacian_matrix;
+    EigenFloatMatrix_t kinetic_matrix;
+    EigenFloatMatrix_t attraction_matrix;
+    EigenFloatMatrixMap_t repulsion_matrix(nullptr, config.matrix_dim, config.matrix_dim);
+    EigenFloatMatrixMap_t exchange_matrix(nullptr, config.matrix_dim, config.matrix_dim);
+    EigenFloatMatrix_t fock_matrix;
     // Orbital values
-    eigen_float_col_vector orbital_values(config.matrix_dim, 1);
+    EigenFloatColVectorMap_t orbital_values(nullptr, config.matrix_dim, 1);
     // Eigenvectors and eigenvalues
-    eigen_float_col_vector eigenvalues(config.matrix_dim, 1);
-    eigen_float_matrix eigenvectors(config.matrix_dim, config.matrix_dim);
-    // Trimmed eigenvectors and eigenvalues
-    eigen_float_col_vector trimmed_eigenvalues(config.num_solutions, 1);
-    eigen_float_matrix trimmed_eigenvectors(config.matrix_dim, config.num_solutions);
+    EigenFloatColVector_t eigenvalues;
+    EigenFloatMatrix_t eigenvectors;
 
-    console_print(0, "** Simulation start!", SIM);
+    // Instantiate matrices and vectors
+    new (&laplacian_matrix) EigenFloatMatrix_t(config.matrix_dim, config.matrix_dim);
+    new (&kinetic_matrix) EigenFloatMatrix_t(config.matrix_dim, config.matrix_dim);
+    new (&attraction_matrix) EigenFloatMatrix_t(config.matrix_dim, config.matrix_dim);
+    new (&fock_matrix) EigenFloatMatrix_t(config.matrix_dim, config.matrix_dim);
+    new (&eigenvectors) EigenFloatMatrix_t(config.matrix_dim, config.matrix_dim);
+    new (&eigenvalues) EigenFloatColVector_t(config.matrix_dim, 1);
+    // For the repulsion, exchange, and orbital values, we will overlay the
+    // Eigen objects over unified memory that is allocated via CUDA. This
+    // overlay is performed using the Eigen::Map class, which allows one to map
+    // a pointer to data allocated outside of Eigen to an Eigen object, like a
+    // matrix or vector. kernel.h externs the three pointers that are used to
+    // store the addresses and the following call will allocate memory for them.
+    cuda_allocate_shared_memory(config);
+    // make sure we got some good pointers out of that call
+    if ((orbital_values_shared != nullptr) && (repulsion_matrix_shared != nullptr) && (exchange_matrix_shared != nullptr))
+    {
+        new (&orbital_values) EigenFloatColVectorMap_t(orbital_values_shared, config.matrix_dim, 1);
+        new (&repulsion_matrix) EigenFloatMatrixMap_t(repulsion_matrix_shared, config.matrix_dim, config.matrix_dim);
+        new (&exchange_matrix) EigenFloatMatrixMap_t(exchange_matrix_shared, config.matrix_dim, config.matrix_dim);
+    }
+    else
+    {
+        console_print_err(0, "Something went horribly wrong when allocating shared memory, aborting", SIM);
+        exit(EXIT_FAILURE);
+    }
+
+    // Trimmed eigenvectors and eigenvalues
+    EigenFloatColVector_t trimmed_eigenvalues(config.num_solutions, 1);
+    EigenFloatMatrix_t trimmed_eigenvectors(config.matrix_dim, config.num_solutions);
+
+    console_print(0, "Simulation start!", SIM);
     auto sim_start = chrono::system_clock::now();
 
     // generate the second order Laplacian matrix for 3D space
-    console_print(1, "** Generating kinetic energy matrix", SIM);
+    console_print(1, "Generating kinetic energy matrix", SIM);
     generate_laplacian_matrix(config, laplacian_matrix.data());
     // generate the kinetic energy matrix
     kinetic_matrix = (laplacian_matrix/(2.0*config.step_size*config.step_size));
     // generate the Coulombic attraction matrix
-    console_print(1, "** Generating electron-nucleus Coulombic attraction matrix", SIM);
+    console_print(1, "Generating electron-nucleus Coulombic attraction matrix", SIM);
     generate_attraction_matrix(config, atomic_structure, attraction_matrix.data());
 
     // Main HF loop
@@ -545,19 +575,19 @@ int main(int argc, char *argv[])
     // initial solution
     fock_matrix = -kinetic_matrix - attraction_matrix;
 
-    console_print(1, "** Obtaining eigenvalues and eigenvectors for initial solution...", SIM);
+    console_print(1, "Obtaining eigenvalues and eigenvectors for initial solution...", SIM);
     // LAPACK solver
     eigenvectors = fock_matrix;
     if (!lapack_solve_eigh(config, eigenvectors.data(), eigenvalues.data()))
     {
-        console_print(0, "** Something went horribly wrong with the solver, aborting", SIM);
+        console_print_err(0, "Something went horribly wrong with the solver, aborting", SIM);
         exit(EXIT_FAILURE);
     }
     orbital_values = eigenvectors.col(0);
 
     do
     {
-        console_print(0, str(format("** Iteration: %d") % interation_count), SIM);
+        console_print(0, str(format("Iteration Start: %d") % interation_count), SIM);
 
         auto iteration_start = chrono::system_clock::now();
 
@@ -565,23 +595,27 @@ int main(int argc, char *argv[])
         repulsion_matrix.Zero(config.matrix_dim, config.matrix_dim);
         exchange_matrix.Zero(config.matrix_dim, config.matrix_dim);
 
+        // generate repulsion and exchange matrices on GPU
+        cuda_numerical_integration_kernel(config, orbital_values.data(), repulsion_matrix.data(), exchange_matrix.data());
+
+        // generate repulsion and exchange matrices on CPU
         // generate repulsion matrix
-        console_print(1, "** Generating electron-electron Coulombic repulsion matrix", SIM);
+        console_print(1, "Generating electron-electron Coulombic repulsion matrix", SIM);
         generate_repulsion_matrix(config, orbital_values.data(), repulsion_matrix.data());
         // generate exchange matrix
-        console_print(1, "** Generating electron-electron exchange matrix", SIM);
+        console_print(1, "Generating electron-electron exchange matrix", SIM);
         generate_exchange_matrix(config, orbital_values.data(), exchange_matrix.data());
         // form fock matrix
-        console_print(1, "** Generating Fock matrix", SIM);
+        console_print(1, "Generating Fock matrix", SIM);
         fock_matrix = -kinetic_matrix - attraction_matrix + 2.0*repulsion_matrix - exchange_matrix;
 
-        console_print(1, "** Obtaining eigenvalues and eigenvectors...", SIM);
+        console_print(1, "Obtaining eigenvalues and eigenvectors...", SIM);
 
         // LAPACK solver, the same one used in numpy
         eigenvectors = fock_matrix;
         if (!lapack_solve_eigh(config, eigenvectors.data(), eigenvalues.data()))
         {
-            console_print(0, "** Something went horribly wrong with the solver, aborting", SIM);
+            console_print(0, "Something went horribly wrong with the solver, aborting", SIM);
             exit(EXIT_FAILURE);
         }
 
@@ -595,8 +629,8 @@ int main(int argc, char *argv[])
         total_energy = calculate_total_energy(orbital_values, kinetic_matrix, attraction_matrix, repulsion_matrix, exchange_matrix);
         total_energy_percent_diff = abs((total_energy - last_total_energy)/((total_energy + last_total_energy) / 2.0));
 
-        console_print(0, str(format("** Total energy: %.3f") % (total_energy)), SIM);
-        console_print(0, str(format("** Energy %% diff: %.3f%%") % (total_energy_percent_diff * 100.0)), SIM);
+        console_print(0, str(format("Total energy: %.3f") % (total_energy)), SIM);
+        console_print(0, str(format("Energy %% diff: %.3f%%") % (total_energy_percent_diff * 100.0)), SIM);
 
         // update last value
         last_total_energy = total_energy;
@@ -607,7 +641,8 @@ int main(int argc, char *argv[])
         auto iteration_end = chrono::system_clock::now();
         auto iteration_time = chrono::duration<float>(iteration_end - iteration_start);
 
-        console_print(0, str(format("** Iteration end! Iteration time: %0.3f seconds**") % (float)(iteration_time.count())), SIM);
+        console_print(0, str(format("Iteration end! Iteration time: %0.3f seconds") % (float)(iteration_time.count())), SIM);
+        console_print_spacer(0, SIM);
 
         // check if we've hit the maximum iteration limit
         if (interation_count == config.max_iterations)
@@ -624,18 +659,22 @@ int main(int argc, char *argv[])
     }
     while(1);
 
-    console_print(0, "** Final Eigenvalues:", SIM);
+    // free shared memory for GPU calculations
+    cuda_free_shared_memory();
+
+    console_print_spacer(0, SIM);
+    console_print(0, "Final Eigenvalues:", SIM);
     stringstream ss;
-    ss << trimmed_eigenvalues;
+    ss << trimmed_eigenvalues.transpose();
     console_print(0, ss.str(), SIM);
     ss.str(string()); // clear ss
-    console_print(0, str(format("** Final Total energy: %.3f") % (total_energy)), SIM);
+    console_print_spacer(0, SIM);
+    console_print(0, str(format("Final Total energy: %.3f") % (total_energy)), SIM);
+    console_print_spacer(0, SIM);
 
     auto sim_end = chrono::system_clock::now();
     auto sim_time = chrono::duration<float>(sim_end - sim_start);
-    console_print(0, str(format("** Simulation end! Total time: %0.3f seconds**") % (float)(sim_time.count())), SIM);
-    
-    cuda_numerical_integration_kernel(orbital_values.data());
+    console_print(0, str(format("Simulation end! Total time: %0.3f seconds") % (float)(sim_time.count())), SIM);
 
     return 0;
 }
