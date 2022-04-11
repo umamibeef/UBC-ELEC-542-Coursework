@@ -324,13 +324,16 @@ float calculate_total_energy(Eigen::MatrixBase<A> &orbital_values, Eigen::Matrix
     EigenFloatRowVector_t psi_prime = orbital_values.transpose();
     EigenFloatColVector_t psi = orbital_values;
 
+    EigenFloatMatrix_t repulsion_matrix = repulsion_diagonal.asDiagonal();
+    EigenFloatMatrix_t exchange_matrix = exchange_diagonal.asDiagonal();
+
     float energy_sum = 0;
 
     // sum for the total number of electrons in the systems: 2
     for (int i = 0; i < 2; i++)
     {
         auto hermitian_term = psi_prime * (-kinetic_matrix - attraction_matrix) * psi;
-        auto hf_term = 0.5 * psi_prime * (2.0 * EigenFloatMatrix_t(repulsion_diagonal.asDiagonal()) - EigenFloatMatrix_t(exchange_diagonal.asDiagonal())) * psi;
+        auto hf_term = 0.5 * psi_prime * (2.0 * repulsion_matrix - exchange_matrix) * psi;
         energy_sum += (hermitian_term(0) + hf_term(0));
     }
 
@@ -624,6 +627,8 @@ int main(int argc, char *argv[])
         //     cout << "repulsion_diagonal: " << endl << repulsion_diagonal << endl;
         //     cout << "exchange_diagonal: " << endl << exchange_diagonal << endl;
         // }
+        
+        console_print(1, "Calculating total energy", SIM);
 
         total_energy = calculate_total_energy(orbital_values, kinetic_matrix, attraction_matrix, repulsion_diagonal, exchange_diagonal);
         total_energy_percent_diff = abs((total_energy - last_total_energy)/((total_energy + last_total_energy) / 2.0));

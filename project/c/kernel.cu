@@ -25,6 +25,7 @@ SOFTWARE.
 // C/C++ includes
 #include <stdlib.h>
 #include <stdio.h>
+#include <chrono>
 
 // Boost includes
 #include <boost/format.hpp>
@@ -113,6 +114,7 @@ void cuda_get_device_info(void)
 {
     int num_devices;
 
+    console_print_spacer(0, CUDA);
     console_print(0, "CUDA Device information:", CUDA);
     cudaGetDeviceCount(&num_devices);
     for (int i = 0; i < num_devices; i++)
@@ -170,8 +172,8 @@ int cuda_allocate_shared_memory(LutVals_t *lut_vals, float **orbital_values_data
         console_print(2, str(format("Allocated %d bytes for shared repulsion matrix diagonal") % repulsion_exchange_matrices_size_bytes), CUDA);
         console_print(2, str(format("Allocated %d bytes for shared exchange matrix diagonal") % repulsion_exchange_matrices_size_bytes), CUDA);
         console_print(2, str(format("Allocated 3x %d bytes for coordinate LUTs") % coordinate_luts_size_bytes), CUDA);
-        console_print_spacer(2, CUDA);
     }
+    console_print_spacer(0, CUDA);
 
     return rv;
 }
@@ -222,10 +224,17 @@ int cuda_numerical_integration_kernel(LutVals_t lut_vals, float *orbital_values,
     {
         console_print(0, "Generating repulsion and exchange matrices on GPU...", CUDA);
 
+        auto cuda_start = std::chrono::system_clock::now();
+
         cuda_generate_repulsion_matrix<<<num_blocks, blocks_size>>>(lut_vals, orbital_values, repulsion_matrix);
         cudaDeviceSynchronize();
         cuda_generate_exchange_matrix<<<num_blocks, blocks_size>>>(lut_vals, orbital_values, exchange_matrix);
         cudaDeviceSynchronize();
+
+        auto cuda_end = std::chrono::system_clock::now();
+        auto cuda_time = std::chrono::duration<float>(cuda_end - cuda_start);
+
+        console_print(0, str(format("Repulsion and exchange matrix computed in: %0.3f seconds") % (float)(cuda_time.count())), CUDA);
     }
 
     error = cudaGetLastError();
