@@ -280,45 +280,45 @@ float repulsion_function(LutVals_t lut_vals, int linear_coordinates_1, int linea
     return (1.0/(denominator));
 }
 
-float repulsion_matrix_integrand_function(LutVals_t lut_vals, float *orbital_values, int linear_coords_1, int linear_coords_2)
+float repulsion_diagonal_integrand_function(LutVals_t lut_vals, float *orbital_values, int linear_coords_1, int linear_coords_2)
 {
     return pow(orbital_values[linear_coords_2], 2.0)*repulsion_function(lut_vals, linear_coords_1, linear_coords_2);
 }
 
-float exchange_matrix_integrand_function(LutVals_t lut_vals, float *orbital_values, int linear_coords_1, int linear_coords_2)
+float exchange_diagonal_integrand_function(LutVals_t lut_vals, float *orbital_values, int linear_coords_1, int linear_coords_2)
 {
     return orbital_values[linear_coords_1]*orbital_values[linear_coords_2]*repulsion_function(lut_vals, linear_coords_1, linear_coords_2);
 }
 
-void generate_repulsion_matrix(LutVals_t lut_vals, float *orbital_values, float *matrix)
+void generate_repulsion_diagonal(LutVals_t lut_vals, float *orbital_values, float *diagonal)
 {
     for (int electron_one_coordinate_index = 0; electron_one_coordinate_index < lut_vals.matrix_dim; electron_one_coordinate_index++)
     {
         float sum = 0;
         for (int electron_two_coordinate_index = 0; electron_two_coordinate_index < lut_vals.matrix_dim; electron_two_coordinate_index++)
         {
-            sum += repulsion_matrix_integrand_function(lut_vals, orbital_values, electron_one_coordinate_index, electron_two_coordinate_index);
+            sum += repulsion_diagonal_integrand_function(lut_vals, orbital_values, electron_one_coordinate_index, electron_two_coordinate_index);
         }
-        matrix[electron_one_coordinate_index + electron_one_coordinate_index*lut_vals.matrix_dim] = sum*lut_vals.step_size_cubed;
+        diagonal[electron_one_coordinate_index] = sum*lut_vals.step_size_cubed;
     }
 }
 
 
-void generate_exchange_matrix(LutVals_t lut_vals, float *orbital_values, float *matrix)
+void generate_exchange_diagonal(LutVals_t lut_vals, float *orbital_values, float *diagonal)
 {
     for (int electron_one_coordinate_index = 0; electron_one_coordinate_index < lut_vals.matrix_dim; electron_one_coordinate_index++)
     {
         float sum = 0;
         for (int electron_two_coordinate_index = 0; electron_two_coordinate_index < lut_vals.matrix_dim; electron_two_coordinate_index++)
         {
-            sum += exchange_matrix_integrand_function(lut_vals, orbital_values, electron_one_coordinate_index, electron_two_coordinate_index);
+            sum += exchange_diagonal_integrand_function(lut_vals, orbital_values, electron_one_coordinate_index, electron_two_coordinate_index);
         }
-        matrix[electron_one_coordinate_index + electron_one_coordinate_index*lut_vals.matrix_dim] = sum*lut_vals.step_size_cubed;
+        diagonal[electron_one_coordinate_index] = sum*lut_vals.step_size_cubed;
     }
 }
 
 template <typename A, typename B, typename C, typename D, typename E>
-float calculate_total_energy(Eigen::MatrixBase<A> &orbital_values, Eigen::MatrixBase<B> &kinetic_matrix, Eigen::MatrixBase<C> &attraction_matrix, Eigen::MatrixBase<D> &repulsion_matrix, Eigen::MatrixBase<E> &exchange_matrix)
+float calculate_total_energy(Eigen::MatrixBase<A> &orbital_values, Eigen::MatrixBase<B> &kinetic_matrix, Eigen::MatrixBase<C> &attraction_matrix, Eigen::MatrixBase<D> &repulsion_diagonal, Eigen::MatrixBase<E> &exchange_diagonal)
 { 
     // orbital values are real, so no need to take conjugate
     EigenFloatRowVector_t psi_prime = orbital_values.transpose();
@@ -329,8 +329,8 @@ float calculate_total_energy(Eigen::MatrixBase<A> &orbital_values, Eigen::Matrix
     // sum for the total number of electrons in the systems: 2
     for (int i = 0; i < 2; i++)
     {
-        auto hermitian_term = psi_prime*(-kinetic_matrix - attraction_matrix)*psi;
-        auto hf_term = 0.5*psi_prime*(2*repulsion_matrix - exchange_matrix)*psi;
+        auto hermitian_term = psi_prime * (-kinetic_matrix - attraction_matrix) * psi;
+        auto hf_term = 0.5 * psi_prime * (2.0 * EigenFloatMatrix_t(repulsion_diagonal.asDiagonal()) - EigenFloatMatrix_t(exchange_diagonal.asDiagonal())) * psi;
         energy_sum += (hermitian_term(0) + hf_term(0));
     }
 
@@ -367,6 +367,9 @@ bool lapack_solve_eigh(LutVals_t lut_vals, float *matrix, float *eigenvalues)
     lapack_int* iwork = nullptr;
     float* work = nullptr;
 
+    auto lapack_start = chrono::system_clock::now();
+
+    console_print(0, "LAPACK ssyevd start", LAPACK);
     console_print(2, TAB1 "LAPACK solver debug", LAPACK);
     console_print(2, str(format(TAB2 "n = %d") % n), LAPACK);
     console_print(2, str(format(TAB2 "lda = %d") % lda), LAPACK);
@@ -407,6 +410,11 @@ bool lapack_solve_eigh(LutVals_t lut_vals, float *matrix, float *eigenvalues)
     LAPACKE_free(work);
 
     console_print(2, str(format(TAB2 "info = %d") % info), LAPACK);
+
+    auto lapack_end = chrono::system_clock::now();
+    auto lapack_time = chrono::duration<float>(lapack_end - lapack_start);
+
+    console_print(0, str(format("LAPACK ssyevd took: %0.3f seconds") % (float)(lapack_time.count())), LAPACK);
 
     return (info==0);
 }
@@ -483,15 +491,15 @@ int main(int argc, char *argv[])
     }
     console_print_spacer(0, SIM);
 
-    // Print CUDA information
-    cuda_print_device_info();
+    // Get and print CUDA information
+    cuda_get_device_info();
 
     // Matrix declarations
     EigenFloatMatrix_t laplacian_matrix;
     EigenFloatMatrix_t kinetic_matrix;
     EigenFloatMatrix_t attraction_matrix;
-    EigenFloatMatrixMap_t repulsion_matrix(nullptr, lut_vals.matrix_dim, lut_vals.matrix_dim);
-    EigenFloatMatrixMap_t exchange_matrix(nullptr, lut_vals.matrix_dim, lut_vals.matrix_dim);
+    EigenFloatColVectorMap_t repulsion_diagonal(nullptr, lut_vals.matrix_dim, 1);
+    EigenFloatColVectorMap_t exchange_diagonal(nullptr, lut_vals.matrix_dim, 1);
     EigenFloatMatrix_t fock_matrix;
     // Orbital values
     EigenFloatColVectorMap_t orbital_values(nullptr, lut_vals.matrix_dim, 1);
@@ -507,18 +515,18 @@ int main(int argc, char *argv[])
     // store the addresses and the following call will allocate memory for them.
     // We will also allocate memory for the lookup tables used.
     float *orbital_values_data;
-    float *repulsion_matrix_data;
-    float *exchange_matrix_data;
-    cuda_allocate_shared_memory(&lut_vals, &orbital_values_data, &repulsion_matrix_data, &exchange_matrix_data);
+    float *repulsion_diagonal_data;
+    float *exchange_diagonal_data;
+    cuda_allocate_shared_memory(&lut_vals, &orbital_values_data, &repulsion_diagonal_data, &exchange_diagonal_data);
     // Populate LUTs
     populate_lookup_values(config, lut_vals);
 
     // make sure we got some good pointers out of that call
-    if ((orbital_values_data != nullptr) && (repulsion_matrix_data != nullptr) && (exchange_matrix_data != nullptr))
+    if ((orbital_values_data != nullptr) && (repulsion_diagonal_data != nullptr) && (exchange_diagonal_data != nullptr))
     {
         new (&orbital_values) EigenFloatColVectorMap_t(orbital_values_data, lut_vals.matrix_dim, 1);
-        new (&repulsion_matrix) EigenFloatMatrixMap_t(repulsion_matrix_data, lut_vals.matrix_dim, lut_vals.matrix_dim);
-        new (&exchange_matrix) EigenFloatMatrixMap_t(exchange_matrix_data, lut_vals.matrix_dim, lut_vals.matrix_dim);
+        new (&repulsion_diagonal) EigenFloatColVectorMap_t(repulsion_diagonal_data, lut_vals.matrix_dim, 1);
+        new (&exchange_diagonal) EigenFloatColVectorMap_t(exchange_diagonal_data, lut_vals.matrix_dim, 1);
     }
     else
     {
@@ -575,24 +583,20 @@ int main(int argc, char *argv[])
 
         auto iteration_start = chrono::system_clock::now();
 
-        // zero out matrices
-        repulsion_matrix.Zero(lut_vals.matrix_dim, lut_vals.matrix_dim);
-        exchange_matrix.Zero(lut_vals.matrix_dim, lut_vals.matrix_dim);
-
         // generate repulsion and exchange matrices on GPU
-        cuda_numerical_integration_kernel(lut_vals, orbital_values_data, repulsion_matrix_data, exchange_matrix_data);
+        cuda_numerical_integration_kernel(lut_vals, orbital_values_data, repulsion_diagonal_data, exchange_diagonal_data);
 
         // // generate repulsion and exchange matrices on CPU
         // // generate repulsion matrix
         // console_print(1, "Generating electron-electron Coulombic repulsion matrix", SIM);
-        // generate_repulsion_matrix(lut_vals, orbital_values.data(), repulsion_matrix.data());
+        // generate_repulsion_diagonal(lut_vals, orbital_values.data(), repulsion_diagonal.data());
         // // generate exchange matrix
         // console_print(1, "Generating electron-electron exchange matrix", SIM);
-        // generate_exchange_matrix(lut_vals, orbital_values.data(), exchange_matrix.data());
+        // generate_exchange_diagonal(lut_vals, orbital_values.data(), exchange_diagonal.data());
 
         // form fock matrix
         console_print(1, "Generating Fock matrix", SIM);
-        fock_matrix = -kinetic_matrix - attraction_matrix + 2.0*repulsion_matrix - exchange_matrix;
+        fock_matrix = -kinetic_matrix - attraction_matrix + 2.0 * EigenFloatMatrix_t(repulsion_diagonal.asDiagonal()) - EigenFloatMatrix_t(exchange_diagonal.asDiagonal());
 
         console_print(1, "Obtaining eigenvalues and eigenvectors...", SIM);
 
@@ -617,11 +621,11 @@ int main(int argc, char *argv[])
         //     cout << "laplacian_matrix: " << endl << laplacian_matrix << endl;
         //     cout << "kinetic_matrix: " << endl << kinetic_matrix << endl;
         //     cout << "attraction_matrix: " << endl << attraction_matrix << endl;
-        //     cout << "repulsion_matrix: " << endl << repulsion_matrix << endl;
-        //     cout << "exchange_matrix: " << endl << exchange_matrix << endl;
+        //     cout << "repulsion_diagonal: " << endl << repulsion_diagonal << endl;
+        //     cout << "exchange_diagonal: " << endl << exchange_diagonal << endl;
         // }
 
-        total_energy = calculate_total_energy(orbital_values, kinetic_matrix, attraction_matrix, repulsion_matrix, exchange_matrix);
+        total_energy = calculate_total_energy(orbital_values, kinetic_matrix, attraction_matrix, repulsion_diagonal, exchange_diagonal);
         total_energy_percent_diff = abs((total_energy - last_total_energy)/((total_energy + last_total_energy) / 2.0));
 
         console_print(0, str(format("Total energy: %.3f") % (total_energy)), SIM);
@@ -655,7 +659,7 @@ int main(int argc, char *argv[])
     while(1);
 
     // free shared memory for GPU calculations
-    cuda_free_shared_memory(&lut_vals, &orbital_values_data, &repulsion_matrix_data, &exchange_matrix_data);
+    cuda_free_shared_memory(&lut_vals, &orbital_values_data, &repulsion_diagonal_data, &exchange_diagonal_data);
 
     console_print_spacer(0, SIM);
     console_print(0, "Final Eigenvalues:", SIM);

@@ -26,11 +26,7 @@ SOFTWARE.
 
 #include "config.hpp"
 
-extern float *orbital_values_shared;
-extern float *repulsion_matrix_shared;
-extern float *exchange_matrix_shared;
-
-void cuda_print_device_info(void);
-int cuda_allocate_shared_memory(LutVals_t *lut_vals, float **orbital_values_data, float **repulsion_matrix_data, float **exchange_matrix_data);
-int cuda_free_shared_memory(LutVals_t *lut_vals, float **orbital_values_data, float **repulsion_matrix_data, float **exchange_matrix_data);
+void cuda_get_device_info(void);
+int cuda_allocate_shared_memory(LutVals_t *lut_vals, float **orbital_values_data, float **repulsion_diagonal_data, float **exchange_diagonal_data);
+int cuda_free_shared_memory(LutVals_t *lut_vals, float **orbital_values_data, float **repulsion_diagonal_data, float **exchange_diagonal_data);
 int cuda_numerical_integration_kernel(LutVals_t lut_vals, float *orbital_values, float *repulsion_matrix, float *exchange_matrix);
