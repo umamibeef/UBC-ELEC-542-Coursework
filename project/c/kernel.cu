@@ -38,22 +38,27 @@ SOFTWARE.
 using namespace boost;
 
 // Pointers to shared memory that we want to keep during program execution
-float *orbital_values_shared = nullptr;
-float *repulsion_matrix_shared = nullptr;
-float *exchange_matrix_shared = nullptr;
+float *orbital_values = nullptr;
+float *repulsion_matrix = nullptr;
+float *exchange_matrix = nullptr;
+
+// TODO: The LUT might be slow since it's stored on the host, bring it to
+// unified memory. In fact, we may need to bring the entire config struct into
+// unified memory.
 
 // Electron-electron Coulombic repulsion function
-float cuda_repulsion_function(Cfg_t &config, int linear_coordinates_1, int linear_coordinates_2)
+__device__
+float cuda_repulsion_function(LutVals_t lut_vals, int linear_coordinates_1, int linear_coordinates_2)
 {
     const float epsilon = EPSILON;
 
-    float x1 = config.coordinate_value_array[IDX_X][linear_coordinates_1];
-    float y1 = config.coordinate_value_array[IDX_Y][linear_coordinates_1];
-    float z1 = config.coordinate_value_array[IDX_Z][linear_coordinates_1];
+    float x1 = lut_vals.coordinate_value_array[IDX_X * lut_vals.matrix_dim + linear_coordinates_1];
+    float y1 = lut_vals.coordinate_value_array[IDX_Y * lut_vals.matrix_dim + linear_coordinates_1];
+    float z1 = lut_vals.coordinate_value_array[IDX_Z * lut_vals.matrix_dim + linear_coordinates_1];
 
-    float x2 = config.coordinate_value_array[IDX_X][linear_coordinates_2];
-    float y2 = config.coordinate_value_array[IDX_Y][linear_coordinates_2];
-    float z2 = config.coordinate_value_array[IDX_Z][linear_coordinates_2];
+    float x2 = lut_vals.coordinate_value_array[IDX_X * lut_vals.matrix_dim + linear_coordinates_2];
+    float y2 = lut_vals.coordinate_value_array[IDX_Y * lut_vals.matrix_dim + linear_coordinates_2];
+    float z2 = lut_vals.coordinate_value_array[IDX_Z * lut_vals.matrix_dim + linear_coordinates_2];
 
     float denominator = sqrtf((x2 - x1)*(x2 - x1) + (y2 - y1)*(y2 - y1) + (z2 - z1)*(z2 - z1));
 
@@ -65,40 +70,43 @@ float cuda_repulsion_function(Cfg_t &config, int linear_coordinates_1, int linea
     return (1.0/(denominator));
 }
 
-float cuda_repulsion_matrix_integrand_function(Cfg_t &config, float *orbital_values, int linear_coords_1, int linear_coords_2)
+__device__
+float cuda_repulsion_matrix_integrand_function(LutVals_t lut_vals, float *orbital_values, int linear_coords_1, int linear_coords_2)
 {
-    return orbital_values[linear_coords_2]*orbital_values[linear_coords_2]*cuda_repulsion_function(config, linear_coords_1, linear_coords_2);
+    return orbital_values[linear_coords_2] * orbital_values[linear_coords_2] * cuda_repulsion_function(lut_vals, linear_coords_1, linear_coords_2);
 }
 
-float cuda_exchange_matrix_integrand_function(Cfg_t &config, float *orbital_values, int linear_coords_1, int linear_coords_2)
+__device__
+float cuda_exchange_matrix_integrand_function(LutVals_t lut_vals, float *orbital_values, int linear_coords_1, int linear_coords_2)
 {
-    return orbital_values[linear_coords_1]*orbital_values[linear_coords_2]*cuda_repulsion_function(config, linear_coords_1, linear_coords_2);
+    return orbital_values[linear_coords_1] * orbital_values[linear_coords_2] * cuda_repulsion_function(lut_vals, linear_coords_1, linear_coords_2);
 }
 
-void cuda_generate_repulsion_matrix(Cfg_t &config, float *orbital_values, float *matrix)
+__global__
+void cuda_generate_repulsion_matrix(LutVals_t lut_vals, float *orbital_values, float *repulsion_matrix)
 {
-    for (int electron_one_coordinate_index = 0; electron_one_coordinate_index < config.matrix_dim; electron_one_coordinate_index++)
+    for (int electron_one_coordinate_index = 0; electron_one_coordinate_index < lut_vals.matrix_dim; electron_one_coordinate_index++)
     {
         float sum = 0;
-        for (int electron_two_coordinate_index = 0; electron_two_coordinate_index < config.matrix_dim; electron_two_coordinate_index++)
+        for (int electron_two_coordinate_index = 0; electron_two_coordinate_index < lut_vals.matrix_dim; electron_two_coordinate_index++)
         {
-            sum += cuda_repulsion_matrix_integrand_function(config, orbital_values, electron_one_coordinate_index, electron_two_coordinate_index);
+            sum += cuda_repulsion_matrix_integrand_function(lut_vals, orbital_values, electron_one_coordinate_index, electron_two_coordinate_index);
         }
-        matrix[electron_one_coordinate_index + electron_one_coordinate_index*config.matrix_dim] = sum*config.step_size_cubed;
+        repulsion_matrix[electron_one_coordinate_index + electron_one_coordinate_index * lut_vals.matrix_dim] = sum * lut_vals.step_size_cubed;
     }
 }
 
-
-void cuda_generate_exchange_matrix(Cfg_t &config, float *orbital_values, float *matrix)
+__global__
+void cuda_generate_exchange_matrix(LutVals_t lut_vals, float *orbital_values, float *exchange_matrix)
 {
-    for (int electron_one_coordinate_index = 0; electron_one_coordinate_index < config.matrix_dim; electron_one_coordinate_index++)
+    for (int electron_one_coordinate_index = 0; electron_one_coordinate_index < lut_vals.matrix_dim; electron_one_coordinate_index++)
     {
         float sum = 0;
-        for (int electron_two_coordinate_index = 0; electron_two_coordinate_index < config.matrix_dim; electron_two_coordinate_index++)
+        for (int electron_two_coordinate_index = 0; electron_two_coordinate_index < lut_vals.matrix_dim; electron_two_coordinate_index++)
         {
-            sum += cuda_exchange_matrix_integrand_function(config, orbital_values, electron_one_coordinate_index, electron_two_coordinate_index);
+            sum += cuda_exchange_matrix_integrand_function(lut_vals, orbital_values, electron_one_coordinate_index, electron_two_coordinate_index);
         }
-        matrix[electron_one_coordinate_index + electron_one_coordinate_index*config.matrix_dim] = sum*config.step_size_cubed;
+        exchange_matrix[electron_one_coordinate_index + electron_one_coordinate_index * lut_vals.matrix_dim] = sum * lut_vals.step_size_cubed;
     }
 }
 
@@ -127,19 +135,23 @@ void cuda_print_device_info(void)
     console_print_spacer(0, CUDA);
 }
 
-int cuda_allocate_shared_memory(Cfg_t &config)
+int cuda_allocate_shared_memory(LutVals_t *lut_vals, float **orbital_values_data, float **repulsion_matrix_data, float **exchange_matrix_data)
 {
     int rv = 0;
     cudaError_t error;
 
     console_print(0, "Allocating unified memory for CPU/GPU...", CUDA);
 
-    int orbital_vector_size_bytes = config.matrix_dim*sizeof(float);
-    int repulsion_exchange_matrices_size_bytes = config.matrix_dim*config.matrix_dim*sizeof(float);
+    int orbital_vector_size_bytes = lut_vals->matrix_dim * sizeof(float);
+    int repulsion_exchange_matrices_size_bytes = lut_vals->matrix_dim * lut_vals->matrix_dim * sizeof(float);
+    int coordinate_luts_size_bytes = IDX_NUM * lut_vals->matrix_dim * sizeof(float);
 
-    cudaMallocManaged(&orbital_values_shared, orbital_vector_size_bytes);
-    cudaMallocManaged(&repulsion_matrix_shared, repulsion_exchange_matrices_size_bytes);
-    cudaMallocManaged(&exchange_matrix_shared, repulsion_exchange_matrices_size_bytes);
+    cudaMallocManaged(orbital_values_data, orbital_vector_size_bytes);
+    cudaMallocManaged(repulsion_matrix_data, repulsion_exchange_matrices_size_bytes);
+    cudaMallocManaged(exchange_matrix_data, repulsion_exchange_matrices_size_bytes);
+
+    cudaMallocManaged(&(lut_vals->coordinate_value_array), coordinate_luts_size_bytes);
+    cudaMallocManaged(&(lut_vals->coordinate_index_array), coordinate_luts_size_bytes);
 
     error = cudaGetLastError();
     if (error != cudaSuccess)
@@ -152,22 +164,32 @@ int cuda_allocate_shared_memory(Cfg_t &config)
         console_print(2, str(format("Allocated %d bytes for shared orbital values vector") % orbital_vector_size_bytes), CUDA);
         console_print(2, str(format("Allocated %d bytes for shared repulsion matrix") % repulsion_exchange_matrices_size_bytes), CUDA);
         console_print(2, str(format("Allocated %d bytes for shared exchange matrix") % repulsion_exchange_matrices_size_bytes), CUDA);
+        console_print(2, str(format("Allocated 3x %d bytes for coordinate LUTs") % coordinate_luts_size_bytes), CUDA);
         console_print_spacer(2, CUDA);
     }
 
     return rv;
 }
 
-int cuda_free_shared_memory(void)
+int cuda_free_shared_memory(LutVals_t *lut_vals, float **orbital_values_data, float **repulsion_matrix_data, float **exchange_matrix_data)
 {
     int rv = 0;
     cudaError_t error;
 
     console_print(0, "Freeing unified memory for CPU/GPU...", CUDA);
 
-    cudaFree(orbital_values_shared);
-    cudaFree(repulsion_matrix_shared);
-    cudaFree(exchange_matrix_shared);
+    cudaFree(*orbital_values_data);
+    cudaFree(*repulsion_matrix_data);
+    cudaFree(*exchange_matrix_data);
+    cudaFree(lut_vals->coordinate_value_array);
+    cudaFree(lut_vals->coordinate_index_array);
+
+    // null the pointers
+    (*orbital_values_data) = nullptr;
+    (*repulsion_matrix_data) = nullptr;
+    (*exchange_matrix_data) = nullptr;
+    (lut_vals->coordinate_value_array) = nullptr;
+    (lut_vals->coordinate_index_array) = nullptr;
 
     error = cudaGetLastError();
     if (error != cudaSuccess)
@@ -183,22 +205,25 @@ int cuda_free_shared_memory(void)
     return rv;
 }
 
-int cuda_numerical_integration_kernel(Cfg_t &config, float *orbital_values, float *repulsion_matrix, float *exchange_matrix)
+int cuda_numerical_integration_kernel(LutVals_t lut_vals, float *orbital_values, float *repulsion_matrix, float *exchange_matrix)
 {
     int rv = 0;
     cudaError_t error;
+
+    if (!rv)
+    {
+        console_print(0, "Generating repulsion and exchange matrices on GPU...", CUDA);
+        cuda_generate_repulsion_matrix<<<1,1>>>(lut_vals, orbital_values, repulsion_matrix);
+        cuda_generate_exchange_matrix<<<1,1>>>(lut_vals, orbital_values, exchange_matrix);
+        // Wait for GPU to finish before accessing on host
+        cudaDeviceSynchronize();
+    }
 
     error = cudaGetLastError();
     if (error != cudaSuccess)
     {
         console_print_err(0, str(format("%s\n") % cudaGetErrorString(error)), CUDA);
         rv = 1;
-    }
-
-    if (!rv)
-    {
-        // Copy orbital values to device
-
     }
 
     return rv;

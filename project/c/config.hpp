@@ -30,14 +30,17 @@ typedef struct
 {
     int verbosity; // The verbosity level of the program
     int num_partitions; // Number of partitions/quantizations for the grid
-    int matrix_dim; // The resulting dimensions of the solution matrices
     int limit; // The x,y,z limits of the solution space
-    float step_size; // The resulting step size for the given number of partitions and limits
-    float step_size_cubed; // The step size cubed
     int max_iterations; // Maximum number of HF interations to perform
     int num_solutions; // The number of eigenvalues and eigenvectors to keep from the solution
     float convergence_percentage; // The convergence percentage for total energy change, used for terminating the main loop
-    // lookup tables to speed up calculations
-    std::vector<std::vector<float>> coordinate_value_array;
-    std::vector<std::vector<float>> coordinate_index_array;
 } Cfg_t;
+
+typedef struct
+{
+    int matrix_dim; // The resulting dimensions of the solution matrices
+    float step_size; // The resulting step size for the given number of partitions and limits
+    float step_size_cubed; // The step size cubed
+    float *coordinate_value_array; // The linear coordinate to value LUT (array[matrix_dim][IDX_NUM])
+    float *coordinate_index_array; // The linear coordinate to index LUT (array[matrix_dim][IDX_NUM])
+} LutVals_t;

@@ -31,6 +31,6 @@ extern float *repulsion_matrix_shared;
 extern float *exchange_matrix_shared;
 
 void cuda_print_device_info(void);
-int cuda_allocate_shared_memory(Cfg_t &config);
-int cuda_free_shared_memory(void);
-int cuda_numerical_integration_kernel(Cfg_t &config, float *orbital_values, float *repulsion_matrix, float *exchange_matrix);
+int cuda_allocate_shared_memory(LutVals_t *lut_vals, float **orbital_values_data, float **repulsion_matrix_data, float **exchange_matrix_data);
+int cuda_free_shared_memory(LutVals_t *lut_vals, float **orbital_values_data, float **repulsion_matrix_data, float **exchange_matrix_data);
+int cuda_numerical_integration_kernel(LutVals_t lut_vals, float *orbital_values, float *repulsion_matrix, float *exchange_matrix);
