@@ -148,12 +148,12 @@ int cuda_get_device_info(void)
     return num_devices;
 }
 
-int cuda_allocate_shared_memory(LutVals_t *lut_vals, float **orbital_values_data, float **repulsion_diagonal_data, float **exchange_diagonal_data)
+int cuda_allocate_integration_memory(LutVals_t *lut_vals, float **orbital_values_data, float **repulsion_diagonal_data, float **exchange_diagonal_data)
 {
     int rv = 0;
     cudaError_t error;
 
-    console_print(0, "Allocating unified memory for CPU/GPU...", CLIENT_CUDA);
+    console_print(0, "Allocating memory for CUDA integration...", CLIENT_CUDA);
 
     int orbital_vector_size_bytes = lut_vals->matrix_dim * sizeof(float);
     int repulsion_exchange_matrices_size_bytes = lut_vals->matrix_dim * sizeof(float);
@@ -174,9 +174,9 @@ int cuda_allocate_shared_memory(LutVals_t *lut_vals, float **orbital_values_data
     }
     else
     {
-        console_print(2, str(format("Allocated %d bytes for shared orbital values vector") % orbital_vector_size_bytes), CLIENT_CUDA);
-        console_print(2, str(format("Allocated %d bytes for shared repulsion matrix diagonal") % repulsion_exchange_matrices_size_bytes), CLIENT_CUDA);
-        console_print(2, str(format("Allocated %d bytes for shared exchange matrix diagonal") % repulsion_exchange_matrices_size_bytes), CLIENT_CUDA);
+        console_print(2, str(format("Allocated %d bytes for orbital values vector") % orbital_vector_size_bytes), CLIENT_CUDA);
+        console_print(2, str(format("Allocated %d bytes for repulsion matrix diagonal") % repulsion_exchange_matrices_size_bytes), CLIENT_CUDA);
+        console_print(2, str(format("Allocated %d bytes for exchange matrix diagonal") % repulsion_exchange_matrices_size_bytes), CLIENT_CUDA);
         console_print(2, str(format("Allocated 3x %d bytes for coordinate LUTs") % coordinate_luts_size_bytes), CLIENT_CUDA);
     }
     console_print_spacer(0, CLIENT_CUDA);
@@ -184,12 +184,38 @@ int cuda_allocate_shared_memory(LutVals_t *lut_vals, float **orbital_values_data
     return rv;
 }
 
-int cuda_free_shared_memory(LutVals_t *lut_vals, float **orbital_values_data, float **repulsion_diagonal_data, float **exchange_diagonal_data)
+int cuda_allocate_eigensolver_memory(LutVals_t *lut_vals, float **fock_matrix)
 {
     int rv = 0;
     cudaError_t error;
 
-    console_print(0, "Freeing unified memory for CPU/GPU...", CLIENT_CUDA);
+    console_print(0, "Allocating memory for CUDA eigensolver...", CLIENT_CUDA);
+
+    int fock_matrix_size_bytes = lut_vals->matrix_dim * lut_vals->matrix_dim * sizeof(float);
+
+    cudaMallocManaged(fock_matrix, fock_matrix_size_bytes);
+
+    error = cudaGetLastError();
+    if (error != cudaSuccess)
+    {
+        console_print_err(0, str(format("%s\n") % cudaGetErrorString(error)), CLIENT_CUDA);
+        rv = 1;
+    }
+    else
+    {
+        console_print(2, str(format("Allocated %d bytes for Fock matrix") % fock_matrix_size_bytes), CLIENT_CUDA);
+    }
+    console_print_spacer(0, CLIENT_CUDA);
+
+    return rv;
+}
+
+int cuda_free_integration_memory(LutVals_t *lut_vals, float **orbital_values_data, float **repulsion_diagonal_data, float **exchange_diagonal_data)
+{
+    int rv = 0;
+    cudaError_t error;
+
+    console_print(0, "Freeing allocated integration memory...", CLIENT_CUDA);
 
     cudaFree(*orbital_values_data);
     cudaFree(*repulsion_diagonal_data);
@@ -212,7 +238,33 @@ int cuda_free_shared_memory(LutVals_t *lut_vals, float **orbital_values_data, fl
     }
     else
     {
-        console_print(2, "Successfully freed shared data", CLIENT_CUDA);
+        console_print(2, "Successfully freed allocated integration memory", CLIENT_CUDA);
+    }
+
+    return rv;
+}
+
+int cuda_free_eigensolver_memory(float **fock_matrix)
+{
+    int rv = 0;
+    cudaError_t error;
+
+    console_print(0, "Freeing allocated eigensolver memory...", CLIENT_CUDA);
+
+    cudaFree(*fock_matrix);
+
+    // null the pointer
+    (*fock_matrix) = nullptr;
+
+    error = cudaGetLastError();
+    if (error != cudaSuccess)
+    {
+        console_print_err(0, str(format("%s\n") % cudaGetErrorString(error)), CLIENT_CUDA);
+        rv = 1;
+    }
+    else
+    {
+        console_print(2, "Successfully freed allocated eigensolver memory", CLIENT_CUDA);
     }
 
     return rv;
@@ -232,6 +284,27 @@ int cuda_numerical_integration(LutVals_t lut_vals, float *orbital_values, float 
 
     console_print(0, "Computing exchange matrix", CLIENT_CUDA);
     cuda_generate_exchange_matrix_kernel<<<num_blocks, blocks_size>>>(lut_vals, orbital_values, exchange_matrix);
+    cudaDeviceSynchronize();
+
+    error = cudaGetLastError();
+    if (error != cudaSuccess)
+    {
+        console_print_err(0, str(format("%s\n") % cudaGetErrorString(error)), CLIENT_CUDA);
+        rv = 1;
+    }
+
+    return rv;
+}
+
+int cuda_eigensolver(LutVals_t lut_vals, float *matrix, float *eigenvalues)
+{
+    int rv = 0;
+    cudaError_t error;
+
+    int num_blocks = multi_processor_count * max_blocks_per_multiprocessor;
+    int blocks_size = multi_processor_count * max_threads_per_multiprocessor / num_blocks;
+
+    // Do work
     cudaDeviceSynchronize();
 
     error = cudaGetLastError();

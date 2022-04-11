@@ -422,11 +422,11 @@ bool lapack_solve_eigh(LutVals_t lut_vals, float *matrix, float *eigenvalues)
     return (info==0);
 }
 
-int cpu_allocate_memory(LutVals_t *lut_vals, float **orbital_values_data, float **repulsion_diagonal_data, float **exchange_diagonal_data)
+int cpu_allocate_integration_memory(LutVals_t *lut_vals, float **orbital_values_data, float **repulsion_diagonal_data, float **exchange_diagonal_data)
 {
     int rv = 0;
 
-    console_print(0, "Allocating unified memory for CPU/GPU...", CLIENT_SIM);
+    console_print(0, "Allocating memory for CPU integration", CLIENT_SIM);
 
     int orbital_vector_size_bytes = lut_vals->matrix_dim * sizeof(float);
     int repulsion_exchange_matrices_size_bytes = lut_vals->matrix_dim * sizeof(float);
@@ -447,9 +447,9 @@ int cpu_allocate_memory(LutVals_t *lut_vals, float **orbital_values_data, float 
     }
     else
     {
-        console_print(2, str(format("Allocated %d bytes for shared orbital values vector") % orbital_vector_size_bytes), CLIENT_SIM);
-        console_print(2, str(format("Allocated %d bytes for shared repulsion matrix diagonal") % repulsion_exchange_matrices_size_bytes), CLIENT_SIM);
-        console_print(2, str(format("Allocated %d bytes for shared exchange matrix diagonal") % repulsion_exchange_matrices_size_bytes), CLIENT_SIM);
+        console_print(2, str(format("Allocated %d bytes for orbital values vector") % orbital_vector_size_bytes), CLIENT_SIM);
+        console_print(2, str(format("Allocated %d bytes for repulsion matrix diagonal") % repulsion_exchange_matrices_size_bytes), CLIENT_SIM);
+        console_print(2, str(format("Allocated %d bytes for exchange matrix diagonal") % repulsion_exchange_matrices_size_bytes), CLIENT_SIM);
         console_print(2, str(format("Allocated 3x %d bytes for coordinate LUTs") % coordinate_luts_size_bytes), CLIENT_SIM);
     }
     console_print_spacer(0, CLIENT_SIM);
@@ -457,11 +457,35 @@ int cpu_allocate_memory(LutVals_t *lut_vals, float **orbital_values_data, float 
     return rv;
 }
 
-int cpu_free_memory(LutVals_t *lut_vals, float **orbital_values_data, float **repulsion_diagonal_data, float **exchange_diagonal_data)
+int cpu_allocate_eigensolver_memory(LutVals_t *lut_vals, float **fock_matrix_data)
 {
     int rv = 0;
 
-    console_print(0, "Freeing allocated memory...", CLIENT_SIM);
+    console_print(0, "Allocating memory for CPU eigensolver", CLIENT_SIM);
+
+    int fock_matrix_size_bytes = lut_vals->matrix_dim * lut_vals->matrix_dim * sizeof(float);
+
+    *fock_matrix_data = (float*)(malloc(fock_matrix_size_bytes));
+
+    if (fock_matrix_data == nullptr)
+    {
+        console_print_err(0, "Memory allocation error!", CLIENT_SIM);
+        rv = 1;
+    }
+    else
+    {
+        console_print(2, str(format("Allocated %d bytes for Fock matrix") % fock_matrix_size_bytes), CLIENT_SIM);
+    }
+    console_print_spacer(0, CLIENT_SIM);
+
+    return rv;
+}
+
+int cpu_free_integration_memory(LutVals_t *lut_vals, float **orbital_values_data, float **repulsion_diagonal_data, float **exchange_diagonal_data)
+{
+    int rv = 0;
+
+    console_print(0, "Freeing allocated integration memory...", CLIENT_SIM);
 
     free(*orbital_values_data);
     free(*repulsion_diagonal_data);
@@ -476,7 +500,23 @@ int cpu_free_memory(LutVals_t *lut_vals, float **orbital_values_data, float **re
     (lut_vals->coordinate_value_array) = nullptr;
     (lut_vals->coordinate_index_array) = nullptr;
 
-    console_print(2, "Successfully freed allocated memory", CLIENT_SIM);
+    console_print(2, "Successfully freed allocated integration memory", CLIENT_SIM);
+
+    return rv;
+}
+
+int cpu_free_eigensolver_memory(float **fock_matrix_data)
+{
+    int rv = 0;
+
+    console_print(0, "Freeing allocated eigensolver memory...", CLIENT_SIM);
+
+    free(*fock_matrix_data);
+
+    // null the pointers
+    (*fock_matrix_data) = nullptr;
+
+    console_print(2, "Successfully freed allocated eigensolver memory", CLIENT_SIM);
 
     return rv;
 }
@@ -576,7 +616,7 @@ int main(int argc, char *argv[])
     EigenFloatMatrix_t attraction_matrix;
     EigenFloatColVectorMap_t repulsion_diagonal(nullptr, lut_vals.matrix_dim, 1);
     EigenFloatColVectorMap_t exchange_diagonal(nullptr, lut_vals.matrix_dim, 1);
-    EigenFloatMatrix_t fock_matrix;
+    EigenFloatMatrixMap_t fock_matrix(nullptr, lut_vals.matrix_dim, lut_vals.matrix_dim);
     // Orbital values
     EigenFloatColVectorMap_t orbital_values(nullptr, lut_vals.matrix_dim, 1);
     // Eigenvectors and eigenvalues
@@ -594,15 +634,25 @@ int main(int argc, char *argv[])
     float *orbital_values_data;
     float *repulsion_diagonal_data;
     float *exchange_diagonal_data;
-    int allocate_error;
+    float *fock_matrix_data;
+    int allocate_error = 0;
 
     if (config.enable_cuda_integration)
     {
-        allocate_error = cuda_allocate_shared_memory(&lut_vals, &orbital_values_data, &repulsion_diagonal_data, &exchange_diagonal_data);
+        allocate_error |= cuda_allocate_integration_memory(&lut_vals, &orbital_values_data, &repulsion_diagonal_data, &exchange_diagonal_data);
     }
     else
     {
-        allocate_error = cpu_allocate_memory(&lut_vals, &orbital_values_data, &repulsion_diagonal_data, &exchange_diagonal_data);
+        allocate_error |= cpu_allocate_integration_memory(&lut_vals, &orbital_values_data, &repulsion_diagonal_data, &exchange_diagonal_data);
+    }
+
+    if (config.enable_cuda_eigensolver)
+    {
+        allocate_error |= cuda_allocate_eigensolver_memory(&lut_vals, &fock_matrix_data);
+    }
+    else
+    {
+        allocate_error |= cpu_allocate_eigensolver_memory(&lut_vals, &fock_matrix_data);
     }
 
     // make sure we got some good pointers out of that call
@@ -611,6 +661,7 @@ int main(int argc, char *argv[])
         new (&orbital_values) EigenFloatColVectorMap_t(orbital_values_data, lut_vals.matrix_dim, 1);
         new (&repulsion_diagonal) EigenFloatColVectorMap_t(repulsion_diagonal_data, lut_vals.matrix_dim, 1);
         new (&exchange_diagonal) EigenFloatColVectorMap_t(exchange_diagonal_data, lut_vals.matrix_dim, 1);
+        new (&fock_matrix) EigenFloatMatrixMap_t(fock_matrix_data, lut_vals.matrix_dim, 1);
         // Populate LUTs
         populate_lookup_values(config, lut_vals);
     }
@@ -764,14 +815,22 @@ int main(int argc, char *argv[])
     }
     while(1);
 
-    // free shared memory for GPU calculations
+    // free dynamically allocated memory
     if (config.enable_cuda_integration)
     {
-        cuda_free_shared_memory(&lut_vals, &orbital_values_data, &repulsion_diagonal_data, &exchange_diagonal_data);
+        cuda_free_integration_memory(&lut_vals, &orbital_values_data, &repulsion_diagonal_data, &exchange_diagonal_data);
     }
     else
     {
-        cpu_free_memory(&lut_vals, &orbital_values_data, &repulsion_diagonal_data, &exchange_diagonal_data);
+        cpu_free_integration_memory(&lut_vals, &orbital_values_data, &repulsion_diagonal_data, &exchange_diagonal_data);
+    }
+    if (config.enable_cuda_eigensolver)
+    {
+        cuda_free_eigensolver_memory(&fock_matrix_data);
+    }
+    else
+    {
+        cpu_free_eigensolver_memory(&fock_matrix_data);
     }
 
     console_print_spacer(0, CLIENT_SIM);
