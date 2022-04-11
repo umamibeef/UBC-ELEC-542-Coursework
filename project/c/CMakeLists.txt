@@ -10,18 +10,18 @@ set(CMAKE_CUDA_COMPILER /usr/local/cuda/bin/nvcc)
 # set the program name
 project(ExactHartreeFockSim LANGUAGES C CXX CUDA)
 
-# GSL
-find_package(GSL REQUIRED)
-link_libraries(GSL::gsl GSL::gslcblas)
+# CUDA
+find_package(CUDAToolkit REQUIRED)
+link_libraries(CUDA::cudart CUDA::cuda_driver CUDA::cusolver)
 
 # Eigen
 find_package(Eigen3 3.3 REQUIRED NO_MODULE)
 link_libraries(Eigen3::Eigen)
 
 # LAPACK/BLAS
-find_package(BLAS)
-find_package(LAPACK)
-find_package(LAPACKE)
+find_package(BLAS REQUIRED)
+find_package(LAPACK REQUIRED)
+find_package(LAPACKE REQUIRED)
 if(LAPACK_FOUND AND BLAS_FOUND AND LAPACKE_FOUND)
     set(lapackblas_libraries ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES} ${LAPACKE_LIBRARIES})
 endif()
@@ -31,17 +31,14 @@ link_libraries(${lapackblas_libraries})
 set(Boost_USE_STATIC_LIBS OFF) 
 set(Boost_USE_MULTITHREADED ON)  
 set(Boost_USE_STATIC_RUNTIME OFF) 
-find_package(Boost 1.71.0 COMPONENTS program_options date_time)
+find_package(Boost 1.71.0 REQUIRED COMPONENTS program_options date_time)
 link_libraries(${Boost_LIBRARIES})
 
 # OpenMP
-find_package(OpenMP)
+find_package(OpenMP REQUIRED)
 if(OpenMP_CXX_FOUND)
     link_libraries(OpenMP::OpenMP_CXX)
 endif()
-
-# need to point to CUDA and Boost include dirs
-include_directories(${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES} ${Boost_INCLUDE_DIRS})
 
 # add the executable
 add_executable(ExactHartreeFockSim main.cpp console.cpp kernel.cu kernel.cu)

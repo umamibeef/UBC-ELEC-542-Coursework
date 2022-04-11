@@ -39,8 +39,10 @@
 
 # TODOs
   * Immediate:
-    - Finished first acceleration of program using naive kernels
-    - Need to implement a switch between CPU and GPU workloads
+    - Finish adding time metrics for computationally intensive tasks
+    - Add CSV outputter for performance data and results
+    - Refactor main program to shrink main()
+    - ~~Need to implement a switch between CPU and GPU workloads~~
     - Implement a switch between single core and multi core CPU for that additional datapoint
     - ~~implement proper exchange and repulsion matrices by looking at good homework example~~ Done.
     - ~~coordinates may not work with dedicated integration function, may need to revisit that~~ Done, no problem.

@@ -30,6 +30,10 @@ SOFTWARE.
 // Boost includes
 #include <boost/format.hpp>
 
+// CUDA includes
+#include <cuda_runtime.h>
+#include <cusolverDn.h>
+
 // Program includes
 #include "main.hpp"
 #include "config.hpp"
@@ -37,6 +41,34 @@ SOFTWARE.
 #include "kernel.h"
 
 using namespace boost;
+
+// Derived from:
+// https://github.com/NVIDIA/CUDALibrarySamples/blob/master/cuSOLVER/utils/cusolver_utils.h
+// CUDA API error checking
+#define CUDA_CHECK(err)                                                                                                 \
+    do                                                                                                                  \
+    {                                                                                                                   \
+        cudaError_t err_ = (err);                                                                                       \
+        if (err_ != cudaSuccess)                                                                                        \
+        {                                                                                                               \
+            console_print_err(0, str(format("CUDA error %d at %s:%d\n") % err_ % __FILE__ % __LINE__), CLIENT_CUDA);    \
+            throw std::runtime_error("CUDA error");                                                                     \
+        }                                                                                                               \
+    }                                                                                                                   \
+    while (0)                                                                                                           \
+
+// cusolver API error checking
+#define CUSOLVER_CHECK(err)                                                                                             \
+    do                                                                                                                  \
+    {                                                                                                                   \
+        cusolverStatus_t err_ = (err);                                                                                  \
+        if (err_ != CUSOLVER_STATUS_SUCCESS)                                                                            \
+        {                                                                                                               \
+            console_print_err(0, str(format("cusolver error %d at %s:%d\n") % err_ % __FILE__ % __LINE__), CLIENT_CUDA);\
+            throw std::runtime_error("cusolver error");                                                                 \
+        }                                                                                                               \
+    }                                                                                                                   \
+    while (0)                                                                                                           \
 
 int multi_processor_count;
 int max_blocks_per_multiprocessor;
@@ -184,16 +216,18 @@ int cuda_allocate_integration_memory(LutVals_t *lut_vals, float **orbital_values
     return rv;
 }
 
-int cuda_allocate_eigensolver_memory(LutVals_t *lut_vals, float **fock_matrix)
+int cuda_allocate_eigensolver_memory(LutVals_t *lut_vals, float **eigenvectors_data, float **eigenvalues_data)
 {
     int rv = 0;
     cudaError_t error;
 
     console_print(0, "Allocating memory for CUDA eigensolver...", CLIENT_CUDA);
 
-    int fock_matrix_size_bytes = lut_vals->matrix_dim * lut_vals->matrix_dim * sizeof(float);
+    int eigenvectors_data_size_bytes = lut_vals->matrix_dim * lut_vals->matrix_dim * sizeof(float);
+    int eigenvalues_data_size_bytes = lut_vals->matrix_dim * sizeof(float);
 
-    cudaMallocManaged(fock_matrix, fock_matrix_size_bytes);
+    cudaMallocManaged(eigenvectors_data, eigenvectors_data_size_bytes);
+    cudaMallocManaged(eigenvalues_data, eigenvalues_data_size_bytes);
 
     error = cudaGetLastError();
     if (error != cudaSuccess)
@@ -203,7 +237,8 @@ int cuda_allocate_eigensolver_memory(LutVals_t *lut_vals, float **fock_matrix)
     }
     else
     {
-        console_print(2, str(format("Allocated %d bytes for Fock matrix") % fock_matrix_size_bytes), CLIENT_CUDA);
+        console_print(2, str(format("Allocated %d bytes for eigenvectors matrix") % eigenvectors_data_size_bytes), CLIENT_CUDA);
+        console_print(2, str(format("Allocated %d bytes for eigenvalues vector") % eigenvalues_data_size_bytes), CLIENT_CUDA);
     }
     console_print_spacer(0, CLIENT_CUDA);
 
@@ -244,17 +279,19 @@ int cuda_free_integration_memory(LutVals_t *lut_vals, float **orbital_values_dat
     return rv;
 }
 
-int cuda_free_eigensolver_memory(float **fock_matrix)
+int cuda_free_eigensolver_memory(float **eigenvectors_data, float **eigenvalues_data)
 {
     int rv = 0;
     cudaError_t error;
 
     console_print(0, "Freeing allocated eigensolver memory...", CLIENT_CUDA);
 
-    cudaFree(*fock_matrix);
+    cudaFree(*eigenvectors_data);
+    cudaFree(*eigenvalues_data);
 
     // null the pointer
-    (*fock_matrix) = nullptr;
+    (*eigenvectors_data) = nullptr;
+    (*eigenvalues_data) = nullptr;
 
     error = cudaGetLastError();
     if (error != cudaSuccess)
@@ -296,21 +333,44 @@ int cuda_numerical_integration(LutVals_t lut_vals, float *orbital_values, float 
     return rv;
 }
 
-int cuda_eigensolver(LutVals_t lut_vals, float *matrix, float *eigenvalues)
+int cuda_eigensolver(LutVals_t lut_vals, float *eigenvectors_data, float *eigenvalues_data)
 {
     int rv = 0;
-    cudaError_t error;
+    cudaError_t cuda_error;
+    cusolverStatus_t cusolver_error;
+    cusolverDnHandle_t cusolver_handle = NULL;
+    cudaStream_t stream = NULL;
+    int *device_info_ptr = nullptr; // pointer to device algorithm info in
+    int info = 0; // algorithm info int
+    int lwork = 0; // size of workspace
+    float *workspace_ptr = nullptr; // pointer to workspace
+    cusolverEigMode_t jobz = CUSOLVER_EIG_MODE_VECTOR; // solver job type, compute eigenvalues and eigenvectors.
+    cublasFillMode_t uplo = CUBLAS_FILL_MODE_UPPER; // matrix fill mode;
 
-    int num_blocks = multi_processor_count * max_blocks_per_multiprocessor;
-    int blocks_size = multi_processor_count * max_threads_per_multiprocessor / num_blocks;
+    // Create a cusolver handle and bind it to a stream
+    CUSOLVER_CHECK(cusolverDnCreate(&cusolver_handle));
+    CUDA_CHECK(cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking));
+    CUSOLVER_CHECK(cusolverDnSetStream(cusolver_handle, stream));
 
-    // Do work
-    cudaDeviceSynchronize();
+    // Allocate a spot for device_info_ptr
+    CUDA_CHECK(cudaMalloc(reinterpret_cast<void **>(&device_info_ptr), sizeof(int)));
 
-    error = cudaGetLastError();
-    if (error != cudaSuccess)
+    // Query working space required for syevd
+    CUSOLVER_CHECK(cusolverDnSsyevd_bufferSize(cusolver_handle, jobz, uplo, lut_vals.matrix_dim, eigenvectors_data, lut_vals.matrix_dim, eigenvalues_data, &lwork));
+    
+    // Allocate memory for work area
+    CUDA_CHECK(cudaMalloc(reinterpret_cast<void **>(&workspace_ptr), sizeof(float) * lwork));
+
+    // compute solution
+    CUSOLVER_CHECK(cusolverDnSsyevd(cusolver_handle, jobz, uplo, lut_vals.matrix_dim, eigenvectors_data, lut_vals.matrix_dim, eigenvalues_data, workspace_ptr, lwork, device_info_ptr));
+    CUDA_CHECK(cudaMemcpyAsync(&info, device_info_ptr, sizeof(int), cudaMemcpyDeviceToHost, stream));
+
+    CUDA_CHECK(cudaStreamSynchronize(stream));
+
+    cuda_error = cudaGetLastError();
+    if (cuda_error != cudaSuccess)
     {
-        console_print_err(0, str(format("%s\n") % cudaGetErrorString(error)), CLIENT_CUDA);
+        console_print_err(0, str(format("%s\n") % cudaGetErrorString(cuda_error)), CLIENT_CUDA);
         rv = 1;
     }
 

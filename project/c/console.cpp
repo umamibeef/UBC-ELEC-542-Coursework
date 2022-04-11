@@ -33,14 +33,14 @@ SOFTWARE.
 using namespace std;
 using namespace boost;
 
-static const string none_string = " ";
-static const string sim_string = ANSI_FG_COLOR_CYAN         "|EHFSIM|" ANSI_COLOR_RESET;
-static const string cuda_string = ANSI_FG_COLOR_GREEN       "| CUDA |" ANSI_COLOR_RESET;
-static const string lapack_string = ANSI_FG_COLOR_YELLOW    "|LAPACK|" ANSI_COLOR_RESET;
+static const string sim_string = ANSI_FG_COLOR_CYAN         "EHFSIM|" ANSI_COLOR_RESET;
+static const string cuda_string = ANSI_FG_COLOR_GREEN       "CUDART|" ANSI_COLOR_RESET;
+static const string cusolver_string = ANSI_FG_COLOR_GREEN   "CUSOLV|" ANSI_COLOR_RESET;
+static const string lapack_string = ANSI_FG_COLOR_YELLOW    "LAPACK|" ANSI_COLOR_RESET;
 
-static const string info_string =                           "|INFO|";
-static const string warning_string = ANSI_FG_COLOR_YELLOW   "|WARN|" ANSI_COLOR_RESET;
-static const string error_string = ANSI_FG_COLOR_RED        "|ERR!|" ANSI_COLOR_RESET;
+static const string info_string =                           "INFO|";
+static const string warning_string = ANSI_FG_COLOR_YELLOW   "WARN|" ANSI_COLOR_RESET;
+static const string error_string = ANSI_FG_COLOR_RED        "ERR!|" ANSI_COLOR_RESET;
 
 void console_print_internal(int verbose_level, std::string input_string, client_e client, level_e level)
 {
@@ -66,9 +66,12 @@ void console_print_internal(int verbose_level, std::string input_string, client_
         case CLIENT_CUDA:
             new (&client_string) string(cuda_string);
             break;
+        case CLIENT_CUSOLVER:
+            new (&client_string) string(cusolver_string);
+            break;
         case CLIENT_NONE:
         default:
-            new (&client_string) string(none_string);
+            new (&client_string) string(sim_string);
             break;
     }
 
@@ -93,7 +96,7 @@ void console_print_internal(int verbose_level, std::string input_string, client_
     string output_string;
     while (getline(ss, output_string, '\n'))
     {
-        cout << format("[%s]") % time_string << client_string << level_string << " " << output_string << endl;
+        cout << format("|%s|") % time_string << client_string << level_string << " " << output_string << endl;
     }
 }
 

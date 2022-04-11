@@ -54,6 +54,7 @@ typedef enum
     CLIENT_NONE = 0,
     CLIENT_SIM,
     CLIENT_CUDA,
+    CLIENT_CUSOLVER,
     CLIENT_LAPACK,
 } client_e;
 

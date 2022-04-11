@@ -28,8 +28,8 @@ SOFTWARE.
 
 int cuda_get_device_info(void);
 int cuda_allocate_integration_memory(LutVals_t *lut_vals, float **orbital_values_data, float **repulsion_diagonal_data, float **exchange_diagonal_data);
-int cuda_allocate_eigensolver_memory(LutVals_t *lut_vals, float **fock_matrix_data);
+int cuda_allocate_eigensolver_memory(LutVals_t *lut_vals, float **eigenvectors_data, float **eigenvalues_data);
 int cuda_free_integration_memory(LutVals_t *lut_vals, float **orbital_values_data, float **repulsion_diagonal_data, float **exchange_diagonal_data);
-int cuda_free_eigensolver_memory(float **fock_matrix);
+int cuda_free_eigensolver_memory(float **eigenvectors_data, float **eigenvalues_data);
 int cuda_numerical_integration(LutVals_t lut_vals, float *orbital_values, float *repulsion_matrix, float *exchange_matrix);
-int cuda_eigensolver(LutVals_t lut_vals, float *matrix, float *eigenvalues);
+int cuda_eigensolver(LutVals_t lut_vals, float *eigenvectors_data, float *eigenvalues_data);

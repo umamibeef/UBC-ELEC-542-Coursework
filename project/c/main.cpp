@@ -457,24 +457,27 @@ int cpu_allocate_integration_memory(LutVals_t *lut_vals, float **orbital_values_
     return rv;
 }
 
-int cpu_allocate_eigensolver_memory(LutVals_t *lut_vals, float **fock_matrix_data)
+int cpu_allocate_eigensolver_memory(LutVals_t *lut_vals, float **eigenvectors_data, float **eigenvalues_data)
 {
     int rv = 0;
 
     console_print(0, "Allocating memory for CPU eigensolver", CLIENT_SIM);
 
-    int fock_matrix_size_bytes = lut_vals->matrix_dim * lut_vals->matrix_dim * sizeof(float);
+    int eigenvectors_size_bytes = lut_vals->matrix_dim * lut_vals->matrix_dim * sizeof(float);
+    int eigenvalues_size_bytes = lut_vals->matrix_dim * sizeof(float);
 
-    *fock_matrix_data = (float*)(malloc(fock_matrix_size_bytes));
+    *eigenvectors_data = (float*)(malloc(eigenvectors_size_bytes));
+    *eigenvalues_data = (float*)(malloc(eigenvalues_size_bytes));
 
-    if (fock_matrix_data == nullptr)
+    if ((eigenvectors_data == nullptr) || (eigenvalues_data == nullptr))
     {
         console_print_err(0, "Memory allocation error!", CLIENT_SIM);
         rv = 1;
     }
     else
     {
-        console_print(2, str(format("Allocated %d bytes for Fock matrix") % fock_matrix_size_bytes), CLIENT_SIM);
+        console_print(2, str(format("Allocated %d bytes for eigenvector matrix") % eigenvectors_size_bytes), CLIENT_SIM);
+        console_print(2, str(format("Allocated %d bytes for eigenvalue vector") % eigenvalues_size_bytes), CLIENT_SIM);
     }
     console_print_spacer(0, CLIENT_SIM);
 
@@ -505,16 +508,18 @@ int cpu_free_integration_memory(LutVals_t *lut_vals, float **orbital_values_data
     return rv;
 }
 
-int cpu_free_eigensolver_memory(float **fock_matrix_data)
+int cpu_free_eigensolver_memory(float **eigenvectors_data, float **eigenvalues_data)
 {
     int rv = 0;
 
     console_print(0, "Freeing allocated eigensolver memory...", CLIENT_SIM);
 
-    free(*fock_matrix_data);
+    free(*eigenvectors_data);
+    free(*eigenvalues_data);
 
     // null the pointers
-    (*fock_matrix_data) = nullptr;
+    (*eigenvectors_data) = nullptr;
+    (*eigenvalues_data) = nullptr;
 
     console_print(2, "Successfully freed allocated eigensolver memory", CLIENT_SIM);
 
@@ -540,8 +545,8 @@ int main(int argc, char *argv[])
         ("convergence", po::value<float>()->default_value(0.01), "set the convergence condition (%)")
         ("structure", po::value<int>()->default_value(0), "set the atomic structure: (0:He, 1:H2)")
         ("verbosity", po::value<int>()->default_value(2), "set the verbosity of the program")
-        ("use_cuda_int", po::value<bool>()->default_value(1), "enable CUDA GPU acceleration for numerical integration")
-        ("use_cuda_eig", po::value<bool>()->default_value(1), "enable CUDA GPU acceleration for the eigensolver")
+        ("use-gpu-int", po::value<bool>()->default_value(1), "enable CUDA GPU acceleration for numerical integration")
+        ("use-gpu-eig", po::value<bool>()->default_value(1), "enable CUDA GPU acceleration for the eigensolver")
     ;
     po::variables_map vm;
     po::store(po::parse_command_line(argc, argv, desc), vm);
@@ -570,8 +575,8 @@ int main(int argc, char *argv[])
     config.max_iterations = vm["iterations"].as<int>();
     config.num_solutions = 6;
     config.convergence_percentage = vm["convergence"].as<float>();
-    config.enable_cuda_integration = vm["use_cuda_int"].as<bool>();
-    config.enable_cuda_eigensolver = vm["use_cuda_eig"].as<bool>();
+    config.enable_cuda_integration = vm["use-gpu-int"].as<bool>();
+    config.enable_cuda_eigensolver = vm["use-gpu-eig"].as<bool>();
     program_verbosity = vm["verbosity"].as<int>();
     // Program lookup table values
     LutVals_t lut_vals;
@@ -616,12 +621,12 @@ int main(int argc, char *argv[])
     EigenFloatMatrix_t attraction_matrix;
     EigenFloatColVectorMap_t repulsion_diagonal(nullptr, lut_vals.matrix_dim, 1);
     EigenFloatColVectorMap_t exchange_diagonal(nullptr, lut_vals.matrix_dim, 1);
-    EigenFloatMatrixMap_t fock_matrix(nullptr, lut_vals.matrix_dim, lut_vals.matrix_dim);
+    EigenFloatMatrix_t fock_matrix;
     // Orbital values
     EigenFloatColVectorMap_t orbital_values(nullptr, lut_vals.matrix_dim, 1);
     // Eigenvectors and eigenvalues
-    EigenFloatColVector_t eigenvalues;
-    EigenFloatMatrix_t eigenvectors;
+    EigenFloatColVectorMap_t eigenvalues(nullptr, lut_vals.matrix_dim, 1);
+    EigenFloatMatrixMap_t eigenvectors(nullptr, lut_vals.matrix_dim, 1);
 
     // For the repulsion, exchange, and orbital values, we will overlay the
     // Eigen objects over unified memory that is allocated via CUDA (if
@@ -634,7 +639,8 @@ int main(int argc, char *argv[])
     float *orbital_values_data;
     float *repulsion_diagonal_data;
     float *exchange_diagonal_data;
-    float *fock_matrix_data;
+    float *eigenvectors_data;
+    float *eigenvalues_data;
     int allocate_error = 0;
 
     if (config.enable_cuda_integration)
@@ -648,20 +654,20 @@ int main(int argc, char *argv[])
 
     if (config.enable_cuda_eigensolver)
     {
-        allocate_error |= cuda_allocate_eigensolver_memory(&lut_vals, &fock_matrix_data);
+        allocate_error |= cuda_allocate_eigensolver_memory(&lut_vals, &eigenvectors_data, &eigenvalues_data);
     }
     else
     {
-        allocate_error |= cpu_allocate_eigensolver_memory(&lut_vals, &fock_matrix_data);
+        allocate_error |= cpu_allocate_eigensolver_memory(&lut_vals, &eigenvectors_data, &eigenvalues_data);
     }
 
-    // make sure we got some good pointers out of that call
     if (!allocate_error)
     {
         new (&orbital_values) EigenFloatColVectorMap_t(orbital_values_data, lut_vals.matrix_dim, 1);
         new (&repulsion_diagonal) EigenFloatColVectorMap_t(repulsion_diagonal_data, lut_vals.matrix_dim, 1);
         new (&exchange_diagonal) EigenFloatColVectorMap_t(exchange_diagonal_data, lut_vals.matrix_dim, 1);
-        new (&fock_matrix) EigenFloatMatrixMap_t(fock_matrix_data, lut_vals.matrix_dim, 1);
+        new (&eigenvectors) EigenFloatMatrixMap_t(eigenvectors_data, lut_vals.matrix_dim, lut_vals.matrix_dim);
+        new (&eigenvalues) EigenFloatColVectorMap_t(eigenvalues_data, lut_vals.matrix_dim, 1);
         // Populate LUTs
         populate_lookup_values(config, lut_vals);
     }
@@ -676,8 +682,6 @@ int main(int argc, char *argv[])
     new (&kinetic_matrix) EigenFloatMatrix_t(lut_vals.matrix_dim, lut_vals.matrix_dim);
     new (&attraction_matrix) EigenFloatMatrix_t(lut_vals.matrix_dim, lut_vals.matrix_dim);
     new (&fock_matrix) EigenFloatMatrix_t(lut_vals.matrix_dim, lut_vals.matrix_dim);
-    new (&eigenvectors) EigenFloatMatrix_t(lut_vals.matrix_dim, lut_vals.matrix_dim);
-    new (&eigenvalues) EigenFloatColVector_t(lut_vals.matrix_dim, 1);
 
     // Trimmed eigenvectors and eigenvalues
     EigenFloatColVector_t trimmed_eigenvalues(config.num_solutions, 1);
@@ -705,12 +709,22 @@ int main(int argc, char *argv[])
     fock_matrix = -kinetic_matrix - attraction_matrix;
 
     console_print(1, "Obtaining eigenvalues and eigenvectors for initial solution...", CLIENT_SIM);
-    // LAPACK solver
+
+    // Solve for Fock matrix eigenvectors
     eigenvectors = fock_matrix;
-    if (!lapack_solve_eigh(lut_vals, eigenvectors.data(), eigenvalues.data()))
+    if (config.enable_cuda_eigensolver)
     {
-        console_print_err(0, "Something went horribly wrong with the solver, aborting", CLIENT_SIM);
-        exit(EXIT_FAILURE);
+        // CUDA cuSOLVER
+        cuda_eigensolver(lut_vals, eigenvectors_data, eigenvalues_data);
+    }
+    else
+    {
+        // CPU LAPACK solver
+        if (!lapack_solve_eigh(lut_vals, eigenvectors_data, eigenvalues_data))
+        {
+            console_print_err(0, "Something went horribly wrong with the solver, aborting", CLIENT_SIM);
+            exit(EXIT_FAILURE);
+        }
     }
     orbital_values = eigenvectors.col(0);
 
@@ -755,16 +769,24 @@ int main(int argc, char *argv[])
 
         console_print(1, "Obtaining eigenvalues and eigenvectors...", CLIENT_SIM);
 
-        // LAPACK solver, the same one used in numpy
+        // Solve for Fock matrix eigenvectors
         eigenvectors = fock_matrix;
-        if (!lapack_solve_eigh(lut_vals, eigenvectors.data(), eigenvalues.data()))
+        if (config.enable_cuda_eigensolver)
         {
-            console_print(0, "Something went horribly wrong with the solver, aborting", CLIENT_SIM);
-            exit(EXIT_FAILURE);
+            // CUDA cuSOLVER
+            cuda_eigensolver(lut_vals, eigenvectors_data, eigenvalues_data);
         }
-
-        // Extract orbital_values
+        else
+        {
+            // CPU LAPACK solver
+            if (!lapack_solve_eigh(lut_vals, eigenvectors_data, eigenvalues_data))
+            {
+                console_print_err(0, "Something went horribly wrong with the solver, aborting", CLIENT_SIM);
+                exit(EXIT_FAILURE);
+            }
+        }
         orbital_values = eigenvectors.col(0);
+
         // Extract num_solutions eigenvalues
         trimmed_eigenvalues = eigenvalues.block(0, 0, config.num_solutions, 1);
         // Extract num_solutions eigenvectors
@@ -826,11 +848,11 @@ int main(int argc, char *argv[])
     }
     if (config.enable_cuda_eigensolver)
     {
-        cuda_free_eigensolver_memory(&fock_matrix_data);
+        cuda_free_eigensolver_memory(&eigenvectors_data, &eigenvalues_data);
     }
     else
     {
-        cpu_free_eigensolver_memory(&fock_matrix_data);
+        cpu_free_eigensolver_memory(&eigenvectors_data, &eigenvalues_data);
     }
 
     console_print_spacer(0, CLIENT_SIM);
