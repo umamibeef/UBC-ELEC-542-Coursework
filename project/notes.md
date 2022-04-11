@@ -62,6 +62,6 @@ Processing Units ("C:\Users\Michel\OneDrive\School\ELEC542\Project\Electronic St
   * ~~priority is to understand DFT better, because right now it doesn't make enough sense~~
     - https://pyscf.org/user/dft.html seems to have a good overview, and the benchmark uses a variation of the example within~~ Done.
     - https://www.youtube.com/watch?v=QGyfGCZT110 watched this, good overview of DFT from David Sherill
-  * ~~watch this, CP2K parallel algorithms overview (~1h): https://www.youtube.com/watch?v=GNnSKOgqEwM~~ Nevermind, not worth it.
+  * ~~watch this, CP2K parallel algorithms overview (1h): https://www.youtube.com/watch?v=GNnSKOgqEwM~~ Nevermind, not worth it.
   * ~~finalize a benchmark to run that will utilize the numerical integration~~ pyscf abandoned for now
   * ~~understand what workloads use the numerical integration routines that will be accelerated~~ pyscf abandoned for now
