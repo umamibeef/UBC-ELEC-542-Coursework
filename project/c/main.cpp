@@ -89,7 +89,7 @@ void print_header(void)
         << "Git Branch: " << GIT_BRANCH << endl
         << "Git Hash: " << GIT_COMMIT_HASH << endl << endl;
 
-    console_print(0, ss.str(), SIM);
+    console_print(0, ss.str(), CLIENT_SIM);
 }
 
 void populate_lookup_values(Cfg_t &config, LutVals_t &lut_vals)
@@ -372,36 +372,36 @@ bool lapack_solve_eigh(LutVals_t lut_vals, float *matrix, float *eigenvalues)
 
     auto lapack_start = chrono::system_clock::now();
 
-    console_print(0, "LAPACK ssyevd start", LAPACK);
-    console_print(2, TAB1 "LAPACK solver debug", LAPACK);
-    console_print(2, str(format(TAB2 "n = %d") % n), LAPACK);
-    console_print(2, str(format(TAB2 "lda = %d") % lda), LAPACK);
+    console_print(0, "LAPACK ssyevd start", CLIENT_LAPACK);
+    console_print(2, TAB1 "LAPACK solver debug", CLIENT_LAPACK);
+    console_print(2, str(format(TAB2 "n = %d") % n), CLIENT_LAPACK);
+    console_print(2, str(format(TAB2 "lda = %d") % lda), CLIENT_LAPACK);
 
     // Setting lwork and liwork manually based on the LAPACK documentation
     lwork = 1 + 6*n + 2*n*n;
     liwork = 3 + 5*n;
 
-    console_print(2, str(format(TAB2 "liwork = %d") % liwork), LAPACK);
-    console_print(2, str(format(TAB2 "lwork = %d") % lwork), LAPACK);
+    console_print(2, str(format(TAB2 "liwork = %d") % liwork), CLIENT_LAPACK);
+    console_print(2, str(format(TAB2 "lwork = %d") % lwork), CLIENT_LAPACK);
 
     // Allocate memory for work arrays
     iwork = (lapack_int*)LAPACKE_malloc(sizeof(lapack_int) * liwork);
     if(iwork == nullptr)
     {
         info = LAPACK_WORK_MEMORY_ERROR;
-        console_print(2, TAB2 "FATAL! Could not allocate iwork array", LAPACK);
+        console_print(2, TAB2 "FATAL! Could not allocate iwork array", CLIENT_LAPACK);
     }
     work = (float*)LAPACKE_malloc(sizeof(float) * lwork);
     if(work == nullptr)
     {
         info = LAPACK_WORK_MEMORY_ERROR;
-        console_print(2, TAB2 "FATAL! Could not allocate work array", LAPACK);
+        console_print(2, TAB2 "FATAL! Could not allocate work array", CLIENT_LAPACK);
     }
 
     // Call LAPACK function and adjust info if our work areas are OK
     if ((iwork != nullptr) && (work != nullptr))
     {
-        console_print(2, TAB2 "calling LAPACK function", LAPACK);
+        console_print(2, TAB2 "calling LAPACK function", CLIENT_LAPACK);
         LAPACK_ssyevd(&jobz, &uplo, &n, matrix, &lda, eigenvalues, work, &lwork, iwork, &liwork, &info);
         if( info < 0 ) {
             info = info - 1;
@@ -412,14 +412,73 @@ bool lapack_solve_eigh(LutVals_t lut_vals, float *matrix, float *eigenvalues)
     LAPACKE_free(iwork);
     LAPACKE_free(work);
 
-    console_print(2, str(format(TAB2 "info = %d") % info), LAPACK);
+    console_print(2, str(format(TAB2 "info = %d") % info), CLIENT_LAPACK);
 
     auto lapack_end = chrono::system_clock::now();
     auto lapack_time = chrono::duration<float>(lapack_end - lapack_start);
 
-    console_print(0, str(format("LAPACK ssyevd took: %0.3f seconds") % (float)(lapack_time.count())), LAPACK);
+    console_print(0, str(format("LAPACK ssyevd took: %0.3f seconds") % (float)(lapack_time.count())), CLIENT_LAPACK);
 
     return (info==0);
+}
+
+int cpu_allocate_memory(LutVals_t *lut_vals, float **orbital_values_data, float **repulsion_diagonal_data, float **exchange_diagonal_data)
+{
+    int rv = 0;
+
+    console_print(0, "Allocating unified memory for CPU/GPU...", CLIENT_SIM);
+
+    int orbital_vector_size_bytes = lut_vals->matrix_dim * sizeof(float);
+    int repulsion_exchange_matrices_size_bytes = lut_vals->matrix_dim * sizeof(float);
+    int coordinate_luts_size_bytes = IDX_NUM * lut_vals->matrix_dim * sizeof(float);
+
+    *orbital_values_data = (float*)(malloc(orbital_vector_size_bytes));
+    *repulsion_diagonal_data = (float*)(malloc(repulsion_exchange_matrices_size_bytes));
+    *exchange_diagonal_data = (float*)(malloc(repulsion_exchange_matrices_size_bytes));
+
+    lut_vals->coordinate_value_array = (float*)(malloc(coordinate_luts_size_bytes));
+    lut_vals->coordinate_index_array = (float*)(malloc(coordinate_luts_size_bytes));
+
+    if ( ((*orbital_values_data) == nullptr) || ((*repulsion_diagonal_data) == nullptr) || ((*exchange_diagonal_data) == nullptr) ||
+         (lut_vals->coordinate_value_array == nullptr) || (lut_vals->coordinate_index_array == nullptr) )
+    {
+        console_print_err(0, "Memory allocation error!", CLIENT_SIM);
+        rv = 1;
+    }
+    else
+    {
+        console_print(2, str(format("Allocated %d bytes for shared orbital values vector") % orbital_vector_size_bytes), CLIENT_SIM);
+        console_print(2, str(format("Allocated %d bytes for shared repulsion matrix diagonal") % repulsion_exchange_matrices_size_bytes), CLIENT_SIM);
+        console_print(2, str(format("Allocated %d bytes for shared exchange matrix diagonal") % repulsion_exchange_matrices_size_bytes), CLIENT_SIM);
+        console_print(2, str(format("Allocated 3x %d bytes for coordinate LUTs") % coordinate_luts_size_bytes), CLIENT_SIM);
+    }
+    console_print_spacer(0, CLIENT_SIM);
+
+    return rv;
+}
+
+int cpu_free_memory(LutVals_t *lut_vals, float **orbital_values_data, float **repulsion_diagonal_data, float **exchange_diagonal_data)
+{
+    int rv = 0;
+
+    console_print(0, "Freeing allocated memory...", CLIENT_SIM);
+
+    free(*orbital_values_data);
+    free(*repulsion_diagonal_data);
+    free(*exchange_diagonal_data);
+    free(lut_vals->coordinate_value_array);
+    free(lut_vals->coordinate_index_array);
+
+    // null the pointers
+    (*orbital_values_data) = nullptr;
+    (*repulsion_diagonal_data) = nullptr;
+    (*exchange_diagonal_data) = nullptr;
+    (lut_vals->coordinate_value_array) = nullptr;
+    (lut_vals->coordinate_index_array) = nullptr;
+
+    console_print(2, "Successfully freed allocated memory", CLIENT_SIM);
+
+    return rv;
 }
 
 int main(int argc, char *argv[])
@@ -441,6 +500,8 @@ int main(int argc, char *argv[])
         ("convergence", po::value<float>()->default_value(0.01), "set the convergence condition (%)")
         ("structure", po::value<int>()->default_value(0), "set the atomic structure: (0:He, 1:H2)")
         ("verbosity", po::value<int>()->default_value(2), "set the verbosity of the program")
+        ("use_cuda_int", po::value<bool>()->default_value(1), "enable CUDA GPU acceleration for numerical integration")
+        ("use_cuda_eig", po::value<bool>()->default_value(1), "enable CUDA GPU acceleration for the eigensolver")
     ;
     po::variables_map vm;
     po::store(po::parse_command_line(argc, argv, desc), vm);
@@ -469,6 +530,8 @@ int main(int argc, char *argv[])
     config.max_iterations = vm["iterations"].as<int>();
     config.num_solutions = 6;
     config.convergence_percentage = vm["convergence"].as<float>();
+    config.enable_cuda_integration = vm["use_cuda_int"].as<bool>();
+    config.enable_cuda_eigensolver = vm["use_cuda_eig"].as<bool>();
     program_verbosity = vm["verbosity"].as<int>();
     // Program lookup table values
     LutVals_t lut_vals;
@@ -477,25 +540,35 @@ int main(int argc, char *argv[])
     lut_vals.step_size_cubed = pow(lut_vals.step_size, 3.0);
 
     // Print program information
-    console_print(0, "Program Configurations:\n", SIM);
-    console_print(0, str(format(TAB1 "Iterations = %d") % config.max_iterations), SIM);
-    console_print(0, str(format(TAB1 "Num Partitions = %d") % config.num_partitions), SIM);
-    console_print(0, str(format(TAB1 "Limits = %d") % config.limit), SIM);
-    console_print(0, str(format(TAB1 "Matrix Dimension = %d") % lut_vals.matrix_dim), SIM);
-    console_print(0, str(format(TAB1 "Step Size = %f") % lut_vals.step_size), SIM);
+    console_print(0, "Program Configurations:\n", CLIENT_SIM);
+    console_print(0, str(format(TAB1 "Iterations = %d") % config.max_iterations), CLIENT_SIM);
+    console_print(0, str(format(TAB1 "Num Partitions = %d") % config.num_partitions), CLIENT_SIM);
+    console_print(0, str(format(TAB1 "Limits = %d") % config.limit), CLIENT_SIM);
+    console_print(0, str(format(TAB1 "Matrix Dimension = %d") % lut_vals.matrix_dim), CLIENT_SIM);
+    console_print(0, str(format(TAB1 "Step Size = %f") % lut_vals.step_size), CLIENT_SIM);
 
     if (atomic_structure == HELIUM_ATOM)
     {
-        console_print(0, TAB1 "Atomic Structure: Helium Atom", SIM);
+        console_print(0, TAB1 "Atomic Structure: Helium Atom", CLIENT_SIM);
     }
     else if (atomic_structure == HYDROGEN_MOLECULE)
     {
-        console_print(0, TAB1 "Atomic Structure: Hydrogen Molecule", SIM);
+        console_print(0, TAB1 "Atomic Structure: Hydrogen Molecule", CLIENT_SIM);
     }
-    console_print_spacer(0, SIM);
+    console_print_spacer(0, CLIENT_SIM);
 
     // Get and print CUDA information
-    cuda_get_device_info();
+    if (config.enable_cuda_eigensolver || config.enable_cuda_integration)
+    {
+        console_print(0, "Checking for available CUDA devices", CLIENT_SIM);
+        int num_cuda_devices = cuda_get_device_info();
+        if ((num_cuda_devices == 0) && (config.enable_cuda_eigensolver || config.enable_cuda_integration))
+        {
+            console_print_warn(0, "Disabling CUDA acceleration since no device is available", CLIENT_SIM);
+            config.enable_cuda_integration = false;
+            config.enable_cuda_eigensolver = false;
+        }
+    }
 
     // Matrix declarations
     EigenFloatMatrix_t laplacian_matrix;
@@ -511,29 +584,39 @@ int main(int argc, char *argv[])
     EigenFloatMatrix_t eigenvectors;
 
     // For the repulsion, exchange, and orbital values, we will overlay the
-    // Eigen objects over unified memory that is allocated via CUDA. This
-    // overlay is performed using the Eigen::Map object, which allows one to map
-    // a pointer to data allocated outside of Eigen to an Eigen object, like a
-    // matrix or vector. kernel.h externs the three pointers that are used to
-    // store the addresses and the following call will allocate memory for them.
-    // We will also allocate memory for the lookup tables used.
+    // Eigen objects over unified memory that is allocated via CUDA (if
+    // enabled). Otherwise we will malloc data normally. This overlay is
+    // performed using the Eigen::Map object, which allows one to map a pointer
+    // to data allocated outside of Eigen to an Eigen object, like a matrix or
+    // vector. kernel.h externs the three pointers that are used to store the
+    // addresses and the following call will allocate memory for them. We will
+    // also allocate memory for the lookup tables used.
     float *orbital_values_data;
     float *repulsion_diagonal_data;
     float *exchange_diagonal_data;
-    cuda_allocate_shared_memory(&lut_vals, &orbital_values_data, &repulsion_diagonal_data, &exchange_diagonal_data);
-    // Populate LUTs
-    populate_lookup_values(config, lut_vals);
+    int allocate_error;
+
+    if (config.enable_cuda_integration)
+    {
+        allocate_error = cuda_allocate_shared_memory(&lut_vals, &orbital_values_data, &repulsion_diagonal_data, &exchange_diagonal_data);
+    }
+    else
+    {
+        allocate_error = cpu_allocate_memory(&lut_vals, &orbital_values_data, &repulsion_diagonal_data, &exchange_diagonal_data);
+    }
 
     // make sure we got some good pointers out of that call
-    if ((orbital_values_data != nullptr) && (repulsion_diagonal_data != nullptr) && (exchange_diagonal_data != nullptr))
+    if (!allocate_error)
     {
         new (&orbital_values) EigenFloatColVectorMap_t(orbital_values_data, lut_vals.matrix_dim, 1);
         new (&repulsion_diagonal) EigenFloatColVectorMap_t(repulsion_diagonal_data, lut_vals.matrix_dim, 1);
         new (&exchange_diagonal) EigenFloatColVectorMap_t(exchange_diagonal_data, lut_vals.matrix_dim, 1);
+        // Populate LUTs
+        populate_lookup_values(config, lut_vals);
     }
     else
     {
-        console_print_err(0, "Something went horribly wrong when allocating shared memory, aborting", SIM);
+        console_print_err(0, "Something went horribly wrong when allocating memory, aborting", CLIENT_SIM);
         exit(EXIT_FAILURE);
     }
 
@@ -549,16 +632,16 @@ int main(int argc, char *argv[])
     EigenFloatColVector_t trimmed_eigenvalues(config.num_solutions, 1);
     EigenFloatMatrix_t trimmed_eigenvectors(lut_vals.matrix_dim, config.num_solutions);
 
-    console_print(0, "Simulation start!", SIM);
+    console_print(0, "Simulation start!", CLIENT_SIM);
     auto sim_start = chrono::system_clock::now();
 
     // generate the second order Laplacian matrix for 3D space
-    console_print(1, "Generating kinetic energy matrix", SIM);
+    console_print(1, "Generating kinetic energy matrix", CLIENT_SIM);
     generate_laplacian_matrix(lut_vals, laplacian_matrix.data());
     // generate the kinetic energy matrix
     kinetic_matrix = (laplacian_matrix/(2.0*lut_vals.step_size*lut_vals.step_size));
     // generate the Coulombic attraction matrix
-    console_print(1, "Generating electron-nucleus Coulombic attraction matrix", SIM);
+    console_print(1, "Generating electron-nucleus Coulombic attraction matrix", CLIENT_SIM);
     generate_attraction_matrix(lut_vals, atomic_structure, attraction_matrix.data());
 
     // Main HF loop
@@ -570,44 +653,62 @@ int main(int argc, char *argv[])
     // initial solution
     fock_matrix = -kinetic_matrix - attraction_matrix;
 
-    console_print(1, "Obtaining eigenvalues and eigenvectors for initial solution...", SIM);
+    console_print(1, "Obtaining eigenvalues and eigenvectors for initial solution...", CLIENT_SIM);
     // LAPACK solver
     eigenvectors = fock_matrix;
     if (!lapack_solve_eigh(lut_vals, eigenvectors.data(), eigenvalues.data()))
     {
-        console_print_err(0, "Something went horribly wrong with the solver, aborting", SIM);
+        console_print_err(0, "Something went horribly wrong with the solver, aborting", CLIENT_SIM);
         exit(EXIT_FAILURE);
     }
     orbital_values = eigenvectors.col(0);
 
     do
     {
-        console_print(0, str(format("Iteration Start: %d") % interation_count), SIM);
+        console_print(0, str(format("Iteration Start: %d") % interation_count), CLIENT_SIM);
 
         auto iteration_start = chrono::system_clock::now();
 
-        // generate repulsion and exchange matrices on GPU
-        cuda_numerical_integration_kernel(lut_vals, orbital_values_data, repulsion_diagonal_data, exchange_diagonal_data);
 
-        // // generate repulsion and exchange matrices on CPU
-        // // generate repulsion matrix
-        // console_print(1, "Generating electron-electron Coulombic repulsion matrix", SIM);
-        // generate_repulsion_diagonal(lut_vals, orbital_values.data(), repulsion_diagonal.data());
-        // // generate exchange matrix
-        // console_print(1, "Generating electron-electron exchange matrix", SIM);
-        // generate_exchange_diagonal(lut_vals, orbital_values.data(), exchange_diagonal.data());
+        if (config.enable_cuda_integration)
+        {
+            console_print(0, "Generating repulsion and exchange matrices on GPU", CLIENT_SIM);
+            auto cpu_int_start = std::chrono::system_clock::now();
+
+            // generate repulsion and exchange matrices on GPU
+            cuda_numerical_integration(lut_vals, orbital_values_data, repulsion_diagonal_data, exchange_diagonal_data);
+
+            auto cpu_int_end = std::chrono::system_clock::now();
+            auto cpu_int_time = std::chrono::duration<float>(cpu_int_end - cpu_int_start);
+
+            console_print(0, str(format("Repulsion and exchange matrix computed in: %0.3f seconds") % (float)(cpu_int_time.count())), CLIENT_SIM);
+        }
+        else
+        {
+            console_print(0, "Generating repulsion and exchange matrices on CPU", CLIENT_SIM);
+            auto cpu_int_start = std::chrono::system_clock::now();
+
+            // generate repulsion and exchange matrices on CPU
+            generate_repulsion_diagonal(lut_vals, orbital_values.data(), repulsion_diagonal.data());
+            generate_exchange_diagonal(lut_vals, orbital_values.data(), exchange_diagonal.data());
+
+            auto cpu_int_end = std::chrono::system_clock::now();
+            auto cpu_int_time = std::chrono::duration<float>(cpu_int_end - cpu_int_start);
+
+            console_print(0, str(format("Repulsion and exchange matrix computed in: %0.3f seconds") % (float)(cpu_int_time.count())), CLIENT_SIM);
+        }
 
         // form fock matrix
-        console_print(1, "Generating Fock matrix", SIM);
+        console_print(1, "Generating Fock matrix", CLIENT_SIM);
         fock_matrix = -kinetic_matrix - attraction_matrix + 2.0 * EigenFloatMatrix_t(repulsion_diagonal.asDiagonal()) - EigenFloatMatrix_t(exchange_diagonal.asDiagonal());
 
-        console_print(1, "Obtaining eigenvalues and eigenvectors...", SIM);
+        console_print(1, "Obtaining eigenvalues and eigenvectors...", CLIENT_SIM);
 
         // LAPACK solver, the same one used in numpy
         eigenvectors = fock_matrix;
         if (!lapack_solve_eigh(lut_vals, eigenvectors.data(), eigenvalues.data()))
         {
-            console_print(0, "Something went horribly wrong with the solver, aborting", SIM);
+            console_print(0, "Something went horribly wrong with the solver, aborting", CLIENT_SIM);
             exit(EXIT_FAILURE);
         }
 
@@ -628,13 +729,13 @@ int main(int argc, char *argv[])
         //     cout << "exchange_diagonal: " << endl << exchange_diagonal << endl;
         // }
         
-        console_print(1, "Calculating total energy", SIM);
+        console_print(1, "Calculating total energy", CLIENT_SIM);
 
         total_energy = calculate_total_energy(orbital_values, kinetic_matrix, attraction_matrix, repulsion_diagonal, exchange_diagonal);
         total_energy_percent_diff = abs((total_energy - last_total_energy)/((total_energy + last_total_energy) / 2.0));
 
-        console_print(0, str(format("Total energy: %.3f") % (total_energy)), SIM);
-        console_print(0, str(format("Energy %% diff: %.3f%%") % (total_energy_percent_diff * 100.0)), SIM);
+        console_print(0, str(format("Total energy: %.3f") % (total_energy)), CLIENT_SIM);
+        console_print(0, str(format("Energy %% diff: %.3f%%") % (total_energy_percent_diff * 100.0)), CLIENT_SIM);
 
         // update last value
         last_total_energy = total_energy;
@@ -645,8 +746,8 @@ int main(int argc, char *argv[])
         auto iteration_end = chrono::system_clock::now();
         auto iteration_time = chrono::duration<float>(iteration_end - iteration_start);
 
-        console_print(0, str(format("Iteration end! Iteration time: %0.3f seconds") % (float)(iteration_time.count())), SIM);
-        console_print_spacer(0, SIM);
+        console_print(0, str(format("Iteration end! Iteration time: %0.3f seconds") % (float)(iteration_time.count())), CLIENT_SIM);
+        console_print_spacer(0, CLIENT_SIM);
 
         // check if we've hit the maximum iteration limit
         if (interation_count == config.max_iterations)
@@ -664,21 +765,28 @@ int main(int argc, char *argv[])
     while(1);
 
     // free shared memory for GPU calculations
-    cuda_free_shared_memory(&lut_vals, &orbital_values_data, &repulsion_diagonal_data, &exchange_diagonal_data);
+    if (config.enable_cuda_integration)
+    {
+        cuda_free_shared_memory(&lut_vals, &orbital_values_data, &repulsion_diagonal_data, &exchange_diagonal_data);
+    }
+    else
+    {
+        cpu_free_memory(&lut_vals, &orbital_values_data, &repulsion_diagonal_data, &exchange_diagonal_data);
+    }
 
-    console_print_spacer(0, SIM);
-    console_print(0, "Final Eigenvalues:", SIM);
+    console_print_spacer(0, CLIENT_SIM);
+    console_print(0, "Final Eigenvalues:", CLIENT_SIM);
     stringstream ss;
     ss << trimmed_eigenvalues.transpose();
-    console_print(0, ss.str(), SIM);
+    console_print(0, ss.str(), CLIENT_SIM);
     ss.str(string()); // clear ss
-    console_print_spacer(0, SIM);
-    console_print(0, str(format("Final Total energy: %.3f") % (total_energy)), SIM);
-    console_print_spacer(0, SIM);
+    console_print_spacer(0, CLIENT_SIM);
+    console_print(0, str(format("Final Total energy: %.3f") % (total_energy)), CLIENT_SIM);
+    console_print_spacer(0, CLIENT_SIM);
 
     auto sim_end = chrono::system_clock::now();
     auto sim_time = chrono::duration<float>(sim_end - sim_start);
-    console_print(0, str(format("Simulation end! Total time: %0.3f seconds") % (float)(sim_time.count())), SIM);
+    console_print(0, str(format("Simulation end! Total time: %0.3f seconds") % (float)(sim_time.count())), CLIENT_SIM);
 
     return 0;
 }

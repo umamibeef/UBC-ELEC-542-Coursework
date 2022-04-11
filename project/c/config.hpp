@@ -34,6 +34,8 @@ typedef struct
     int max_iterations; // Maximum number of HF interations to perform
     int num_solutions; // The number of eigenvalues and eigenvectors to keep from the solution
     float convergence_percentage; // The convergence percentage for total energy change, used for terminating the main loop
+    bool enable_cuda_integration; // Enable CUDA for the the numerical integration
+    bool enable_cuda_eigensolver; // Enable CUDA for the eigensolver
 } Cfg_t;
 
 typedef struct

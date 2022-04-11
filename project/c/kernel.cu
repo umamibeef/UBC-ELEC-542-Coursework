@@ -79,7 +79,7 @@ float cuda_exchange_matrix_integrand_function(LutVals_t lut_vals, float *orbital
 }
 
 __global__
-void cuda_generate_repulsion_matrix(LutVals_t lut_vals, float *orbital_values, float *repulsion_diagonal)
+void cuda_generate_repulsion_matrix_kernel(LutVals_t lut_vals, float *orbital_values, float *repulsion_diagonal)
 {
     int start_index = blockIdx.x * blockDim.x + threadIdx.x;
     int stride = blockDim.x * gridDim.x;
@@ -95,7 +95,7 @@ void cuda_generate_repulsion_matrix(LutVals_t lut_vals, float *orbital_values, f
 }
 
 __global__
-void cuda_generate_exchange_matrix(LutVals_t lut_vals, float *orbital_values, float *exchange_diagonal)
+void cuda_generate_exchange_matrix_kernel(LutVals_t lut_vals, float *orbital_values, float *exchange_diagonal)
 {
     int start_index = blockIdx.x * blockDim.x + threadIdx.x;
     int stride = blockDim.x * gridDim.x;
@@ -110,28 +110,28 @@ void cuda_generate_exchange_matrix(LutVals_t lut_vals, float *orbital_values, fl
     }
 }
 
-void cuda_get_device_info(void)
+int cuda_get_device_info(void)
 {
     int num_devices;
 
-    console_print_spacer(0, CUDA);
-    console_print(0, "CUDA Device information:", CUDA);
+    console_print_spacer(0, CLIENT_CUDA);
+    console_print(0, "CUDA Device information:", CLIENT_CUDA);
     cudaGetDeviceCount(&num_devices);
     for (int i = 0; i < num_devices; i++)
     {
         cudaDeviceProp prop;
         cudaGetDeviceProperties(&prop, i);
-        console_print(0, str(format("Device Number: %d\n") % i), CUDA);
-        console_print(0, str(format(TAB1 "Device name: %s\n") % prop.name), CUDA);
-        console_print(0, str(format(TAB1 "CUDA Capability %d.%d\n") % prop.major % prop.minor), CUDA);
-        console_print(0, str(format(TAB1 "Memory Clock Rate (kHz): %d\n") % prop.memoryClockRate), CUDA);
-        console_print(0, str(format(TAB1 "Memory Bus Width (bits): %d\n") % prop.memoryBusWidth), CUDA);
-        console_print(0, str(format(TAB1 "Peak Memory Bandwidth (GB/s): %f\n") % (2.0*prop.memoryClockRate*(prop.memoryBusWidth/8)/1.0e6)), CUDA);
-        console_print(0, str(format(TAB1 "Streaming Multiprocessors Count: %d\n") % prop.multiProcessorCount), CUDA);
-        console_print(0, str(format(TAB1 "Max Blocks per Streaming Multiprocessors: %d\n") % prop.maxBlocksPerMultiProcessor), CUDA);
-        console_print(0, str(format(TAB1 "Max Threads per Streaming Multiprocessors: %d\n") % prop.maxThreadsPerMultiProcessor), CUDA);
-        console_print(0, str(format(TAB1 "Max Dimensions of a Thread Block (x,y,z): (%d, %d, %d)\n") % prop.maxThreadsDim[0] % prop.maxThreadsDim[1] % prop.maxThreadsDim[2]), CUDA);
-        console_print(0, str(format(TAB1 "Max Dimensions of a Grid Size (x,y,z): (%d, %d, %d)\n") % prop.maxGridSize[0] % prop.maxGridSize[1] % prop.maxGridSize[2]), CUDA);
+        console_print(0, str(format("Device Number: %d\n") % i), CLIENT_CUDA);
+        console_print(0, str(format(TAB1 "Device name: %s\n") % prop.name), CLIENT_CUDA);
+        console_print(0, str(format(TAB1 "CUDA Capability %d.%d\n") % prop.major % prop.minor), CLIENT_CUDA);
+        console_print(0, str(format(TAB1 "Memory Clock Rate (kHz): %d\n") % prop.memoryClockRate), CLIENT_CUDA);
+        console_print(0, str(format(TAB1 "Memory Bus Width (bits): %d\n") % prop.memoryBusWidth), CLIENT_CUDA);
+        console_print(0, str(format(TAB1 "Peak Memory Bandwidth (GB/s): %f\n") % (2.0*prop.memoryClockRate*(prop.memoryBusWidth/8)/1.0e6)), CLIENT_CUDA);
+        console_print(0, str(format(TAB1 "Streaming Multiprocessors Count: %d\n") % prop.multiProcessorCount), CLIENT_CUDA);
+        console_print(0, str(format(TAB1 "Max Blocks per Streaming Multiprocessors: %d\n") % prop.maxBlocksPerMultiProcessor), CLIENT_CUDA);
+        console_print(0, str(format(TAB1 "Max Threads per Streaming Multiprocessors: %d\n") % prop.maxThreadsPerMultiProcessor), CLIENT_CUDA);
+        console_print(0, str(format(TAB1 "Max Dimensions of a Thread Block (x,y,z): (%d, %d, %d)\n") % prop.maxThreadsDim[0] % prop.maxThreadsDim[1] % prop.maxThreadsDim[2]), CLIENT_CUDA);
+        console_print(0, str(format(TAB1 "Max Dimensions of a Grid Size (x,y,z): (%d, %d, %d)\n") % prop.maxGridSize[0] % prop.maxGridSize[1] % prop.maxGridSize[2]), CLIENT_CUDA);
 
         // TODO: handle the multi CUDA device case
         multi_processor_count = prop.multiProcessorCount;
@@ -139,7 +139,13 @@ void cuda_get_device_info(void)
         max_threads_per_multiprocessor = prop.maxThreadsPerMultiProcessor;
 
     }
-    console_print_spacer(0, CUDA);
+    if (num_devices == 0)
+    {
+        console_print_warn(0, "No CUDA devices available!", CLIENT_CUDA);
+    }
+    console_print_spacer(0, CLIENT_CUDA);
+
+    return num_devices;
 }
 
 int cuda_allocate_shared_memory(LutVals_t *lut_vals, float **orbital_values_data, float **repulsion_diagonal_data, float **exchange_diagonal_data)
@@ -147,7 +153,7 @@ int cuda_allocate_shared_memory(LutVals_t *lut_vals, float **orbital_values_data
     int rv = 0;
     cudaError_t error;
 
-    console_print(0, "Allocating unified memory for CPU/GPU...", CUDA);
+    console_print(0, "Allocating unified memory for CPU/GPU...", CLIENT_CUDA);
 
     int orbital_vector_size_bytes = lut_vals->matrix_dim * sizeof(float);
     int repulsion_exchange_matrices_size_bytes = lut_vals->matrix_dim * sizeof(float);
@@ -163,17 +169,17 @@ int cuda_allocate_shared_memory(LutVals_t *lut_vals, float **orbital_values_data
     error = cudaGetLastError();
     if (error != cudaSuccess)
     {
-        console_print_err(0, str(format("%s\n") % cudaGetErrorString(error)), CUDA);
+        console_print_err(0, str(format("%s\n") % cudaGetErrorString(error)), CLIENT_CUDA);
         rv = 1;
     }
     else
     {
-        console_print(2, str(format("Allocated %d bytes for shared orbital values vector") % orbital_vector_size_bytes), CUDA);
-        console_print(2, str(format("Allocated %d bytes for shared repulsion matrix diagonal") % repulsion_exchange_matrices_size_bytes), CUDA);
-        console_print(2, str(format("Allocated %d bytes for shared exchange matrix diagonal") % repulsion_exchange_matrices_size_bytes), CUDA);
-        console_print(2, str(format("Allocated 3x %d bytes for coordinate LUTs") % coordinate_luts_size_bytes), CUDA);
+        console_print(2, str(format("Allocated %d bytes for shared orbital values vector") % orbital_vector_size_bytes), CLIENT_CUDA);
+        console_print(2, str(format("Allocated %d bytes for shared repulsion matrix diagonal") % repulsion_exchange_matrices_size_bytes), CLIENT_CUDA);
+        console_print(2, str(format("Allocated %d bytes for shared exchange matrix diagonal") % repulsion_exchange_matrices_size_bytes), CLIENT_CUDA);
+        console_print(2, str(format("Allocated 3x %d bytes for coordinate LUTs") % coordinate_luts_size_bytes), CLIENT_CUDA);
     }
-    console_print_spacer(0, CUDA);
+    console_print_spacer(0, CLIENT_CUDA);
 
     return rv;
 }
@@ -183,7 +189,7 @@ int cuda_free_shared_memory(LutVals_t *lut_vals, float **orbital_values_data, fl
     int rv = 0;
     cudaError_t error;
 
-    console_print(0, "Freeing unified memory for CPU/GPU...", CUDA);
+    console_print(0, "Freeing unified memory for CPU/GPU...", CLIENT_CUDA);
 
     cudaFree(*orbital_values_data);
     cudaFree(*repulsion_diagonal_data);
@@ -201,18 +207,18 @@ int cuda_free_shared_memory(LutVals_t *lut_vals, float **orbital_values_data, fl
     error = cudaGetLastError();
     if (error != cudaSuccess)
     {
-        console_print_err(0, str(format("%s\n") % cudaGetErrorString(error)), CUDA);
+        console_print_err(0, str(format("%s\n") % cudaGetErrorString(error)), CLIENT_CUDA);
         rv = 1;
     }
     else
     {
-        console_print(2, "Successfully freed shared data", CUDA);
+        console_print(2, "Successfully freed shared data", CLIENT_CUDA);
     }
 
     return rv;
 }
 
-int cuda_numerical_integration_kernel(LutVals_t lut_vals, float *orbital_values, float *repulsion_matrix, float *exchange_matrix)
+int cuda_numerical_integration(LutVals_t lut_vals, float *orbital_values, float *repulsion_matrix, float *exchange_matrix)
 {
     int rv = 0;
     cudaError_t error;
@@ -220,27 +226,18 @@ int cuda_numerical_integration_kernel(LutVals_t lut_vals, float *orbital_values,
     int num_blocks = multi_processor_count * max_blocks_per_multiprocessor;
     int blocks_size = multi_processor_count * max_threads_per_multiprocessor / num_blocks;
 
-    if (!rv)
-    {
-        console_print(0, "Generating repulsion and exchange matrices on GPU...", CUDA);
+    console_print(0, "Computing repulsion matrix", CLIENT_CUDA);
+    cuda_generate_repulsion_matrix_kernel<<<num_blocks, blocks_size>>>(lut_vals, orbital_values, repulsion_matrix);
+    cudaDeviceSynchronize();
 
-        auto cuda_start = std::chrono::system_clock::now();
-
-        cuda_generate_repulsion_matrix<<<num_blocks, blocks_size>>>(lut_vals, orbital_values, repulsion_matrix);
-        cudaDeviceSynchronize();
-        cuda_generate_exchange_matrix<<<num_blocks, blocks_size>>>(lut_vals, orbital_values, exchange_matrix);
-        cudaDeviceSynchronize();
-
-        auto cuda_end = std::chrono::system_clock::now();
-        auto cuda_time = std::chrono::duration<float>(cuda_end - cuda_start);
-
-        console_print(0, str(format("Repulsion and exchange matrix computed in: %0.3f seconds") % (float)(cuda_time.count())), CUDA);
-    }
+    console_print(0, "Computing exchange matrix", CLIENT_CUDA);
+    cuda_generate_exchange_matrix_kernel<<<num_blocks, blocks_size>>>(lut_vals, orbital_values, exchange_matrix);
+    cudaDeviceSynchronize();
 
     error = cudaGetLastError();
     if (error != cudaSuccess)
     {
-        console_print_err(0, str(format("%s\n") % cudaGetErrorString(error)), CUDA);
+        console_print_err(0, str(format("%s\n") % cudaGetErrorString(error)), CLIENT_CUDA);
         rv = 1;
     }
 

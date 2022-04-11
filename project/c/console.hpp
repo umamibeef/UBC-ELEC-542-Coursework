@@ -51,16 +51,25 @@ extern int program_verbosity;
 
 typedef enum
 {
-    NONE = 0,
-    SIM,
-    CUDA,
-    LAPACK,
+    CLIENT_NONE = 0,
+    CLIENT_SIM,
+    CLIENT_CUDA,
+    CLIENT_LAPACK,
 } client_e;
+
+typedef enum
+{
+    LEVEL_NONE = 0,
+    LEVEL_INFO,
+    LEVEL_WARNING,
+    LEVEL_ERROR,
+} level_e;
 
 // Headers
 #include <iostream>
 
 // Functions
-void console_print(int verbose_level, std::string input_string, client_e client = NONE);
-void console_print_err(int verbose_level, std::string input_string, client_e client = NONE);
+void console_print(int verbose_level, std::string input_string, client_e client);
+void console_print_err(int verbose_level, std::string input_string, client_e client);
+void console_print_warn(int verbose_level, std::string input_string, client_e client);
 void console_print_spacer(int verbose_level, client_e client);
