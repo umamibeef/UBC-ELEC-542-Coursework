@@ -146,7 +146,7 @@ int cuda_get_device_info(void)
 {
     int num_devices;
 
-    console_print_spacer(0, CLIENT_CUDA);
+    console_print_hr(0, CLIENT_CUDA);
     console_print(0, "CUDA Device information:", CLIENT_CUDA);
     cudaGetDeviceCount(&num_devices);
     for (int i = 0; i < num_devices; i++)
@@ -175,7 +175,6 @@ int cuda_get_device_info(void)
     {
         console_print_warn(0, "No CUDA devices available!", CLIENT_CUDA);
     }
-    console_print_spacer(0, CLIENT_CUDA);
 
     return num_devices;
 }
@@ -185,6 +184,7 @@ int cuda_allocate_integration_memory(LutVals_t *lut_vals, float **orbital_values
     int rv = 0;
     cudaError_t error;
 
+    console_print_hr(0, CLIENT_CUDA);
     console_print(0, "Allocating memory for CUDA integration...", CLIENT_CUDA);
 
     int orbital_vector_size_bytes = lut_vals->matrix_dim * sizeof(float);
@@ -211,7 +211,6 @@ int cuda_allocate_integration_memory(LutVals_t *lut_vals, float **orbital_values
         console_print(2, str(format("Allocated %d bytes for exchange matrix diagonal") % repulsion_exchange_matrices_size_bytes), CLIENT_CUDA);
         console_print(2, str(format("Allocated 3x %d bytes for coordinate LUTs") % coordinate_luts_size_bytes), CLIENT_CUDA);
     }
-    console_print_spacer(0, CLIENT_CUDA);
 
     return rv;
 }
@@ -221,6 +220,7 @@ int cuda_allocate_eigensolver_memory(LutVals_t *lut_vals, float **eigenvectors_d
     int rv = 0;
     cudaError_t error;
 
+    console_print_hr(0, CLIENT_CUDA);
     console_print(0, "Allocating memory for CUDA eigensolver...", CLIENT_CUDA);
 
     int eigenvectors_data_size_bytes = lut_vals->matrix_dim * lut_vals->matrix_dim * sizeof(float);
@@ -240,7 +240,6 @@ int cuda_allocate_eigensolver_memory(LutVals_t *lut_vals, float **eigenvectors_d
         console_print(2, str(format("Allocated %d bytes for eigenvectors matrix") % eigenvectors_data_size_bytes), CLIENT_CUDA);
         console_print(2, str(format("Allocated %d bytes for eigenvalues vector") % eigenvalues_data_size_bytes), CLIENT_CUDA);
     }
-    console_print_spacer(0, CLIENT_CUDA);
 
     return rv;
 }
@@ -346,6 +345,8 @@ bool cuda_eigensolver(LutVals_t lut_vals, float *eigenvectors_data, float *eigen
     cusolverEigMode_t jobz = CUSOLVER_EIG_MODE_VECTOR; // solver job type, compute eigenvalues and eigenvectors.
     cublasFillMode_t uplo = CUBLAS_FILL_MODE_UPPER; // matrix fill mode;
 
+    console_print(0, "cusolverDnSsyevd start", CLIENT_CUDA);
+    console_print(2, TAB1 "cusolverDnSsyevd solver debug", CLIENT_CUDA);
     // Create a cusolver handle and bind it to a stream
     CUSOLVER_CHECK(cusolverDnCreate(&cusolver_handle));
     CUDA_CHECK(cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking));
@@ -355,16 +356,22 @@ bool cuda_eigensolver(LutVals_t lut_vals, float *eigenvectors_data, float *eigen
     CUDA_CHECK(cudaMalloc(reinterpret_cast<void **>(&device_info_ptr), sizeof(int)));
 
     // Query working space required for syevd
+    console_print(2, TAB2 "cusolverDnSsyevd_bufferSize query", CLIENT_CUDA);
     CUSOLVER_CHECK(cusolverDnSsyevd_bufferSize(cusolver_handle, jobz, uplo, lut_vals.matrix_dim, eigenvectors_data, lut_vals.matrix_dim, eigenvalues_data, &lwork));
     
+    console_print(2, str(format(TAB2"lwork = %d") % lwork), CLIENT_CUDA);
+
     // Allocate memory for work area
+    console_print(2, TAB2 "allocating workspace", CLIENT_CUDA);
     CUDA_CHECK(cudaMalloc(reinterpret_cast<void **>(&workspace_ptr), sizeof(float) * lwork));
 
     // compute solution
+    console_print(2, TAB2 "calling cusolverDnSsyevd", CLIENT_CUDA);
     CUSOLVER_CHECK(cusolverDnSsyevd(cusolver_handle, jobz, uplo, lut_vals.matrix_dim, eigenvectors_data, lut_vals.matrix_dim, eigenvalues_data, workspace_ptr, lwork, device_info_ptr));
     CUDA_CHECK(cudaMemcpyAsync(&info, device_info_ptr, sizeof(int), cudaMemcpyDeviceToHost, stream));
 
     CUDA_CHECK(cudaStreamSynchronize(stream));
+    console_print(2, str(format(TAB2"info = %d") % info), CLIENT_CUDA);
 
     return (info==0);
 }

@@ -107,7 +107,7 @@ public:
                 << "    Total energy: " << iteration_counters[ITERATION_TOTAL_ENERGY][i] << " Hartrees" << std::endl
                 ;
         }
-        ss << std::endl << "Total execution time: " << total_time << " seconds" << std::endl;
+        ss << "Total execution time: " << total_time << " seconds" << std::endl;
 
         return ss.str(); 
     }

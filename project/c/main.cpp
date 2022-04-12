@@ -138,6 +138,7 @@ void print_header(void)
         << "Git Branch: " << GIT_BRANCH << endl
         << "Git Hash: " << GIT_COMMIT_HASH << endl << endl;
 
+    console_print_hr(0, CLIENT_SIM);
     console_print(0, ss.str(), CLIENT_SIM);
 }
 
@@ -475,6 +476,7 @@ int cpu_allocate_integration_memory(LutVals_t *lut_vals, float **orbital_values_
 {
     int rv = 0;
 
+    console_print_hr(0, CLIENT_SIM);
     console_print(0, "Allocating memory for CPU integration", CLIENT_SIM);
 
     int orbital_vector_size_bytes = lut_vals->matrix_dim * sizeof(float);
@@ -501,7 +503,6 @@ int cpu_allocate_integration_memory(LutVals_t *lut_vals, float **orbital_values_
         console_print(2, str(format("Allocated %d bytes for exchange matrix diagonal") % repulsion_exchange_matrices_size_bytes), CLIENT_SIM);
         console_print(2, str(format("Allocated 3x %d bytes for coordinate LUTs") % coordinate_luts_size_bytes), CLIENT_SIM);
     }
-    console_print_spacer(0, CLIENT_SIM);
 
     return rv;
 }
@@ -510,6 +511,7 @@ int cpu_allocate_eigensolver_memory(LutVals_t *lut_vals, float **eigenvectors_da
 {
     int rv = 0;
 
+    console_print_hr(0, CLIENT_SIM);
     console_print(0, "Allocating memory for CPU eigensolver", CLIENT_SIM);
 
     int eigenvectors_size_bytes = lut_vals->matrix_dim * lut_vals->matrix_dim * sizeof(float);
@@ -528,7 +530,6 @@ int cpu_allocate_eigensolver_memory(LutVals_t *lut_vals, float **eigenvectors_da
         console_print(2, str(format("Allocated %d bytes for eigenvector matrix") % eigenvectors_size_bytes), CLIENT_SIM);
         console_print(2, str(format("Allocated %d bytes for eigenvalue vector") % eigenvalues_size_bytes), CLIENT_SIM);
     }
-    console_print_spacer(0, CLIENT_SIM);
 
     return rv;
 }
@@ -578,6 +579,7 @@ int cpu_free_eigensolver_memory(float **eigenvectors_data, float **eigenvalues_d
 void print_program_configurations(Cfg_t &config, LutVals_t &lut_vals)
 {
     // Print program information
+    console_print_hr(0, CLIENT_SIM);
     console_print(0, "Program Configurations:\n", CLIENT_SIM);
     console_print(0, str(format(TAB1 "Iterations = %d") % config.max_iterations), CLIENT_SIM);
     console_print(0, str(format(TAB1 "Num Partitions = %d") % config.num_partitions), CLIENT_SIM);
@@ -593,7 +595,6 @@ void print_program_configurations(Cfg_t &config, LutVals_t &lut_vals)
     {
         console_print(0, TAB1 "Atomic Structure: Hydrogen Molecule", CLIENT_SIM);
     }
-    console_print_spacer(0, CLIENT_SIM);
 }
 
 void config_cuda(Cfg_t &config)
@@ -774,7 +775,7 @@ int main(int argc, char *argv[])
     EigenFloatMatrix_t trimmed_eigenvectors(lut_vals.matrix_dim, config.num_solutions);
 
     console_print(0, "Simulation start!", CLIENT_SIM);
-    console_print_spacer(0, CLIENT_SIM);
+    console_print_hr(0, CLIENT_SIM);
     auto sim_start = chrono::system_clock::now();
 
     // generate the second order Laplacian matrix for 3D space
@@ -802,9 +803,9 @@ int main(int argc, char *argv[])
 
     do
     {
-        console_print_spacer(0, CLIENT_SIM);
+        console_print_hr(0, CLIENT_SIM);
         console_print(0, str(format("Iteration Start: %d") % interation_count), CLIENT_SIM);
-        console_print_spacer(0, CLIENT_SIM);
+        console_print_hr(0, CLIENT_SIM);
 
         auto iteration_start = chrono::system_clock::now();
 
@@ -880,23 +881,26 @@ int main(int argc, char *argv[])
         cpu_free_eigensolver_memory(&eigenvectors_data, &eigenvalues_data);
     }
 
-    console_print_spacer(0, CLIENT_SIM);
+    console_print_hr(0, CLIENT_SIM);
     console_print(0, "Final Eigenvalues:", CLIENT_SIM);
     stringstream ss;
     ss << trimmed_eigenvalues.transpose();
     console_print(0, ss.str(), CLIENT_SIM);
     ss.str(string()); // clear ss
-    console_print_spacer(0, CLIENT_SIM);
+    console_print_hr(0, CLIENT_SIM);
     console_print(0, str(format("Final Total energy: %.3f") % (total_energy)), CLIENT_SIM);
-    console_print_spacer(0, CLIENT_SIM);
+    console_print_hr(0, CLIENT_SIM);
 
     auto sim_end = chrono::system_clock::now();
     auto sim_time = chrono::duration<float>(sim_end - sim_start);
     perfmon.total_time = (float)(sim_time.count());
     console_print(0, str(format("Simulation end! Total time: %0.3f seconds") % (float)(sim_time.count())), CLIENT_SIM);
 
+    console_print_hr(0, CLIENT_SIM);
     console_print(0, "Performance monitor records:", CLIENT_SIM);
     console_print(0, perfmon.str(), CLIENT_SIM);
+    console_print_hr(0, CLIENT_SIM);
 
     return 0;
 }
+
