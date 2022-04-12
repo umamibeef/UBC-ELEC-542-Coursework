@@ -333,9 +333,8 @@ int cuda_numerical_integration(LutVals_t lut_vals, float *orbital_values, float 
     return rv;
 }
 
-int cuda_eigensolver(LutVals_t lut_vals, float *eigenvectors_data, float *eigenvalues_data)
+bool cuda_eigensolver(LutVals_t lut_vals, float *eigenvectors_data, float *eigenvalues_data)
 {
-    int rv = 0;
     cudaError_t cuda_error;
     cusolverStatus_t cusolver_error;
     cusolverDnHandle_t cusolver_handle = NULL;
@@ -367,12 +366,5 @@ int cuda_eigensolver(LutVals_t lut_vals, float *eigenvectors_data, float *eigenv
 
     CUDA_CHECK(cudaStreamSynchronize(stream));
 
-    cuda_error = cudaGetLastError();
-    if (cuda_error != cudaSuccess)
-    {
-        console_print_err(0, str(format("%s\n") % cudaGetErrorString(cuda_error)), CLIENT_CUDA);
-        rv = 1;
-    }
-
-    return rv;
+    return (info==0);
 }

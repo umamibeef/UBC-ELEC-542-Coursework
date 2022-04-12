@@ -58,6 +58,7 @@ namespace po = boost::program_options;
 #include "console.hpp"
 #include "kernel.h"
 #include "version.hpp"
+#include "perfmon.hpp"
 
 // Clean up code a bit by using aliases and typedefs
 using namespace std;
@@ -70,6 +71,53 @@ typedef Eigen::Map<EigenFloatColVector_t> EigenFloatColVectorMap_t;
 
 // Naughty naughty global!!!
 int program_verbosity;
+
+void parse_program_options(int argc, char **argv, Cfg_t &config, po::variables_map &vm)
+{
+    po::options_description desc("EHFS options");
+    stringstream ss;
+    desc.add_options()
+        ("help", "produce help message")
+        ("iterations", po::value<int>()->default_value(50), "set maximum number of iterations")
+        ("partitions", po::value<int>()->default_value(12), "set number of partitions to divide solution space")
+        ("limit", po::value<int>()->default_value(4), "set the solution space maximum x=y=z limit")
+        ("convergence", po::value<float>()->default_value(0.01), "set the convergence condition (%)")
+        ("structure", po::value<int>()->default_value(0), "set the atomic structure: (0:He, 1:H2)")
+        ("verbosity", po::value<int>()->default_value(2), "set the verbosity of the program")
+        ("use-gpu-int", po::value<bool>()->default_value(1), "enable CUDA GPU acceleration for numerical integration")
+        ("use-gpu-eig", po::value<bool>()->default_value(1), "enable CUDA GPU acceleration for the eigensolver")
+    ;
+    po::store(po::parse_command_line(argc, argv, desc), vm);
+    po::notify(vm);    
+    if (vm.count("help"))
+    {
+        ss << desc << "\n";
+        console_print(0, ss.str(), CLIENT_SIM);
+        exit(1);
+    }
+
+    if (vm["structure"].as<int>() >= ATOMIC_STRUCTURE_NUM)
+    {
+        ss << "Invalid atomic structure selection: " << vm["structure"].as<int>() << endl;
+        ss << "Valid options: (0:He, 1:H2)" << endl;
+        console_print(0, ss.str(), CLIENT_SIM);
+        exit(0);
+    }
+    else
+    {
+        config.atomic_structure = (atomic_structure_e)(vm["structure"].as<int>());
+    }
+
+    // Program configuration from CLI
+    config.num_partitions = vm["partitions"].as<int>();
+    config.limit = vm["limit"].as<int>();
+    config.max_iterations = vm["iterations"].as<int>();
+    config.num_solutions = 6;
+    config.convergence_percentage = vm["convergence"].as<float>();
+    config.enable_cuda_integration = vm["use-gpu-int"].as<bool>();
+    config.enable_cuda_eigensolver = vm["use-gpu-eig"].as<bool>();
+    program_verbosity = vm["verbosity"].as<int>();
+}
 
 void print_header(void)
 {
@@ -526,64 +574,8 @@ int cpu_free_eigensolver_memory(float **eigenvectors_data, float **eigenvalues_d
     return rv;
 }
 
-int main(int argc, char *argv[])
+void print_program_configurations(Cfg_t &config, LutVals_t &lut_vals)
 {
-    // Print the header
-    print_header();
-
-    // Set the maximum number of thread to use for OMP and Eigen
-    omp_set_num_threads(OMP_NUM_THREADS); // Set the number of maximum threads to use for OMP
-    Eigen::setNbThreads(OMP_NUM_THREADS); // Set the number of maximum threads to use for Eigen
-
-    // Boost Program options
-    po::options_description desc("Allowed options");
-    desc.add_options()
-        ("help", "produce help message")
-        ("iterations", po::value<int>()->default_value(50), "set maximum number of iterations")
-        ("partitions", po::value<int>()->default_value(12), "set number of partitions to divide solution space")
-        ("limit", po::value<int>()->default_value(4), "set the solution space maximum x=y=z limit")
-        ("convergence", po::value<float>()->default_value(0.01), "set the convergence condition (%)")
-        ("structure", po::value<int>()->default_value(0), "set the atomic structure: (0:He, 1:H2)")
-        ("verbosity", po::value<int>()->default_value(2), "set the verbosity of the program")
-        ("use-gpu-int", po::value<bool>()->default_value(1), "enable CUDA GPU acceleration for numerical integration")
-        ("use-gpu-eig", po::value<bool>()->default_value(1), "enable CUDA GPU acceleration for the eigensolver")
-    ;
-    po::variables_map vm;
-    po::store(po::parse_command_line(argc, argv, desc), vm);
-    po::notify(vm);    
-    if (vm.count("help"))
-    {
-        cout << desc << "\n";
-        return 1;
-    }
-    atomic_structure_e atomic_structure;
-    if (vm["structure"].as<int>() >= ATOMIC_STRUCTURE_NUM)
-    {
-        cout << "Invalid atomic structure selection: " << vm["structure"].as<int>() << endl;
-        cout << "Valid options: (0:He, 1:H2)" << endl;
-        return 0;
-    }
-    else
-    {
-        atomic_structure = (atomic_structure_e)(vm["structure"].as<int>());
-    }
-
-    // Program configuration from CLI
-    Cfg_t config;
-    config.num_partitions = vm["partitions"].as<int>();
-    config.limit = vm["limit"].as<int>();
-    config.max_iterations = vm["iterations"].as<int>();
-    config.num_solutions = 6;
-    config.convergence_percentage = vm["convergence"].as<float>();
-    config.enable_cuda_integration = vm["use-gpu-int"].as<bool>();
-    config.enable_cuda_eigensolver = vm["use-gpu-eig"].as<bool>();
-    program_verbosity = vm["verbosity"].as<int>();
-    // Program lookup table values
-    LutVals_t lut_vals;
-    lut_vals.matrix_dim = pow(config.num_partitions, 3.0);
-    lut_vals.step_size = (float)(4<<1)/(float)(config.num_partitions - 1);
-    lut_vals.step_size_cubed = pow(lut_vals.step_size, 3.0);
-
     // Print program information
     console_print(0, "Program Configurations:\n", CLIENT_SIM);
     console_print(0, str(format(TAB1 "Iterations = %d") % config.max_iterations), CLIENT_SIM);
@@ -592,17 +584,19 @@ int main(int argc, char *argv[])
     console_print(0, str(format(TAB1 "Matrix Dimension = %d") % lut_vals.matrix_dim), CLIENT_SIM);
     console_print(0, str(format(TAB1 "Step Size = %f") % lut_vals.step_size), CLIENT_SIM);
 
-    if (atomic_structure == HELIUM_ATOM)
+    if (config.atomic_structure == HELIUM_ATOM)
     {
         console_print(0, TAB1 "Atomic Structure: Helium Atom", CLIENT_SIM);
     }
-    else if (atomic_structure == HYDROGEN_MOLECULE)
+    else if (config.atomic_structure == HYDROGEN_MOLECULE)
     {
         console_print(0, TAB1 "Atomic Structure: Hydrogen Molecule", CLIENT_SIM);
     }
     console_print_spacer(0, CLIENT_SIM);
+}
 
-    // Get and print CUDA information
+void config_cuda(Cfg_t &config)
+{
     if (config.enable_cuda_eigensolver || config.enable_cuda_integration)
     {
         console_print(0, "Checking for available CUDA devices", CLIENT_SIM);
@@ -614,6 +608,98 @@ int main(int argc, char *argv[])
             config.enable_cuda_eigensolver = false;
         }
     }
+}
+
+// Solve for Fock matrix eigenvectors
+void eigensolver(Cfg_t config, LutVals_t &lut_vals, PerformanceMonitor &perfmon, float *eigenvectors_data, float *eigenvalues_data)
+{
+    console_print(1, "Obtaining eigenvalues and eigenvectors", CLIENT_SIM);
+
+    auto eig_start = std::chrono::system_clock::now();
+
+    if (config.enable_cuda_eigensolver)
+    {
+        // CUDA cuSOLVER
+        if (!cuda_eigensolver(lut_vals, eigenvectors_data, eigenvalues_data))
+        {
+            console_print_err(0, "Something went horribly wrong with the CUDA solver, aborting", CLIENT_SIM);
+            exit(EXIT_FAILURE);
+        }
+    }
+    else
+    {
+        // CPU LAPACK solver
+        if (!lapack_solve_eigh(lut_vals, eigenvectors_data, eigenvalues_data))
+        {
+            console_print_err(0, "Something went horribly wrong with the LAPACK solver, aborting", CLIENT_SIM);
+            exit(EXIT_FAILURE);
+        }
+    }
+
+    auto eig_end = std::chrono::system_clock::now();
+    auto eig_time = std::chrono::duration<float>(eig_end - eig_start);
+    perfmon.record(PerformanceMonitor::ITERATION_EIGENSOLVER_TIME, (float)(eig_time.count()));
+    console_print(0, str(format("Eigenvalues and eigenvectors computed in: %0.3f seconds") % (float)(eig_time.count())), CLIENT_SIM);
+
+}
+
+void generate_repulsion_and_integration_matrices(Cfg_t &config, LutVals_t &lut_vals, PerformanceMonitor &perfmon, float *orbital_values_data, float *repulsion_diagonal_data, float *exchange_diagonal_data)
+{
+    auto int_start = std::chrono::system_clock::now();
+
+    if (config.enable_cuda_integration)
+    {
+        console_print(0, "Generating repulsion and exchange matrices on GPU", CLIENT_SIM);
+
+        // generate repulsion and exchange matrices on GPU
+        cuda_numerical_integration(lut_vals, orbital_values_data, repulsion_diagonal_data, exchange_diagonal_data);
+    }
+    else
+    {
+        console_print(0, "Generating repulsion and exchange matrices on CPU", CLIENT_SIM);
+
+        // generate repulsion and exchange matrices on CPU
+        generate_repulsion_diagonal(lut_vals, orbital_values_data, repulsion_diagonal_data);
+        generate_exchange_diagonal(lut_vals, orbital_values_data, exchange_diagonal_data);
+    }
+
+    auto int_end = std::chrono::system_clock::now();
+    auto int_time = std::chrono::duration<float>(int_end - int_start);
+    perfmon.record(PerformanceMonitor::ITERATION_INTEGRATION_TIME, (float)(int_time.count()));
+    console_print(0, str(format("Repulsion and exchange matrix computed in: %0.3f seconds") % (float)(int_time.count())), CLIENT_SIM);
+}
+
+int main(int argc, char *argv[])
+{
+    // Performance monitor object
+    PerformanceMonitor perfmon;
+    // Program config struct
+    Cfg_t config;
+    // Program lookup table values
+    LutVals_t lut_vals;
+
+    // Print the header
+    print_header();
+
+    // Set the maximum number of thread to use for OMP and Eigen
+    omp_set_num_threads(OMP_NUM_THREADS); // Set the number of maximum threads to use for OMP
+    Eigen::setNbThreads(OMP_NUM_THREADS); // Set the number of maximum threads to use for Eigen
+
+    // Boost Program options
+    po::variables_map vm;
+    parse_program_options(argc, argv, config, vm);
+
+    // Fill out lut_vals (the rest is done in populate_lookup_values once memory
+    // has been allocated for the arrays inside)
+    lut_vals.matrix_dim = pow(config.num_partitions, 3.0);
+    lut_vals.step_size = (float)(4<<1)/(float)(config.num_partitions - 1);
+    lut_vals.step_size_cubed = pow(lut_vals.step_size, 3.0);
+
+    // Print program configuration
+    print_program_configurations(config, lut_vals);
+
+    // Get and print CUDA information
+    config_cuda(config);
 
     // Matrix declarations
     EigenFloatMatrix_t laplacian_matrix;
@@ -697,7 +783,7 @@ int main(int argc, char *argv[])
     kinetic_matrix = (laplacian_matrix/(2.0*lut_vals.step_size*lut_vals.step_size));
     // generate the Coulombic attraction matrix
     console_print(1, "Generating electron-nucleus Coulombic attraction matrix", CLIENT_SIM);
-    generate_attraction_matrix(lut_vals, atomic_structure, attraction_matrix.data());
+    generate_attraction_matrix(lut_vals, config.atomic_structure, attraction_matrix.data());
 
     // Main HF loop
     float last_total_energy = 0;
@@ -708,24 +794,9 @@ int main(int argc, char *argv[])
     // initial solution
     fock_matrix = -kinetic_matrix - attraction_matrix;
 
-    console_print(1, "Obtaining eigenvalues and eigenvectors for initial solution...", CLIENT_SIM);
-
     // Solve for Fock matrix eigenvectors
     eigenvectors = fock_matrix;
-    if (config.enable_cuda_eigensolver)
-    {
-        // CUDA cuSOLVER
-        cuda_eigensolver(lut_vals, eigenvectors_data, eigenvalues_data);
-    }
-    else
-    {
-        // CPU LAPACK solver
-        if (!lapack_solve_eigh(lut_vals, eigenvectors_data, eigenvalues_data))
-        {
-            console_print_err(0, "Something went horribly wrong with the solver, aborting", CLIENT_SIM);
-            exit(EXIT_FAILURE);
-        }
-    }
+    eigensolver(config, lut_vals, perfmon, eigenvectors_data, eigenvalues_data);
     orbital_values = eigenvectors.col(0);
 
     do
@@ -734,77 +805,27 @@ int main(int argc, char *argv[])
 
         auto iteration_start = chrono::system_clock::now();
 
-
-        if (config.enable_cuda_integration)
-        {
-            console_print(0, "Generating repulsion and exchange matrices on GPU", CLIENT_SIM);
-            auto cpu_int_start = std::chrono::system_clock::now();
-
-            // generate repulsion and exchange matrices on GPU
-            cuda_numerical_integration(lut_vals, orbital_values_data, repulsion_diagonal_data, exchange_diagonal_data);
-
-            auto cpu_int_end = std::chrono::system_clock::now();
-            auto cpu_int_time = std::chrono::duration<float>(cpu_int_end - cpu_int_start);
-
-            console_print(0, str(format("Repulsion and exchange matrix computed in: %0.3f seconds") % (float)(cpu_int_time.count())), CLIENT_SIM);
-        }
-        else
-        {
-            console_print(0, "Generating repulsion and exchange matrices on CPU", CLIENT_SIM);
-            auto cpu_int_start = std::chrono::system_clock::now();
-
-            // generate repulsion and exchange matrices on CPU
-            generate_repulsion_diagonal(lut_vals, orbital_values.data(), repulsion_diagonal.data());
-            generate_exchange_diagonal(lut_vals, orbital_values.data(), exchange_diagonal.data());
-
-            auto cpu_int_end = std::chrono::system_clock::now();
-            auto cpu_int_time = std::chrono::duration<float>(cpu_int_end - cpu_int_start);
-
-            console_print(0, str(format("Repulsion and exchange matrix computed in: %0.3f seconds") % (float)(cpu_int_time.count())), CLIENT_SIM);
-        }
+        // Generate repulsion and integraion matrices
+        generate_repulsion_and_integration_matrices(config, lut_vals, perfmon, orbital_values_data, repulsion_diagonal_data, exchange_diagonal_data);
 
         // form fock matrix
         console_print(1, "Generating Fock matrix", CLIENT_SIM);
         fock_matrix = -kinetic_matrix - attraction_matrix + 2.0 * EigenFloatMatrix_t(repulsion_diagonal.asDiagonal()) - EigenFloatMatrix_t(exchange_diagonal.asDiagonal());
 
-        console_print(1, "Obtaining eigenvalues and eigenvectors...", CLIENT_SIM);
-
-        // Solve for Fock matrix eigenvectors
+        // Solve for Fock matrix eigenvectors and eigenvalues
         eigenvectors = fock_matrix;
-        if (config.enable_cuda_eigensolver)
-        {
-            // CUDA cuSOLVER
-            cuda_eigensolver(lut_vals, eigenvectors_data, eigenvalues_data);
-        }
-        else
-        {
-            // CPU LAPACK solver
-            if (!lapack_solve_eigh(lut_vals, eigenvectors_data, eigenvalues_data))
-            {
-                console_print_err(0, "Something went horribly wrong with the solver, aborting", CLIENT_SIM);
-                exit(EXIT_FAILURE);
-            }
-        }
+        eigensolver(config, lut_vals, perfmon, eigenvectors_data, eigenvalues_data);
         orbital_values = eigenvectors.col(0);
 
         // Extract num_solutions eigenvalues
         trimmed_eigenvalues = eigenvalues.block(0, 0, config.num_solutions, 1);
         // Extract num_solutions eigenvectors
         trimmed_eigenvectors = eigenvectors.block(0, 0, lut_vals.matrix_dim, config.num_solutions);
-
-        // if (1)
-        // {
-        //     cout << "orbital_values: " << endl << orbital_values.transpose() << endl;
-        //     cout << "laplacian_matrix: " << endl << laplacian_matrix << endl;
-        //     cout << "kinetic_matrix: " << endl << kinetic_matrix << endl;
-        //     cout << "attraction_matrix: " << endl << attraction_matrix << endl;
-        //     cout << "repulsion_diagonal: " << endl << repulsion_diagonal << endl;
-        //     cout << "exchange_diagonal: " << endl << exchange_diagonal << endl;
-        // }
         
         console_print(1, "Calculating total energy", CLIENT_SIM);
 
         total_energy = calculate_total_energy(orbital_values, kinetic_matrix, attraction_matrix, repulsion_diagonal, exchange_diagonal);
+        perfmon.record(PerformanceMonitor::ITERATION_TOTAL_ENERGY, total_energy);
         total_energy_percent_diff = abs((total_energy - last_total_energy)/((total_energy + last_total_energy) / 2.0));
 
         console_print(0, str(format("Total energy: %.3f") % (total_energy)), CLIENT_SIM);
@@ -818,7 +839,7 @@ int main(int argc, char *argv[])
 
         auto iteration_end = chrono::system_clock::now();
         auto iteration_time = chrono::duration<float>(iteration_end - iteration_start);
-
+        perfmon.record(PerformanceMonitor::ITERATION_TOTAL_TIME, (float)(iteration_time.count()));
         console_print(0, str(format("Iteration end! Iteration time: %0.3f seconds") % (float)(iteration_time.count())), CLIENT_SIM);
         console_print_spacer(0, CLIENT_SIM);
 
@@ -834,6 +855,8 @@ int main(int argc, char *argv[])
             break;
         }
 
+        // Increment performance monitor data
+        perfmon.next_iteration();
     }
     while(1);
 
@@ -867,7 +890,11 @@ int main(int argc, char *argv[])
 
     auto sim_end = chrono::system_clock::now();
     auto sim_time = chrono::duration<float>(sim_end - sim_start);
+    perfmon.total_time = (float)(sim_time.count());
     console_print(0, str(format("Simulation end! Total time: %0.3f seconds") % (float)(sim_time.count())), CLIENT_SIM);
+
+    console_print(0, "Performance monitor records:", CLIENT_SIM);
+    console_print(0, perfmon.str(), CLIENT_SIM);
 
     return 0;
 }

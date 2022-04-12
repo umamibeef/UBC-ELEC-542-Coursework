@@ -1,14 +1,3 @@
-# Possible optimization target: pyscf, numint_uniform_grid.c
-  * integration is performed by pyscf/pyscf/pbc/dft/multigrid.py
-    - specifically, the eval_mat function
-    - the numeric integration function name to call is constructed and stored
-      in eval_fn (e.g. eval_fn = 'NUMINTeval_' + xctype.lower() + lattice_type)
-    - the numerical integration is passed as the first paramter of
-      libdft.NUMINT_fill2c
-    - a test function exists: test_eval_mat, found in test_numint.py and test_r_numint.py
-    - BLAS and LAPACK libraries are required to build pyscf (sudo apt install libblas-dev liblapack-dev)
-    - OpenMP is used to parallelize the functions
-
 # Python venv setup
   * Create virtual environment
     - python3 -m venv /path/to/new/virtual/environment
@@ -25,23 +14,16 @@
   * More information can be found here: https://docs.python.org/3/library/venv.html
 
 # Notes:
-  * Relevant section on numerical integration: https://pyscf.org/user/dft.html#numerical-integration-grids
-  * "PySCF implements several numerical integration grids, which can be tuned in KS-DFT calculations following the examples in dft/11-grid_scheme.py"
-  * PySCF makes use of libxc (https://www.tddft.org/programs/libxc/)
-    - "Libxc is a library of exchange-correlation and kinetic energy functionals for density-functional theory."
-  * A project that implements numerical integration grids: https://theochem.github.io/horton/2.1.1/lib/pck_horton_grid.html
-  * A paper talking numerical integration: https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.33.3141&rep=rep1&type=pdf
-  * Another paper on Smolyak's construction https://core.ac.uk/download/pdf/14928756.pdf
-  * Paper: "Smolyak's algorithm: A powerful black box for the acceleration of scientific computations" https://arxiv.org/pdf/1703.08872.pdf
-
   * CUDA
     - Following instructions here: https://docs.nvidia.com/cuda/wsl-user-guide/index.html
 
 # TODOs
   * Immediate:
-    - Finish adding time metrics for computationally intensive tasks
+    - ~~Finish adding time metrics for computationally intensive tasks~~
     - Add CSV outputter for performance data and results
-    - Refactor main program to shrink main()
+    - Clean up eigensolver on CUDA side to properly take into account error conditions
+    - ~~Refactor main program to shrink main()~~
+    - Document with doxygen and generate
     - ~~Need to implement a switch between CPU and GPU workloads~~
     - Implement a switch between single core and multi core CPU for that additional datapoint
     - ~~implement proper exchange and repulsion matrices by looking at good homework example~~ Done.
@@ -67,3 +49,24 @@ Processing Units ("C:\Users\Michel\OneDrive\School\ELEC542\Project\Electronic St
   * ~~watch this, CP2K parallel algorithms overview (1h): https://www.youtube.com/watch?v=GNnSKOgqEwM~~ Nevermind, not worth it.
   * ~~finalize a benchmark to run that will utilize the numerical integration~~ pyscf abandoned for now
   * ~~understand what workloads use the numerical integration routines that will be accelerated~~ pyscf abandoned for now
+
+# Old Deprecated Stuff
+## Possible optimization target: pyscf, numint_uniform_grid.c
+  * integration is performed by pyscf/pyscf/pbc/dft/multigrid.py
+    - specifically, the eval_mat function
+    - the numeric integration function name to call is constructed and stored
+      in eval_fn (e.g. eval_fn = 'NUMINTeval_' + xctype.lower() + lattice_type)
+    - the numerical integration is passed as the first paramter of
+      libdft.NUMINT_fill2c
+    - a test function exists: test_eval_mat, found in test_numint.py and test_r_numint.py
+    - BLAS and LAPACK libraries are required to build pyscf (sudo apt install libblas-dev liblapack-dev)
+    - OpenMP is used to parallelize the functions
+## Old Notes
+  * Relevant section on numerical integration: https://pyscf.org/user/dft.html#numerical-integration-grids
+  * "PySCF implements several numerical integration grids, which can be tuned in KS-DFT calculations following the examples in dft/11-grid_scheme.py"
+  * PySCF makes use of libxc (https://www.tddft.org/programs/libxc/)
+    - "Libxc is a library of exchange-correlation and kinetic energy functionals for density-functional theory."
+  * A project that implements numerical integration grids: https://theochem.github.io/horton/2.1.1/lib/pck_horton_grid.html
+  * A paper talking numerical integration: https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.33.3141&rep=rep1&type=pdf
+  * Another paper on Smolyak's construction https://core.ac.uk/download/pdf/14928756.pdf
+  * Paper: "Smolyak's algorithm: A powerful black box for the acceleration of scientific computations" https://arxiv.org/pdf/1703.08872.pdf

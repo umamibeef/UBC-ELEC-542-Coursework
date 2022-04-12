@@ -26,6 +26,13 @@ SOFTWARE.
 
 #include <vector>
 
+typedef enum
+{
+    HELIUM_ATOM = 0,
+    HYDROGEN_MOLECULE,
+    ATOMIC_STRUCTURE_NUM,
+} atomic_structure_e;
+
 typedef struct
 {
     int verbosity; // The verbosity level of the program
@@ -34,6 +41,7 @@ typedef struct
     int max_iterations; // Maximum number of HF interations to perform
     int num_solutions; // The number of eigenvalues and eigenvectors to keep from the solution
     float convergence_percentage; // The convergence percentage for total energy change, used for terminating the main loop
+    atomic_structure_e atomic_structure; // The atomic structure to run the simulation against
     bool enable_cuda_integration; // Enable CUDA for the the numerical integration
     bool enable_cuda_eigensolver; // Enable CUDA for the eigensolver
 } Cfg_t;

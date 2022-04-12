@@ -32,13 +32,6 @@ typedef enum
     IDX_NUM,
 } coordinate_index_e;
 
-typedef enum
-{
-    HELIUM_ATOM = 0,
-    HYDROGEN_MOLECULE,
-    ATOMIC_STRUCTURE_NUM,
-} atomic_structure_e;
-
 // Program constants
 #define AU_DISTANCE (5.29e-11) // Atomic unit of distance = Bohr radius (m)
 #define H2_BOND_LENGTH_ATOMIC_UNITS (0.74e-10/AU_DISTANCE) // Bond length of Hydrogen atoms in Hydrogen molecule in atomic units
