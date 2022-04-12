@@ -72,8 +72,9 @@ typedef Eigen::Map<EigenFloatColVector_t> EigenFloatColVectorMap_t;
 // Naughty naughty global!!!
 int program_verbosity;
 
-void parse_program_options(int argc, char **argv, Cfg_t &config, po::variables_map &vm)
+void parse_program_options(int argc, char **argv, Cfg_t &config)
 {
+    po::variables_map vm;
     po::options_description desc("EHFS options");
     stringstream ss;
     desc.add_options()
@@ -686,8 +687,7 @@ int main(int argc, char *argv[])
     Eigen::setNbThreads(OMP_NUM_THREADS); // Set the number of maximum threads to use for Eigen
 
     // Boost Program options
-    po::variables_map vm;
-    parse_program_options(argc, argv, config, vm);
+    parse_program_options(argc, argv, config);
 
     // Fill out lut_vals (the rest is done in populate_lookup_values once memory
     // has been allocated for the arrays inside)
@@ -774,6 +774,7 @@ int main(int argc, char *argv[])
     EigenFloatMatrix_t trimmed_eigenvectors(lut_vals.matrix_dim, config.num_solutions);
 
     console_print(0, "Simulation start!", CLIENT_SIM);
+    console_print_spacer(0, CLIENT_SIM);
     auto sim_start = chrono::system_clock::now();
 
     // generate the second order Laplacian matrix for 3D space
@@ -801,7 +802,9 @@ int main(int argc, char *argv[])
 
     do
     {
+        console_print_spacer(0, CLIENT_SIM);
         console_print(0, str(format("Iteration Start: %d") % interation_count), CLIENT_SIM);
+        console_print_spacer(0, CLIENT_SIM);
 
         auto iteration_start = chrono::system_clock::now();
 
@@ -841,7 +844,6 @@ int main(int argc, char *argv[])
         auto iteration_time = chrono::duration<float>(iteration_end - iteration_start);
         perfmon.record(PerformanceMonitor::ITERATION_TOTAL_TIME, (float)(iteration_time.count()));
         console_print(0, str(format("Iteration end! Iteration time: %0.3f seconds") % (float)(iteration_time.count())), CLIENT_SIM);
-        console_print_spacer(0, CLIENT_SIM);
 
         // check if we've hit the maximum iteration limit
         if (interation_count == config.max_iterations)
