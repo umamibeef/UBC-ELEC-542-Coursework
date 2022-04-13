@@ -142,6 +142,11 @@ void cuda_generate_exchange_matrix_kernel(LutVals_t lut_vals, float *orbital_val
     }
 }
 
+void cuda_device_reset(void)
+{
+    CUDA_CHECK(cudaDeviceReset()); // Reset CUDA device
+}
+
 int cuda_get_device_info(void)
 {
     int num_devices;
@@ -202,6 +207,11 @@ int cuda_allocate_integration_memory(LutVals_t &lut_vals, DynamicDataPointers_t 
     cudaMallocManaged(&(lut_vals.coordinate_value_array), coordinate_luts_size_bytes);
     cudaMallocManaged(&(lut_vals.coordinate_index_array), coordinate_luts_size_bytes);
 
+    console_print(2, str(format("Trying to allocate %zu bytes for orbital values vector") % orbital_vector_size_bytes), CLIENT_CUDA);
+    console_print(2, str(format("Trying to allocate %zu bytes for repulsion matrix diagonal") % repulsion_exchange_matrices_size_bytes), CLIENT_CUDA);
+    console_print(2, str(format("Trying to allocate %zu bytes for exchange matrix diagonal") % repulsion_exchange_matrices_size_bytes), CLIENT_CUDA);
+    console_print(2, str(format("Trying to allocate 3x %zu bytes for coordinate LUTs") % coordinate_luts_size_bytes), CLIENT_CUDA);
+
     error = cudaGetLastError();
     if (error != cudaSuccess)
     {
@@ -213,7 +223,7 @@ int cuda_allocate_integration_memory(LutVals_t &lut_vals, DynamicDataPointers_t 
         console_print(2, str(format("Allocated %zu bytes for orbital values vector") % orbital_vector_size_bytes), CLIENT_CUDA);
         console_print(2, str(format("Allocated %zu bytes for repulsion matrix diagonal") % repulsion_exchange_matrices_size_bytes), CLIENT_CUDA);
         console_print(2, str(format("Allocated %zu bytes for exchange matrix diagonal") % repulsion_exchange_matrices_size_bytes), CLIENT_CUDA);
-        console_print(2, str(format("Allocated 3x %zu bytes for coordinate LUTs") % coordinate_luts_size_bytes), CLIENT_CUDA);
+        console_print(2, str(format("Allocated 2x %zu bytes for coordinate LUTs") % coordinate_luts_size_bytes), CLIENT_CUDA);
         cudaMemGetInfo(&free,&total);
         console_print(2, str(format(TAB1 "Free: %zu bytes Total: %zu") % free % total), CLIENT_CUDA);
     }
@@ -235,6 +245,9 @@ int cuda_allocate_eigensolver_memory(LutVals_t &lut_vals, DynamicDataPointers_t 
 
     size_t eigenvectors_data_size_bytes = sizeof(float) * lut_vals.matrix_dim * lut_vals.matrix_dim;
     size_t eigenvalues_data_size_bytes = sizeof(float) * lut_vals.matrix_dim ;
+
+    console_print(2, str(format("Trying to allocate %zu bytes for eigenvectors matrix") % eigenvectors_data_size_bytes), CLIENT_CUDA);
+    console_print(2, str(format("Trying to allocate %zu bytes for eigenvalues vector") % eigenvalues_data_size_bytes), CLIENT_CUDA);
 
     cudaMallocManaged(&(ddp.eigenvectors_data), eigenvectors_data_size_bytes);
     cudaMallocManaged(&(ddp.eigenvalues_data), eigenvalues_data_size_bytes);

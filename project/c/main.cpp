@@ -624,6 +624,10 @@ void config_cuda(Cfg_t &config)
             config.enable_cuda_integration = false;
             config.enable_cuda_eigensolver = false;
         }
+        else
+        {
+            cuda_device_reset();
+        }
     }
 }
 

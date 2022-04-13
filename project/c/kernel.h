@@ -27,6 +27,7 @@ SOFTWARE.
 #include "main.hpp"
 #include "config.hpp"
 
+void cuda_device_reset(void);
 int cuda_get_device_info(void);
 
 int cuda_allocate_integration_memory(LutVals_t &lut_vals, DynamicDataPointers_t &ddp);
