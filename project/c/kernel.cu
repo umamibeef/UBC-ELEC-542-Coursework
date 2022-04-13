@@ -142,6 +142,15 @@ void cuda_generate_exchange_matrix_kernel(LutVals_t lut_vals, float *orbital_val
     }
 }
 
+void cuda_print_memory_info()
+{
+    size_t free;
+    size_t total;
+
+    cudaMemGetInfo(&free,&total);
+    console_print(2, str(format("Memory Free: %zu Memory Total: %zu") % free % total), CLIENT_CUDA);
+}
+
 void cuda_device_reset(void)
 {
     CUDA_CHECK(cudaDeviceReset()); // Reset CUDA device
@@ -150,6 +159,9 @@ void cuda_device_reset(void)
 int cuda_get_device_info(void)
 {
     int num_devices;
+
+    // cuda reset
+    cuda_device_reset();
 
     console_print_hr(0, CLIENT_CUDA);
     console_print(0, "CUDA Device information:", CLIENT_CUDA);
@@ -174,8 +186,8 @@ int cuda_get_device_info(void)
         multi_processor_count = prop.multiProcessorCount;
         max_blocks_per_multiprocessor = prop.maxBlocksPerMultiProcessor;
         max_threads_per_multiprocessor = prop.maxThreadsPerMultiProcessor;
-
     }
+    cuda_print_memory_info();
     if (num_devices == 0)
     {
         console_print_warn(0, "No CUDA devices available!", CLIENT_CUDA);
@@ -188,24 +200,20 @@ int cuda_allocate_integration_memory(LutVals_t &lut_vals, DynamicDataPointers_t 
 {
     int rv = 0;
     cudaError_t error;
-    size_t free;
-    size_t total;
 
-    console_print_hr(0, CLIENT_CUDA);
-    console_print(0, "Allocating memory for CUDA integration...", CLIENT_CUDA);
-    cudaMemGetInfo(&free,&total);
-    console_print(2, str(format(TAB1 "Free: %zu bytes Total: %zu") % free % total), CLIENT_CUDA);
+    console_print_hr(2, CLIENT_CUDA);
+    console_print(2, "Allocating memory for CUDA integration...", CLIENT_CUDA);
 
     size_t orbital_vector_size_bytes = sizeof(float) * lut_vals.matrix_dim;
     size_t repulsion_exchange_matrices_size_bytes = sizeof(float) * lut_vals.matrix_dim;
     size_t coordinate_luts_size_bytes = sizeof(float) * IDX_NUM * lut_vals.matrix_dim;
 
-    cudaMallocManaged(&(ddp.orbital_values_data), orbital_vector_size_bytes);
-    cudaMallocManaged(&(ddp.repulsion_diagonal_data), repulsion_exchange_matrices_size_bytes);
-    cudaMallocManaged(&(ddp.exchange_diagonal_data), repulsion_exchange_matrices_size_bytes);
+    cudaMalloc(&(ddp.orbital_values_data), orbital_vector_size_bytes);
+    cudaMalloc(&(ddp.repulsion_diagonal_data), repulsion_exchange_matrices_size_bytes);
+    cudaMalloc(&(ddp.exchange_diagonal_data), repulsion_exchange_matrices_size_bytes);
 
-    cudaMallocManaged(&(lut_vals.coordinate_value_array), coordinate_luts_size_bytes);
-    cudaMallocManaged(&(lut_vals.coordinate_index_array), coordinate_luts_size_bytes);
+    cudaMalloc(&(lut_vals.coordinate_value_array), coordinate_luts_size_bytes);
+    cudaMalloc(&(lut_vals.coordinate_index_array), coordinate_luts_size_bytes);
 
     console_print(2, str(format("Trying to allocate %zu bytes for orbital values vector") % orbital_vector_size_bytes), CLIENT_CUDA);
     console_print(2, str(format("Trying to allocate %zu bytes for repulsion matrix diagonal") % repulsion_exchange_matrices_size_bytes), CLIENT_CUDA);
@@ -224,8 +232,7 @@ int cuda_allocate_integration_memory(LutVals_t &lut_vals, DynamicDataPointers_t 
         console_print(2, str(format("Allocated %zu bytes for repulsion matrix diagonal") % repulsion_exchange_matrices_size_bytes), CLIENT_CUDA);
         console_print(2, str(format("Allocated %zu bytes for exchange matrix diagonal") % repulsion_exchange_matrices_size_bytes), CLIENT_CUDA);
         console_print(2, str(format("Allocated 2x %zu bytes for coordinate LUTs") % coordinate_luts_size_bytes), CLIENT_CUDA);
-        cudaMemGetInfo(&free,&total);
-        console_print(2, str(format(TAB1 "Free: %zu bytes Total: %zu") % free % total), CLIENT_CUDA);
+        cuda_print_memory_info();
     }
 
     return rv;
@@ -235,22 +242,18 @@ int cuda_allocate_eigensolver_memory(LutVals_t &lut_vals, DynamicDataPointers_t 
 {
     int rv = 0;
     cudaError_t error;
-    size_t free;
-    size_t total;
 
-    console_print_hr(0, CLIENT_CUDA);
-    console_print(0, "Allocating memory for CUDA eigensolver...", CLIENT_CUDA);
-    cudaMemGetInfo(&free,&total);
-    console_print(2, str(format(TAB1 "Free: %zu bytes Total: %zu") % free % total), CLIENT_CUDA);
+    console_print_hr(2, CLIENT_CUDA);
+    console_print(2, "Allocating memory for CUDA eigensolver...", CLIENT_CUDA);
 
     size_t eigenvectors_data_size_bytes = sizeof(float) * lut_vals.matrix_dim * lut_vals.matrix_dim;
-    size_t eigenvalues_data_size_bytes = sizeof(float) * lut_vals.matrix_dim ;
+    size_t eigenvalues_data_size_bytes = sizeof(float) * lut_vals.matrix_dim;
 
     console_print(2, str(format("Trying to allocate %zu bytes for eigenvectors matrix") % eigenvectors_data_size_bytes), CLIENT_CUDA);
     console_print(2, str(format("Trying to allocate %zu bytes for eigenvalues vector") % eigenvalues_data_size_bytes), CLIENT_CUDA);
 
-    cudaMallocManaged(&(ddp.eigenvectors_data), eigenvectors_data_size_bytes);
-    cudaMallocManaged(&(ddp.eigenvalues_data), eigenvalues_data_size_bytes);
+    cudaMalloc(&(ddp.eigenvectors_data), eigenvectors_data_size_bytes);
+    cudaMalloc(&(ddp.eigenvalues_data), eigenvalues_data_size_bytes);
 
     error = cudaGetLastError();
     if (error != cudaSuccess)
@@ -262,8 +265,7 @@ int cuda_allocate_eigensolver_memory(LutVals_t &lut_vals, DynamicDataPointers_t 
     {
         console_print(2, str(format("Allocated %zu bytes for eigenvectors matrix") % eigenvectors_data_size_bytes), CLIENT_CUDA);
         console_print(2, str(format("Allocated %zu bytes for eigenvalues vector") % eigenvalues_data_size_bytes), CLIENT_CUDA);
-        cudaMemGetInfo(&free,&total);
-        console_print(2, str(format(TAB1 "Free: %zu bytes Total: %zu") % free % total), CLIENT_CUDA);
+        cuda_print_memory_info();
     }
 
     return rv;
@@ -273,18 +275,14 @@ int cuda_free_integration_memory(LutVals_t &lut_vals, DynamicDataPointers_t &ddp
 {
     int rv = 0;
     cudaError_t error;
-    size_t free;
-    size_t total;
 
-    console_print(0, "Freeing allocated integration memory...", CLIENT_CUDA);
-    cudaMemGetInfo(&free,&total);
-    console_print(2, str(format(TAB1 "Free: %zu bytes Total: %zu") % free % total), CLIENT_CUDA);
+    console_print(2, "Freeing allocated integration memory...", CLIENT_CUDA);
 
-    cudaFree(ddp.orbital_values_data);
-    cudaFree(ddp.repulsion_diagonal_data);
-    cudaFree(ddp.exchange_diagonal_data);
-    cudaFree(lut_vals.coordinate_value_array);
-    cudaFree(lut_vals.coordinate_index_array);
+    cudaFree((void*)ddp.orbital_values_data);
+    cudaFree((void*)ddp.repulsion_diagonal_data);
+    cudaFree((void*)ddp.exchange_diagonal_data);
+    cudaFree((void*)lut_vals.coordinate_value_array);
+    cudaFree((void*)lut_vals.coordinate_index_array);
 
     // null the pointers
     ddp.orbital_values_data = nullptr;
@@ -302,8 +300,7 @@ int cuda_free_integration_memory(LutVals_t &lut_vals, DynamicDataPointers_t &ddp
     else
     {
         console_print(2, "Successfully freed allocated integration memory", CLIENT_CUDA);
-        cudaMemGetInfo(&free,&total);
-        console_print(2, str(format(TAB1 "Free: %zu bytes Total: %zu") % free % total), CLIENT_CUDA);
+        cuda_print_memory_info();
     }
 
     return rv;
@@ -313,15 +310,11 @@ int cuda_free_eigensolver_memory(DynamicDataPointers_t &ddp)
 {
     int rv = 0;
     cudaError_t error;
-    size_t free;
-    size_t total;
 
-    console_print(0, "Freeing allocated eigensolver memory...", CLIENT_CUDA);
-    cudaMemGetInfo(&free,&total);
-    console_print(2, str(format(TAB1 "Free: %zu bytes Total: %zu") % free % total), CLIENT_CUDA);
+    console_print(2, "Freeing allocated eigensolver memory...", CLIENT_CUDA);
 
-    cudaFree(ddp.eigenvectors_data);
-    cudaFree(ddp.eigenvalues_data);
+    cudaFree((void*)ddp.eigenvectors_data);
+    cudaFree((void*)ddp.eigenvalues_data);
 
     // null the pointer
     ddp.eigenvectors_data = nullptr;
@@ -336,43 +329,55 @@ int cuda_free_eigensolver_memory(DynamicDataPointers_t &ddp)
     else
     {
         console_print(2, "Successfully freed allocated eigensolver memory", CLIENT_CUDA);
-        cudaMemGetInfo(&free,&total);
-        console_print(2, str(format(TAB1 "Free: %zu bytes Total: %zu") % free % total), CLIENT_CUDA);
+        cuda_print_memory_info();
     }
 
     return rv;
 }
 
-int cuda_numerical_integration(LutVals_t lut_vals, DynamicDataPointers_t ddp)
+void cuda_numerical_integration(LutVals_t lut_vals, DynamicDataPointers_t ddp)
 {
-    int rv = 0;
-    cudaError_t error;
+    LutVals_t cuda_lut_vals = lut_vals;
+    DynamicDataPointers_t cuda_ddp;
 
     int num_blocks = multi_processor_count * max_blocks_per_multiprocessor;
     int blocks_size = multi_processor_count * max_threads_per_multiprocessor / num_blocks;
 
+    // cuda reset
+    cuda_device_reset();
+
+    // allocate memory
+    cuda_allocate_integration_memory(cuda_lut_vals, cuda_ddp);
+
+    size_t orbital_vector_size_bytes = sizeof(float) * lut_vals.matrix_dim;
+    size_t repulsion_exchange_matrices_size_bytes = sizeof(float) * lut_vals.matrix_dim;
+    size_t coordinate_luts_size_bytes = sizeof(float) * IDX_NUM * lut_vals.matrix_dim;
+
+    // copy data to device
+    CUDA_CHECK(cudaMemcpy(cuda_ddp.orbital_values_data, ddp.orbital_values_data, orbital_vector_size_bytes, cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(cuda_ddp.repulsion_diagonal_data, ddp.repulsion_diagonal_data, repulsion_exchange_matrices_size_bytes, cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(cuda_ddp.exchange_diagonal_data, ddp.exchange_diagonal_data, repulsion_exchange_matrices_size_bytes, cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(cuda_lut_vals.coordinate_value_array, lut_vals.coordinate_value_array, coordinate_luts_size_bytes, cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(cuda_lut_vals.coordinate_index_array, lut_vals.coordinate_index_array, coordinate_luts_size_bytes, cudaMemcpyHostToDevice));
+
     console_print(0, "Computing repulsion matrix", CLIENT_CUDA);
-    cuda_generate_repulsion_matrix_kernel<<<num_blocks, blocks_size>>>(lut_vals, ddp.orbital_values_data, ddp.repulsion_diagonal_data);
-    cudaDeviceSynchronize();
+    cuda_generate_repulsion_matrix_kernel<<<num_blocks, blocks_size>>>(cuda_lut_vals, cuda_ddp.orbital_values_data, cuda_ddp.repulsion_diagonal_data);
+    CUDA_CHECK(cudaDeviceSynchronize());
 
     console_print(0, "Computing exchange matrix", CLIENT_CUDA);
-    cuda_generate_exchange_matrix_kernel<<<num_blocks, blocks_size>>>(lut_vals, ddp.orbital_values_data, ddp.exchange_diagonal_data);
-    cudaDeviceSynchronize();
+    cuda_generate_exchange_matrix_kernel<<<num_blocks, blocks_size>>>(cuda_lut_vals, cuda_ddp.orbital_values_data, cuda_ddp.exchange_diagonal_data);
+    CUDA_CHECK(cudaDeviceSynchronize());
 
-    error = cudaGetLastError();
-    if (error != cudaSuccess)
-    {
-        console_print_err(0, str(format("%s\n") % cudaGetErrorString(error)), CLIENT_CUDA);
-        rv = 1;
-    }
+    // copy results to host
+    CUDA_CHECK(cudaMemcpy(ddp.repulsion_diagonal_data, cuda_ddp.repulsion_diagonal_data, repulsion_exchange_matrices_size_bytes, cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(ddp.exchange_diagonal_data, cuda_ddp.exchange_diagonal_data, repulsion_exchange_matrices_size_bytes, cudaMemcpyDeviceToHost));
 
-    return rv;
+    // free memory
+    cuda_free_integration_memory(cuda_lut_vals, cuda_ddp); 
 }
 
 bool cuda_eigensolver(LutVals_t lut_vals, DynamicDataPointers_t ddp)
 {
-    // cudaError_t cuda_error;
-    // cusolverStatus_t cusolver_error;
     cusolverDnHandle_t cusolver_handle = NULL;
     cudaStream_t stream = NULL;
     int *device_info_ptr = nullptr; // pointer to device algorithm info in
@@ -381,34 +386,55 @@ bool cuda_eigensolver(LutVals_t lut_vals, DynamicDataPointers_t ddp)
     float *workspace_ptr = nullptr; // pointer to workspace
     cusolverEigMode_t jobz = CUSOLVER_EIG_MODE_VECTOR; // solver job type, compute eigenvalues and eigenvectors.
     cublasFillMode_t uplo = CUBLAS_FILL_MODE_UPPER; // matrix fill mode;
+    DynamicDataPointers_t cuda_ddp;
+
+    size_t eigenvectors_data_size_bytes = sizeof(float) * lut_vals.matrix_dim * lut_vals.matrix_dim;
+    size_t eigenvalues_data_size_bytes = sizeof(float) * lut_vals.matrix_dim;
+
+    // cuda reset
+    cuda_device_reset();
+
+    // allocate memory solution
+    cuda_allocate_eigensolver_memory(lut_vals, cuda_ddp);
+
+    // copy data to device
+    CUDA_CHECK(cudaMemcpy(cuda_ddp.eigenvectors_data, ddp.eigenvectors_data, eigenvectors_data_size_bytes, cudaMemcpyHostToDevice));
 
     console_print(0, "cusolverDnSsyevd start", CLIENT_CUDA);
     console_print(2, TAB1 "cusolverDnSsyevd solver debug", CLIENT_CUDA);
-    // Create a cusolver handle and bind it to a stream
+
+    // create a cusolver handle and bind it to a stream
     CUSOLVER_CHECK(cusolverDnCreate(&cusolver_handle));
     CUDA_CHECK(cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking));
     CUSOLVER_CHECK(cusolverDnSetStream(cusolver_handle, stream));
 
-    // Allocate a spot for device_info_ptr
+    // allocate a spot for device_info_ptr
     CUDA_CHECK(cudaMalloc(reinterpret_cast<void **>(&device_info_ptr), sizeof(int)));
 
-    // Query working space required for syevd
+    // query working space required for syevd
     console_print(2, TAB2 "cusolverDnSsyevd_bufferSize query", CLIENT_CUDA);
-    CUSOLVER_CHECK(cusolverDnSsyevd_bufferSize(cusolver_handle, jobz, uplo, lut_vals.matrix_dim, ddp.eigenvectors_data, lut_vals.matrix_dim, ddp.eigenvalues_data, &lwork));
+    CUSOLVER_CHECK(cusolverDnSsyevd_bufferSize(cusolver_handle, jobz, uplo, lut_vals.matrix_dim, cuda_ddp.eigenvectors_data, lut_vals.matrix_dim, cuda_ddp.eigenvalues_data, &lwork));
     
     console_print(2, str(format(TAB2"lwork = %d") % lwork), CLIENT_CUDA);
 
-    // Allocate memory for work area
+    // allocate memory for work area
     console_print(2, TAB2 "allocating workspace", CLIENT_CUDA);
     CUDA_CHECK(cudaMalloc(reinterpret_cast<void **>(&workspace_ptr), sizeof(float) * lwork));
 
     // compute solution
     console_print(2, TAB2 "calling cusolverDnSsyevd", CLIENT_CUDA);
-    CUSOLVER_CHECK(cusolverDnSsyevd(cusolver_handle, jobz, uplo, lut_vals.matrix_dim, ddp.eigenvectors_data, lut_vals.matrix_dim, ddp.eigenvalues_data, workspace_ptr, lwork, device_info_ptr));
+    CUSOLVER_CHECK(cusolverDnSsyevd(cusolver_handle, jobz, uplo, lut_vals.matrix_dim, cuda_ddp.eigenvectors_data, lut_vals.matrix_dim, cuda_ddp.eigenvalues_data, workspace_ptr, lwork, device_info_ptr));
     CUDA_CHECK(cudaMemcpyAsync(&info, device_info_ptr, sizeof(int), cudaMemcpyDeviceToHost, stream));
-
     CUDA_CHECK(cudaStreamSynchronize(stream));
+
     console_print(2, str(format(TAB2"info = %d") % info), CLIENT_CUDA);
+
+    // copy results to host
+    CUDA_CHECK(cudaMemcpy(ddp.eigenvectors_data, cuda_ddp.eigenvectors_data, eigenvectors_data_size_bytes, cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(ddp.eigenvalues_data, cuda_ddp.eigenvalues_data, eigenvalues_data_size_bytes, cudaMemcpyDeviceToHost));
+
+    // free memory
+    cuda_free_eigensolver_memory(cuda_ddp);
 
     return (info==0);
 }

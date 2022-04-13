@@ -51,7 +51,7 @@ typedef struct
 
 typedef struct
 {
-    int matrix_dim; // The resulting dimensions of the solution matrices
+    size_t matrix_dim; // The resulting dimensions of the solution matrices
     float step_size; // The resulting step size for the given number of partitions and limits
     float step_size_cubed; // The step size cubed
     float *coordinate_value_array; // The linear coordinate to value LUT (array[matrix_dim][IDX_NUM])

@@ -4,11 +4,13 @@
 
 # TODOs
   * Immediate:
-    - Move dynamic memory allocs into their own struct so they can be more easily passed into functions that use them
-    - Add CSV outputter for performance data and results
+    - Use cudaMalloc and copy data vs cudaMallocManaged, because it doesn't work with large value instatiations for some reason
+      - Can probably make all the necessary changes within the CUDA files and only call the CPU alloc stuff on the main program side
+    - ~~Move dynamic memory allocs into their own struct so they can be more easily passed into functions that use them~~
+    - ~~Add CSV outputter for performance data and results~~
     - Clean up eigensolver on CUDA side to properly take into account error conditions
     - Document with doxygen and generate
-    - Implement a switch between single core and multi core CPU for that additional datapoint
+    - ~~Implement a switch between single core and multi core CPU for that additional datapoint~~ sort of implemented via shell script
   * Longterm:
     - Implement a molecule parser to generalize the program
 

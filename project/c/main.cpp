@@ -161,7 +161,7 @@ void populate_lookup_values(Cfg_t &config, LutVals_t &lut_vals)
     // allocated already. Maybe check for null later. TODO.
 
     // Populate LUTs
-    for (int coordinate_index = 0; coordinate_index < lut_vals.matrix_dim; coordinate_index++)
+    for (size_t coordinate_index = 0; coordinate_index < lut_vals.matrix_dim; coordinate_index++)
     {
         // convert coordinate index to x,y,z coordinate indices
         int base_10_num = coordinate_index;
@@ -181,19 +181,16 @@ void populate_lookup_values(Cfg_t &config, LutVals_t &lut_vals)
 // Generate the 3D Laplacian matrix for the given number of partitions
 void generate_laplacian_matrix(LutVals_t lut_vals, float *matrix)
 {
-    // Set matrix to 0
-    memset(matrix, 0.0, lut_vals.matrix_dim * lut_vals.matrix_dim * sizeof(float));
+    size_t col_index_x;
+    size_t col_index_y;
+    size_t col_index_z;
+    size_t row_index_x;
+    size_t row_index_y;
+    size_t row_index_z;
 
-    int col_index_x;
-    int col_index_y;
-    int col_index_z;
-    int row_index_x;
-    int row_index_y;
-    int row_index_z;
-
-    for (int row_coordinate_index = 0; row_coordinate_index < lut_vals.matrix_dim; row_coordinate_index++)
+    for (size_t row_coordinate_index = 0; row_coordinate_index < lut_vals.matrix_dim; row_coordinate_index++)
     {
-        for (int col_coordinate_index = 0; col_coordinate_index < lut_vals.matrix_dim; col_coordinate_index++)
+        for (size_t col_coordinate_index = 0; col_coordinate_index < lut_vals.matrix_dim; col_coordinate_index++)
         {
             col_index_x = lut_vals.coordinate_index_array[IDX_X * lut_vals.matrix_dim + col_coordinate_index];
             col_index_y = lut_vals.coordinate_index_array[IDX_Y * lut_vals.matrix_dim + col_coordinate_index];
@@ -301,19 +298,16 @@ float attraction_function_hydrogen(LutVals_t lut_vals, int linear_coordinates)
 // Generate the attraction matrix
 void generate_attraction_matrix(LutVals_t lut_vals, atomic_structure_e atomic_structure, float *matrix)
 {
-    // Set matrix to 0
-    memset(matrix,0.0,lut_vals.matrix_dim*lut_vals.matrix_dim*sizeof(float));
-
     if (atomic_structure == HELIUM_ATOM)
     {
-        for (int diagonal_index = 0; diagonal_index < lut_vals.matrix_dim; diagonal_index++)
+        for (size_t diagonal_index = 0; diagonal_index < lut_vals.matrix_dim; diagonal_index++)
         {
             matrix[diagonal_index + diagonal_index*lut_vals.matrix_dim] = attraction_function_helium(lut_vals, diagonal_index);
         }
     }
     else if (atomic_structure == HYDROGEN_MOLECULE)
     {
-        for (int diagonal_index = 0; diagonal_index < lut_vals.matrix_dim; diagonal_index++)
+        for (size_t diagonal_index = 0; diagonal_index < lut_vals.matrix_dim; diagonal_index++)
         {
             matrix[diagonal_index + diagonal_index*lut_vals.matrix_dim] = attraction_function_hydrogen(lut_vals, diagonal_index);
         }
@@ -355,10 +349,10 @@ float exchange_diagonal_integrand_function(LutVals_t lut_vals, float *orbital_va
 
 void generate_repulsion_diagonal(LutVals_t lut_vals, DynamicDataPointers_t ddp)
 {
-    for (int electron_one_coordinate_index = 0; electron_one_coordinate_index < lut_vals.matrix_dim; electron_one_coordinate_index++)
+    for (size_t electron_one_coordinate_index = 0; electron_one_coordinate_index < lut_vals.matrix_dim; electron_one_coordinate_index++)
     {
         float sum = 0;
-        for (int electron_two_coordinate_index = 0; electron_two_coordinate_index < lut_vals.matrix_dim; electron_two_coordinate_index++)
+        for (size_t electron_two_coordinate_index = 0; electron_two_coordinate_index < lut_vals.matrix_dim; electron_two_coordinate_index++)
         {
             sum += repulsion_diagonal_integrand_function(lut_vals, ddp.orbital_values_data, electron_one_coordinate_index, electron_two_coordinate_index);
         }
@@ -369,10 +363,10 @@ void generate_repulsion_diagonal(LutVals_t lut_vals, DynamicDataPointers_t ddp)
 
 void generate_exchange_diagonal(LutVals_t lut_vals, DynamicDataPointers_t ddp)
 {
-    for (int electron_one_coordinate_index = 0; electron_one_coordinate_index < lut_vals.matrix_dim; electron_one_coordinate_index++)
+    for (size_t electron_one_coordinate_index = 0; electron_one_coordinate_index < lut_vals.matrix_dim; electron_one_coordinate_index++)
     {
         float sum = 0;
-        for (int electron_two_coordinate_index = 0; electron_two_coordinate_index < lut_vals.matrix_dim; electron_two_coordinate_index++)
+        for (size_t electron_two_coordinate_index = 0; electron_two_coordinate_index < lut_vals.matrix_dim; electron_two_coordinate_index++)
         {
             sum += exchange_diagonal_integrand_function(lut_vals, ddp.orbital_values_data, electron_one_coordinate_index, electron_two_coordinate_index);
         }
@@ -391,6 +385,9 @@ float calculate_total_energy(Eigen::MatrixBase<A> &orbital_values, Eigen::Matrix
     EigenFloatMatrix_t exchange_matrix = exchange_diagonal.asDiagonal();
 
     float energy_sum = 0;
+
+    console_print_hr(1, CLIENT_SIM);
+    console_print(1, "Calculating total energy", CLIENT_SIM);
 
     // sum for the total number of electrons in the systems: 2
     for (int i = 0; i < 2; i++)
@@ -448,17 +445,17 @@ bool lapack_solve_eigh(LutVals_t &lut_vals, DynamicDataPointers_t ddp)
     console_print(2, str(format(TAB2 "lwork = %d") % lwork), CLIENT_LAPACK);
 
     // Allocate memory for work arrays
-    iwork = (lapack_int*)LAPACKE_malloc(sizeof(lapack_int) * liwork);
+    iwork = (lapack_int*)malloc(sizeof(lapack_int) * liwork);
     if(iwork == nullptr)
     {
         info = LAPACK_WORK_MEMORY_ERROR;
-        console_print(2, TAB2 "FATAL! Could not allocate iwork array", CLIENT_LAPACK);
+        console_print_err(2, TAB2 "FATAL! Could not allocate iwork array", CLIENT_LAPACK);
     }
-    work = (float*)LAPACKE_malloc(sizeof(float) * lwork);
+    work = (float*)malloc(sizeof(float) * lwork);
     if(work == nullptr)
     {
         info = LAPACK_WORK_MEMORY_ERROR;
-        console_print(2, TAB2 "FATAL! Could not allocate work array", CLIENT_LAPACK);
+        console_print_err(2, TAB2 "FATAL! Could not allocate work array", CLIENT_LAPACK);
     }
 
     // Call LAPACK function and adjust info if our work areas are OK
@@ -489,19 +486,19 @@ int cpu_allocate_integration_memory(LutVals_t &lut_vals, DynamicDataPointers_t &
 {
     int rv = 0;
 
-    console_print_hr(0, CLIENT_SIM);
-    console_print(0, "Allocating memory for CPU integration", CLIENT_SIM);
+    console_print_hr(2, CLIENT_SIM);
+    console_print(2, "Allocating memory for CPU integration", CLIENT_SIM);
 
-    size_t orbital_vector_size_bytes = sizeof(float) * lut_vals.matrix_dim;
-    size_t repulsion_exchange_matrices_size_bytes = sizeof(float) * lut_vals.matrix_dim;
-    size_t coordinate_luts_size_bytes = sizeof(float) * IDX_NUM * lut_vals.matrix_dim;
+    size_t orbital_vector_size_bytes = lut_vals.matrix_dim;
+    size_t repulsion_exchange_matrices_size_bytes = lut_vals.matrix_dim;
+    size_t coordinate_luts_size_bytes = IDX_NUM * lut_vals.matrix_dim;
 
-    ddp.orbital_values_data = (float*)(malloc(orbital_vector_size_bytes));
-    ddp.repulsion_diagonal_data = (float*)(malloc(repulsion_exchange_matrices_size_bytes));
-    ddp.exchange_diagonal_data = (float*)(malloc(repulsion_exchange_matrices_size_bytes));
+    ddp.orbital_values_data = (float*)(calloc(orbital_vector_size_bytes, sizeof(float)));
+    ddp.repulsion_diagonal_data = (float*)(calloc(repulsion_exchange_matrices_size_bytes, sizeof(float)));
+    ddp.exchange_diagonal_data = (float*)(calloc(repulsion_exchange_matrices_size_bytes, sizeof(float)));
 
-    lut_vals.coordinate_value_array = (float*)(malloc(coordinate_luts_size_bytes));
-    lut_vals.coordinate_index_array = (float*)(malloc(coordinate_luts_size_bytes));
+    lut_vals.coordinate_value_array = (float*)(calloc(coordinate_luts_size_bytes, sizeof(float)));
+    lut_vals.coordinate_index_array = (float*)(calloc(coordinate_luts_size_bytes, sizeof(float)));
 
     if ( (ddp.orbital_values_data == nullptr) || (ddp.repulsion_diagonal_data == nullptr) || (ddp.exchange_diagonal_data == nullptr) ||
          (lut_vals.coordinate_value_array == nullptr) || (lut_vals.coordinate_index_array == nullptr) )
@@ -524,8 +521,8 @@ int cpu_allocate_eigensolver_memory(LutVals_t &lut_vals, DynamicDataPointers_t &
 {
     int rv = 0;
 
-    console_print_hr(0, CLIENT_SIM);
-    console_print(0, "Allocating memory for CPU eigensolver", CLIENT_SIM);
+    console_print_hr(2, CLIENT_SIM);
+    console_print(2, "Allocating memory for CPU eigensolver", CLIENT_SIM);
 
     size_t eigenvectors_size_bytes = sizeof(float) * lut_vals.matrix_dim * lut_vals.matrix_dim;
     size_t eigenvalues_size_bytes = sizeof(float) * lut_vals.matrix_dim;
@@ -551,7 +548,7 @@ int cpu_free_integration_memory(LutVals_t &lut_vals, DynamicDataPointers_t &ddp)
 {
     int rv = 0;
 
-    console_print(0, "Freeing allocated integration memory...", CLIENT_SIM);
+    console_print(2, "Freeing allocated integration memory...", CLIENT_SIM);
 
     free(ddp.orbital_values_data);
     free(ddp.repulsion_diagonal_data);
@@ -575,7 +572,7 @@ int cpu_free_eigensolver_memory(DynamicDataPointers_t &ddp)
 {
     int rv = 0;
 
-    console_print(0, "Freeing allocated eigensolver memory...", CLIENT_SIM);
+    console_print(2, "Freeing allocated eigensolver memory...", CLIENT_SIM);
 
     free(ddp.eigenvectors_data);
     free(ddp.eigenvalues_data);
@@ -624,10 +621,6 @@ void config_cuda(Cfg_t &config)
             config.enable_cuda_integration = false;
             config.enable_cuda_eigensolver = false;
         }
-        else
-        {
-            cuda_device_reset();
-        }
     }
 }
 
@@ -649,6 +642,7 @@ void eigensolver(Cfg_t config, LutVals_t &lut_vals, PerformanceMonitor &perfmon,
     }
     else
     {
+        // Eigen solver, slow.
         // EigenFloatMatrixMap_t eigenvectors(eigenvectors_data, lut_vals.matrix_dim, lut_vals.matrix_dim);
         // EigenFloatColVectorMap_t eigenvalues(eigenvalues_data, lut_vals.matrix_dim, 1);
         // Eigen::SelfAdjointEigenSolver<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic>> solver(eigenvectors);
@@ -667,7 +661,6 @@ void eigensolver(Cfg_t config, LutVals_t &lut_vals, PerformanceMonitor &perfmon,
     auto eig_time = chrono::duration<float>(eig_end - eig_start);
     perfmon.record(PerformanceMonitor::ITERATION_EIGENSOLVER_TIME, (float)(eig_time.count()));
     console_print(0, str(format("Eigenvalues and eigenvectors computed in: %0.3f seconds") % (float)(eig_time.count())), CLIENT_SIM);
-
 }
 
 void generate_repulsion_and_integration_matrices(Cfg_t &config, LutVals_t &lut_vals, PerformanceMonitor &perfmon, DynamicDataPointers_t ddp)
@@ -727,8 +720,6 @@ void print_csv_data(Cfg_t &config, LutVals_t &lut_vals, PerformanceMonitor &perf
 
 int main(int argc, char *argv[])
 {
-
-
     // Performance monitor object
     PerformanceMonitor perfmon;
     // Program config struct
@@ -792,23 +783,8 @@ int main(int argc, char *argv[])
     DynamicDataPointers_t ddp;
     int allocate_error = 0;
 
-    if (config.enable_cuda_integration)
-    {
-        allocate_error |= cuda_allocate_integration_memory(lut_vals, ddp);
-    }
-    else
-    {
-        allocate_error |= cpu_allocate_integration_memory(lut_vals, ddp);
-    }
-
-    if (config.enable_cuda_eigensolver)
-    {
-        allocate_error |= cuda_allocate_eigensolver_memory(lut_vals, ddp);
-    }
-    else
-    {
-        allocate_error |= cpu_allocate_eigensolver_memory(lut_vals, ddp);
-    }
+    allocate_error |= cpu_allocate_integration_memory(lut_vals, ddp);
+    allocate_error |= cpu_allocate_eigensolver_memory(lut_vals, ddp);
 
     if (!allocate_error)
     {
@@ -836,14 +812,16 @@ int main(int argc, char *argv[])
     EigenFloatColVector_t trimmed_eigenvalues(config.num_solutions, 1);
     EigenFloatMatrix_t trimmed_eigenvectors(lut_vals.matrix_dim, config.num_solutions);
 
+    console_print_hr(0, CLIENT_SIM);
     console_print(0, "Simulation start!", CLIENT_SIM);
     console_print_hr(0, CLIENT_SIM);
     auto sim_start = chrono::system_clock::now();
 
     // generate the second order Laplacian matrix for 3D space
-    console_print(1, "Generating kinetic energy matrix", CLIENT_SIM);
+    console_print(1, "Generating Laplacian matrix", CLIENT_SIM);
     generate_laplacian_matrix(lut_vals, laplacian_matrix.data());
     // generate the kinetic energy matrix
+    console_print(1, "Generating kinetic energy matrix", CLIENT_SIM);
     kinetic_matrix = (laplacian_matrix/(2.0*lut_vals.step_size*lut_vals.step_size));
     // generate the Coulombic attraction matrix
     console_print(1, "Generating electron-nucleus Coulombic attraction matrix", CLIENT_SIM);
@@ -858,6 +836,7 @@ int main(int argc, char *argv[])
     // initial solution
     fock_matrix = -kinetic_matrix - attraction_matrix;
 
+    console_print(1, "Solving for initial solution", CLIENT_SIM);
     // Solve for Fock matrix eigenvectors
     eigenvectors = fock_matrix;
     eigensolver(config, lut_vals, perfmon, ddp);
@@ -887,19 +866,17 @@ int main(int argc, char *argv[])
         trimmed_eigenvalues = eigenvalues.block(0, 0, config.num_solutions, 1);
         // Extract num_solutions eigenvectors
         trimmed_eigenvectors = eigenvectors.block(0, 0, lut_vals.matrix_dim, config.num_solutions);
-        
-        console_print(1, "Calculating total energy", CLIENT_SIM);
 
         total_energy = calculate_total_energy(orbital_values, kinetic_matrix, attraction_matrix, repulsion_diagonal, exchange_diagonal);
         perfmon.record(PerformanceMonitor::ITERATION_TOTAL_ENERGY, total_energy);
         total_energy_percent_diff = abs((total_energy - last_total_energy)/((total_energy + last_total_energy) / 2.0));
 
+        console_print_hr(0, CLIENT_SIM);
         console_print(0, str(format("Total energy: %.3f") % (total_energy)), CLIENT_SIM);
         console_print(0, str(format("Energy %% diff: %.3f%%") % (total_energy_percent_diff * 100.0)), CLIENT_SIM);
 
         // update last value
         last_total_energy = total_energy;
-
         // update iteration count
         interation_count++;
 
@@ -925,23 +902,8 @@ int main(int argc, char *argv[])
     }
     while(1);
 
-    // free dynamically allocated memory
-    if (config.enable_cuda_integration)
-    {
-        cuda_free_integration_memory(lut_vals, ddp);
-    }
-    else
-    {
-        cpu_free_integration_memory(lut_vals, ddp);
-    }
-    if (config.enable_cuda_eigensolver)
-    {
-        cuda_free_eigensolver_memory(ddp);
-    }
-    else
-    {
-        cpu_free_eigensolver_memory(ddp);
-    }
+    cpu_free_integration_memory(lut_vals, ddp);
+    cpu_free_eigensolver_memory(ddp);
 
     console_print_hr(0, CLIENT_SIM);
     console_print(0, "Final Eigenvalues:", CLIENT_SIM);
