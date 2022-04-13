@@ -32,6 +32,15 @@ typedef enum
     IDX_NUM,
 } coordinate_index_e;
 
+typedef struct
+{
+    float *orbital_values_data;
+    float *repulsion_diagonal_data;
+    float *exchange_diagonal_data;
+    float *eigenvectors_data;
+    float *eigenvalues_data;
+} DynamicDataPointers_t;
+
 // Program constants
 #define AU_DISTANCE (5.29e-11) // Atomic unit of distance = Bohr radius (m)
 #define H2_BOND_LENGTH_ATOMIC_UNITS (0.74e-10/AU_DISTANCE) // Bond length of Hydrogen atoms in Hydrogen molecule in atomic units

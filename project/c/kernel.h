@@ -24,12 +24,15 @@ SOFTWARE.
 
 #pragma once
 
+#include "main.hpp"
 #include "config.hpp"
 
 int cuda_get_device_info(void);
-int cuda_allocate_integration_memory(LutVals_t *lut_vals, float **orbital_values_data, float **repulsion_diagonal_data, float **exchange_diagonal_data);
-int cuda_allocate_eigensolver_memory(LutVals_t *lut_vals, float **eigenvectors_data, float **eigenvalues_data);
-int cuda_free_integration_memory(LutVals_t *lut_vals, float **orbital_values_data, float **repulsion_diagonal_data, float **exchange_diagonal_data);
-int cuda_free_eigensolver_memory(float **eigenvectors_data, float **eigenvalues_data);
-int cuda_numerical_integration(LutVals_t lut_vals, float *orbital_values, float *repulsion_matrix, float *exchange_matrix);
-bool cuda_eigensolver(LutVals_t lut_vals, float *eigenvectors_data, float *eigenvalues_data);
+
+int cuda_allocate_integration_memory(LutVals_t &lut_vals, DynamicDataPointers_t &ddp);
+int cuda_allocate_eigensolver_memory(LutVals_t &lut_vals, DynamicDataPointers_t &ddp);
+int cuda_free_integration_memory(LutVals_t &lut_vals, DynamicDataPointers_t &ddp);
+int cuda_free_eigensolver_memory(DynamicDataPointers_t &ddp);
+
+int cuda_numerical_integration(LutVals_t lut_vals, DynamicDataPointers_t ddp);
+bool cuda_eigensolver(LutVals_t lut_vals, DynamicDataPointers_t ddp);

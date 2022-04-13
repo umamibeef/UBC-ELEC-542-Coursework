@@ -46,8 +46,10 @@ SOFTWARE.
 namespace po = boost::program_options;
 
 // OMP includes
-#define OMP_NUM_THREADS (16)
 #include <omp.h>
+
+// BLAS includes
+#include <cblas.h>
 
 // CUDA
 #include <cuda.h>
@@ -85,8 +87,11 @@ void parse_program_options(int argc, char **argv, Cfg_t &config)
         ("convergence", po::value<float>()->default_value(0.01), "set the convergence condition (%)")
         ("structure", po::value<int>()->default_value(0), "set the atomic structure: (0:He, 1:H2)")
         ("verbosity", po::value<int>()->default_value(2), "set the verbosity of the program")
+        ("max-threads", po::value<int>()->default_value(16), "set the maximum number of threads that CPU operations can spawn")
         ("use-gpu-int", po::value<bool>()->default_value(1), "enable CUDA GPU acceleration for numerical integration")
         ("use-gpu-eig", po::value<bool>()->default_value(1), "enable CUDA GPU acceleration for the eigensolver")
+        ("csv-header", po::value<bool>()->default_value(0), "enable CSV output (header) of simulation run for piping to file (disables other messages)")
+        ("csv-data", po::value<bool>()->default_value(0), "enable CSV output (data) of simulation run for piping to file (disables other messages)")
     ;
     po::store(po::parse_command_line(argc, argv, desc), vm);
     po::notify(vm);    
@@ -115,9 +120,17 @@ void parse_program_options(int argc, char **argv, Cfg_t &config)
     config.max_iterations = vm["iterations"].as<int>();
     config.num_solutions = 6;
     config.convergence_percentage = vm["convergence"].as<float>();
+    config.verbosity = vm["verbosity"].as<int>();
+    config.max_num_threads = vm["max-threads"].as<int>();
     config.enable_cuda_integration = vm["use-gpu-int"].as<bool>();
     config.enable_cuda_eigensolver = vm["use-gpu-eig"].as<bool>();
-    program_verbosity = vm["verbosity"].as<int>();
+    config.enable_csv_header_output = vm["csv-header"].as<bool>();
+    config.enable_csv_data_output = vm["csv-data"].as<bool>();
+    if (config.enable_csv_header_output || config.enable_csv_data_output)
+    {
+        config.verbosity = -1;
+    }
+    program_verbosity = config.verbosity;
 }
 
 void print_header(void)
@@ -340,30 +353,30 @@ float exchange_diagonal_integrand_function(LutVals_t lut_vals, float *orbital_va
     return orbital_values[linear_coords_1]*orbital_values[linear_coords_2]*repulsion_function(lut_vals, linear_coords_1, linear_coords_2);
 }
 
-void generate_repulsion_diagonal(LutVals_t lut_vals, float *orbital_values, float *diagonal)
+void generate_repulsion_diagonal(LutVals_t lut_vals, DynamicDataPointers_t ddp)
 {
     for (int electron_one_coordinate_index = 0; electron_one_coordinate_index < lut_vals.matrix_dim; electron_one_coordinate_index++)
     {
         float sum = 0;
         for (int electron_two_coordinate_index = 0; electron_two_coordinate_index < lut_vals.matrix_dim; electron_two_coordinate_index++)
         {
-            sum += repulsion_diagonal_integrand_function(lut_vals, orbital_values, electron_one_coordinate_index, electron_two_coordinate_index);
+            sum += repulsion_diagonal_integrand_function(lut_vals, ddp.orbital_values_data, electron_one_coordinate_index, electron_two_coordinate_index);
         }
-        diagonal[electron_one_coordinate_index] = sum*lut_vals.step_size_cubed;
+        ddp.repulsion_diagonal_data[electron_one_coordinate_index] = sum*lut_vals.step_size_cubed;
     }
 }
 
 
-void generate_exchange_diagonal(LutVals_t lut_vals, float *orbital_values, float *diagonal)
+void generate_exchange_diagonal(LutVals_t lut_vals, DynamicDataPointers_t ddp)
 {
     for (int electron_one_coordinate_index = 0; electron_one_coordinate_index < lut_vals.matrix_dim; electron_one_coordinate_index++)
     {
         float sum = 0;
         for (int electron_two_coordinate_index = 0; electron_two_coordinate_index < lut_vals.matrix_dim; electron_two_coordinate_index++)
         {
-            sum += exchange_diagonal_integrand_function(lut_vals, orbital_values, electron_one_coordinate_index, electron_two_coordinate_index);
+            sum += exchange_diagonal_integrand_function(lut_vals, ddp.orbital_values_data, electron_one_coordinate_index, electron_two_coordinate_index);
         }
-        diagonal[electron_one_coordinate_index] = sum*lut_vals.step_size_cubed;
+        ddp.exchange_diagonal_data[electron_one_coordinate_index] = sum*lut_vals.step_size_cubed;
     }
 }
 
@@ -408,7 +421,7 @@ float calculate_total_energy(Eigen::MatrixBase<A> &orbital_values, Eigen::Matrix
 // @return     True if the solver found solutions, false if the solver failed
 //             for some reason
 //
-bool lapack_solve_eigh(LutVals_t lut_vals, float *matrix, float *eigenvalues)
+bool lapack_solve_eigh(LutVals_t &lut_vals, DynamicDataPointers_t ddp)
 {
     char jobz = 'V'; // compute eigenvalues and eigenvectors.
     char uplo = 'U'; // perform calculation on upper triangle of matrix
@@ -452,7 +465,7 @@ bool lapack_solve_eigh(LutVals_t lut_vals, float *matrix, float *eigenvalues)
     if ((iwork != nullptr) && (work != nullptr))
     {
         console_print(2, TAB2 "calling LAPACK function", CLIENT_LAPACK);
-        LAPACK_ssyevd(&jobz, &uplo, &n, matrix, &lda, eigenvalues, work, &lwork, iwork, &liwork, &info);
+        LAPACK_ssyevd(&jobz, &uplo, &n, ddp.eigenvectors_data, &lda, ddp.eigenvalues_data, work, &lwork, iwork, &liwork, &info);
         if( info < 0 ) {
             info = info - 1;
         }
@@ -472,26 +485,26 @@ bool lapack_solve_eigh(LutVals_t lut_vals, float *matrix, float *eigenvalues)
     return (info==0);
 }
 
-int cpu_allocate_integration_memory(LutVals_t *lut_vals, float **orbital_values_data, float **repulsion_diagonal_data, float **exchange_diagonal_data)
+int cpu_allocate_integration_memory(LutVals_t &lut_vals, DynamicDataPointers_t &ddp)
 {
     int rv = 0;
 
     console_print_hr(0, CLIENT_SIM);
     console_print(0, "Allocating memory for CPU integration", CLIENT_SIM);
 
-    int orbital_vector_size_bytes = lut_vals->matrix_dim * sizeof(float);
-    int repulsion_exchange_matrices_size_bytes = lut_vals->matrix_dim * sizeof(float);
-    int coordinate_luts_size_bytes = IDX_NUM * lut_vals->matrix_dim * sizeof(float);
+    size_t orbital_vector_size_bytes = sizeof(float) * lut_vals.matrix_dim;
+    size_t repulsion_exchange_matrices_size_bytes = sizeof(float) * lut_vals.matrix_dim;
+    size_t coordinate_luts_size_bytes = sizeof(float) * IDX_NUM * lut_vals.matrix_dim;
 
-    *orbital_values_data = (float*)(malloc(orbital_vector_size_bytes));
-    *repulsion_diagonal_data = (float*)(malloc(repulsion_exchange_matrices_size_bytes));
-    *exchange_diagonal_data = (float*)(malloc(repulsion_exchange_matrices_size_bytes));
+    ddp.orbital_values_data = (float*)(malloc(orbital_vector_size_bytes));
+    ddp.repulsion_diagonal_data = (float*)(malloc(repulsion_exchange_matrices_size_bytes));
+    ddp.exchange_diagonal_data = (float*)(malloc(repulsion_exchange_matrices_size_bytes));
 
-    lut_vals->coordinate_value_array = (float*)(malloc(coordinate_luts_size_bytes));
-    lut_vals->coordinate_index_array = (float*)(malloc(coordinate_luts_size_bytes));
+    lut_vals.coordinate_value_array = (float*)(malloc(coordinate_luts_size_bytes));
+    lut_vals.coordinate_index_array = (float*)(malloc(coordinate_luts_size_bytes));
 
-    if ( ((*orbital_values_data) == nullptr) || ((*repulsion_diagonal_data) == nullptr) || ((*exchange_diagonal_data) == nullptr) ||
-         (lut_vals->coordinate_value_array == nullptr) || (lut_vals->coordinate_index_array == nullptr) )
+    if ( (ddp.orbital_values_data == nullptr) || (ddp.repulsion_diagonal_data == nullptr) || (ddp.exchange_diagonal_data == nullptr) ||
+         (lut_vals.coordinate_value_array == nullptr) || (lut_vals.coordinate_index_array == nullptr) )
     {
         console_print_err(0, "Memory allocation error!", CLIENT_SIM);
         rv = 1;
@@ -507,20 +520,20 @@ int cpu_allocate_integration_memory(LutVals_t *lut_vals, float **orbital_values_
     return rv;
 }
 
-int cpu_allocate_eigensolver_memory(LutVals_t *lut_vals, float **eigenvectors_data, float **eigenvalues_data)
+int cpu_allocate_eigensolver_memory(LutVals_t &lut_vals, DynamicDataPointers_t &ddp)
 {
     int rv = 0;
 
     console_print_hr(0, CLIENT_SIM);
     console_print(0, "Allocating memory for CPU eigensolver", CLIENT_SIM);
 
-    int eigenvectors_size_bytes = lut_vals->matrix_dim * lut_vals->matrix_dim * sizeof(float);
-    int eigenvalues_size_bytes = lut_vals->matrix_dim * sizeof(float);
+    size_t eigenvectors_size_bytes = sizeof(float) * lut_vals.matrix_dim * lut_vals.matrix_dim;
+    size_t eigenvalues_size_bytes = sizeof(float) * lut_vals.matrix_dim;
 
-    *eigenvectors_data = (float*)(malloc(eigenvectors_size_bytes));
-    *eigenvalues_data = (float*)(malloc(eigenvalues_size_bytes));
+    ddp.eigenvectors_data = (float*)(malloc(eigenvectors_size_bytes));
+    ddp.eigenvalues_data = (float*)(malloc(eigenvalues_size_bytes));
 
-    if ((eigenvectors_data == nullptr) || (eigenvalues_data == nullptr))
+    if ((ddp.eigenvectors_data == nullptr) || (ddp.eigenvalues_data == nullptr))
     {
         console_print_err(0, "Memory allocation error!", CLIENT_SIM);
         rv = 1;
@@ -534,42 +547,42 @@ int cpu_allocate_eigensolver_memory(LutVals_t *lut_vals, float **eigenvectors_da
     return rv;
 }
 
-int cpu_free_integration_memory(LutVals_t *lut_vals, float **orbital_values_data, float **repulsion_diagonal_data, float **exchange_diagonal_data)
+int cpu_free_integration_memory(LutVals_t &lut_vals, DynamicDataPointers_t &ddp)
 {
     int rv = 0;
 
     console_print(0, "Freeing allocated integration memory...", CLIENT_SIM);
 
-    free(*orbital_values_data);
-    free(*repulsion_diagonal_data);
-    free(*exchange_diagonal_data);
-    free(lut_vals->coordinate_value_array);
-    free(lut_vals->coordinate_index_array);
+    free(ddp.orbital_values_data);
+    free(ddp.repulsion_diagonal_data);
+    free(ddp.exchange_diagonal_data);
+    free(lut_vals.coordinate_value_array);
+    free(lut_vals.coordinate_index_array);
 
     // null the pointers
-    (*orbital_values_data) = nullptr;
-    (*repulsion_diagonal_data) = nullptr;
-    (*exchange_diagonal_data) = nullptr;
-    (lut_vals->coordinate_value_array) = nullptr;
-    (lut_vals->coordinate_index_array) = nullptr;
+    (ddp.orbital_values_data) = nullptr;
+    (ddp.repulsion_diagonal_data) = nullptr;
+    (ddp.exchange_diagonal_data) = nullptr;
+    (lut_vals.coordinate_value_array) = nullptr;
+    (lut_vals.coordinate_index_array) = nullptr;
 
     console_print(2, "Successfully freed allocated integration memory", CLIENT_SIM);
 
     return rv;
 }
 
-int cpu_free_eigensolver_memory(float **eigenvectors_data, float **eigenvalues_data)
+int cpu_free_eigensolver_memory(DynamicDataPointers_t &ddp)
 {
     int rv = 0;
 
     console_print(0, "Freeing allocated eigensolver memory...", CLIENT_SIM);
 
-    free(*eigenvectors_data);
-    free(*eigenvalues_data);
+    free(ddp.eigenvectors_data);
+    free(ddp.eigenvalues_data);
 
     // null the pointers
-    (*eigenvectors_data) = nullptr;
-    (*eigenvalues_data) = nullptr;
+    ddp.eigenvectors_data = nullptr;
+    ddp.eigenvalues_data = nullptr;
 
     console_print(2, "Successfully freed allocated eigensolver memory", CLIENT_SIM);
 
@@ -581,6 +594,7 @@ void print_program_configurations(Cfg_t &config, LutVals_t &lut_vals)
     // Print program information
     console_print_hr(0, CLIENT_SIM);
     console_print(0, "Program Configurations:\n", CLIENT_SIM);
+    console_print(0, str(format(TAB1 "Verbosity = %d") % config.verbosity), CLIENT_SIM);
     console_print(0, str(format(TAB1 "Iterations = %d") % config.max_iterations), CLIENT_SIM);
     console_print(0, str(format(TAB1 "Num Partitions = %d") % config.num_partitions), CLIENT_SIM);
     console_print(0, str(format(TAB1 "Limits = %d") % config.limit), CLIENT_SIM);
@@ -595,6 +609,7 @@ void print_program_configurations(Cfg_t &config, LutVals_t &lut_vals)
     {
         console_print(0, TAB1 "Atomic Structure: Hydrogen Molecule", CLIENT_SIM);
     }
+    console_print(0, str(format(TAB1 "Maximum CPU Threads = %d") % config.max_num_threads), CLIENT_SIM);
 }
 
 void config_cuda(Cfg_t &config)
@@ -613,16 +628,16 @@ void config_cuda(Cfg_t &config)
 }
 
 // Solve for Fock matrix eigenvectors
-void eigensolver(Cfg_t config, LutVals_t &lut_vals, PerformanceMonitor &perfmon, float *eigenvectors_data, float *eigenvalues_data)
+void eigensolver(Cfg_t config, LutVals_t &lut_vals, PerformanceMonitor &perfmon, DynamicDataPointers_t ddp)
 {
     console_print(1, "Obtaining eigenvalues and eigenvectors", CLIENT_SIM);
 
-    auto eig_start = std::chrono::system_clock::now();
+    auto eig_start = chrono::system_clock::now();
 
     if (config.enable_cuda_eigensolver)
     {
         // CUDA cuSOLVER
-        if (!cuda_eigensolver(lut_vals, eigenvectors_data, eigenvalues_data))
+        if (!cuda_eigensolver(lut_vals, ddp))
         {
             console_print_err(0, "Something went horribly wrong with the CUDA solver, aborting", CLIENT_SIM);
             exit(EXIT_FAILURE);
@@ -630,49 +645,86 @@ void eigensolver(Cfg_t config, LutVals_t &lut_vals, PerformanceMonitor &perfmon,
     }
     else
     {
+        // EigenFloatMatrixMap_t eigenvectors(eigenvectors_data, lut_vals.matrix_dim, lut_vals.matrix_dim);
+        // EigenFloatColVectorMap_t eigenvalues(eigenvalues_data, lut_vals.matrix_dim, 1);
+        // Eigen::SelfAdjointEigenSolver<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic>> solver(eigenvectors);
+        // eigenvectors = solver.eigenvectors();
+        // eigenvalues = solver.eigenvalues();
+
         // CPU LAPACK solver
-        if (!lapack_solve_eigh(lut_vals, eigenvectors_data, eigenvalues_data))
+        if (!lapack_solve_eigh(lut_vals, ddp))
         {
             console_print_err(0, "Something went horribly wrong with the LAPACK solver, aborting", CLIENT_SIM);
             exit(EXIT_FAILURE);
         }
     }
 
-    auto eig_end = std::chrono::system_clock::now();
-    auto eig_time = std::chrono::duration<float>(eig_end - eig_start);
+    auto eig_end = chrono::system_clock::now();
+    auto eig_time = chrono::duration<float>(eig_end - eig_start);
     perfmon.record(PerformanceMonitor::ITERATION_EIGENSOLVER_TIME, (float)(eig_time.count()));
     console_print(0, str(format("Eigenvalues and eigenvectors computed in: %0.3f seconds") % (float)(eig_time.count())), CLIENT_SIM);
 
 }
 
-void generate_repulsion_and_integration_matrices(Cfg_t &config, LutVals_t &lut_vals, PerformanceMonitor &perfmon, float *orbital_values_data, float *repulsion_diagonal_data, float *exchange_diagonal_data)
+void generate_repulsion_and_integration_matrices(Cfg_t &config, LutVals_t &lut_vals, PerformanceMonitor &perfmon, DynamicDataPointers_t ddp)
 {
-    auto int_start = std::chrono::system_clock::now();
+    auto int_start = chrono::system_clock::now();
 
     if (config.enable_cuda_integration)
     {
         console_print(0, "Generating repulsion and exchange matrices on GPU", CLIENT_SIM);
 
         // generate repulsion and exchange matrices on GPU
-        cuda_numerical_integration(lut_vals, orbital_values_data, repulsion_diagonal_data, exchange_diagonal_data);
+        cuda_numerical_integration(lut_vals, ddp);
     }
     else
     {
         console_print(0, "Generating repulsion and exchange matrices on CPU", CLIENT_SIM);
 
         // generate repulsion and exchange matrices on CPU
-        generate_repulsion_diagonal(lut_vals, orbital_values_data, repulsion_diagonal_data);
-        generate_exchange_diagonal(lut_vals, orbital_values_data, exchange_diagonal_data);
+        generate_repulsion_diagonal(lut_vals, ddp);
+        generate_exchange_diagonal(lut_vals, ddp);
     }
 
-    auto int_end = std::chrono::system_clock::now();
-    auto int_time = std::chrono::duration<float>(int_end - int_start);
+    auto int_end = chrono::system_clock::now();
+    auto int_time = chrono::duration<float>(int_end - int_start);
     perfmon.record(PerformanceMonitor::ITERATION_INTEGRATION_TIME, (float)(int_time.count()));
     console_print(0, str(format("Repulsion and exchange matrix computed in: %0.3f seconds") % (float)(int_time.count())), CLIENT_SIM);
 }
 
+void print_csv_header(void)
+{
+    cout << "Date Time," << "Atomic Structure," << "Maximum CPU Threads,"
+         << "GPU Integration," << "GPU Eigensolver," <<"Num Partitions," << "Limit,"
+         << "Matrix Dim," << "Step Size," << "Convergence Percentage,"
+         << "Max Iterations," << "Iteration," << "Total Energy,"
+         << "Eigensolver Time," << "Integration Time," << "Total Time," << endl;
+}
+
+void print_csv_data(Cfg_t &config, LutVals_t &lut_vals, PerformanceMonitor &perfmon)
+{
+    time_t time_now = time(nullptr);
+    char time_string[100];
+    strftime(time_string, sizeof(time_string), "%Y/%m/%d-%H:%M:%S", localtime(&time_now));
+
+    for (int i = 0; i < perfmon.num_iterations; i++)
+    {
+        cout << time_string << "," << config.atomic_structure << "," << config.max_num_threads << ","
+             << config.enable_cuda_integration << "," << config.enable_cuda_eigensolver << ","
+             << config.num_partitions << "," << config.limit << ","
+             << lut_vals.matrix_dim << "," << lut_vals.step_size << "," << config.convergence_percentage << ","
+             << config.max_iterations << "," << i << ","
+             << perfmon.iteration_counters[PerformanceMonitor::ITERATION_TOTAL_ENERGY][i] << ","
+             << perfmon.iteration_counters[PerformanceMonitor::ITERATION_EIGENSOLVER_TIME][i] << ","
+             << perfmon.iteration_counters[PerformanceMonitor::ITERATION_INTEGRATION_TIME][i] << ","
+             << perfmon.iteration_counters[PerformanceMonitor::ITERATION_TOTAL_TIME][i] << "," << endl;
+    }
+}
+
 int main(int argc, char *argv[])
 {
+
+
     // Performance monitor object
     PerformanceMonitor perfmon;
     // Program config struct
@@ -680,15 +732,25 @@ int main(int argc, char *argv[])
     // Program lookup table values
     LutVals_t lut_vals;
 
-    // Print the header
-    print_header();
-
-    // Set the maximum number of thread to use for OMP and Eigen
-    omp_set_num_threads(OMP_NUM_THREADS); // Set the number of maximum threads to use for OMP
-    Eigen::setNbThreads(OMP_NUM_THREADS); // Set the number of maximum threads to use for Eigen
-
     // Boost Program options
     parse_program_options(argc, argv, config);
+
+    // Print the CSV header if requested, and exit the program
+    if (config.enable_csv_header_output)
+    {
+        print_csv_header();
+        exit(EXIT_SUCCESS);
+    }
+
+    // Set the maximum number of thread to use for OMP and Eigen. This doesn't
+    // appear to modulate the number of threads the LAPACK solver is using, so
+    // something isn't right here. Leaving here anyways just in case I can fix
+    // it sometime later.
+    omp_set_dynamic(0); // Disable dynamic teams in OpenMP
+    omp_set_num_threads(config.max_num_threads); // Set the number of maximum threads to use for OMP (Eigen will use this value)
+
+    // Print the header
+    print_header();
 
     // Fill out lut_vals (the rest is done in populate_lookup_values once memory
     // has been allocated for the arrays inside)
@@ -723,38 +785,34 @@ int main(int argc, char *argv[])
     // vector. kernel.h externs the three pointers that are used to store the
     // addresses and the following call will allocate memory for them. We will
     // also allocate memory for the lookup tables used.
-    float *orbital_values_data;
-    float *repulsion_diagonal_data;
-    float *exchange_diagonal_data;
-    float *eigenvectors_data;
-    float *eigenvalues_data;
+    DynamicDataPointers_t ddp;
     int allocate_error = 0;
 
     if (config.enable_cuda_integration)
     {
-        allocate_error |= cuda_allocate_integration_memory(&lut_vals, &orbital_values_data, &repulsion_diagonal_data, &exchange_diagonal_data);
+        allocate_error |= cuda_allocate_integration_memory(lut_vals, ddp);
     }
     else
     {
-        allocate_error |= cpu_allocate_integration_memory(&lut_vals, &orbital_values_data, &repulsion_diagonal_data, &exchange_diagonal_data);
+        allocate_error |= cpu_allocate_integration_memory(lut_vals, ddp);
     }
 
     if (config.enable_cuda_eigensolver)
     {
-        allocate_error |= cuda_allocate_eigensolver_memory(&lut_vals, &eigenvectors_data, &eigenvalues_data);
+        allocate_error |= cuda_allocate_eigensolver_memory(lut_vals, ddp);
     }
     else
     {
-        allocate_error |= cpu_allocate_eigensolver_memory(&lut_vals, &eigenvectors_data, &eigenvalues_data);
+        allocate_error |= cpu_allocate_eigensolver_memory(lut_vals, ddp);
     }
 
     if (!allocate_error)
     {
-        new (&orbital_values) EigenFloatColVectorMap_t(orbital_values_data, lut_vals.matrix_dim, 1);
-        new (&repulsion_diagonal) EigenFloatColVectorMap_t(repulsion_diagonal_data, lut_vals.matrix_dim, 1);
-        new (&exchange_diagonal) EigenFloatColVectorMap_t(exchange_diagonal_data, lut_vals.matrix_dim, 1);
-        new (&eigenvectors) EigenFloatMatrixMap_t(eigenvectors_data, lut_vals.matrix_dim, lut_vals.matrix_dim);
-        new (&eigenvalues) EigenFloatColVectorMap_t(eigenvalues_data, lut_vals.matrix_dim, 1);
+        new (&orbital_values) EigenFloatColVectorMap_t(ddp.orbital_values_data, lut_vals.matrix_dim, 1);
+        new (&repulsion_diagonal) EigenFloatColVectorMap_t(ddp.repulsion_diagonal_data, lut_vals.matrix_dim, 1);
+        new (&exchange_diagonal) EigenFloatColVectorMap_t(ddp.exchange_diagonal_data, lut_vals.matrix_dim, 1);
+        new (&eigenvectors) EigenFloatMatrixMap_t(ddp.eigenvectors_data, lut_vals.matrix_dim, lut_vals.matrix_dim);
+        new (&eigenvalues) EigenFloatColVectorMap_t(ddp.eigenvalues_data, lut_vals.matrix_dim, 1);
         // Populate LUTs
         populate_lookup_values(config, lut_vals);
     }
@@ -798,7 +856,7 @@ int main(int argc, char *argv[])
 
     // Solve for Fock matrix eigenvectors
     eigenvectors = fock_matrix;
-    eigensolver(config, lut_vals, perfmon, eigenvectors_data, eigenvalues_data);
+    eigensolver(config, lut_vals, perfmon, ddp);
     orbital_values = eigenvectors.col(0);
 
     do
@@ -810,7 +868,7 @@ int main(int argc, char *argv[])
         auto iteration_start = chrono::system_clock::now();
 
         // Generate repulsion and integraion matrices
-        generate_repulsion_and_integration_matrices(config, lut_vals, perfmon, orbital_values_data, repulsion_diagonal_data, exchange_diagonal_data);
+        generate_repulsion_and_integration_matrices(config, lut_vals, perfmon, ddp);
 
         // form fock matrix
         console_print(1, "Generating Fock matrix", CLIENT_SIM);
@@ -818,7 +876,7 @@ int main(int argc, char *argv[])
 
         // Solve for Fock matrix eigenvectors and eigenvalues
         eigenvectors = fock_matrix;
-        eigensolver(config, lut_vals, perfmon, eigenvectors_data, eigenvalues_data);
+        eigensolver(config, lut_vals, perfmon, ddp);
         orbital_values = eigenvectors.col(0);
 
         // Extract num_solutions eigenvalues
@@ -866,19 +924,19 @@ int main(int argc, char *argv[])
     // free dynamically allocated memory
     if (config.enable_cuda_integration)
     {
-        cuda_free_integration_memory(&lut_vals, &orbital_values_data, &repulsion_diagonal_data, &exchange_diagonal_data);
+        cuda_free_integration_memory(lut_vals, ddp);
     }
     else
     {
-        cpu_free_integration_memory(&lut_vals, &orbital_values_data, &repulsion_diagonal_data, &exchange_diagonal_data);
+        cpu_free_integration_memory(lut_vals, ddp);
     }
     if (config.enable_cuda_eigensolver)
     {
-        cuda_free_eigensolver_memory(&eigenvectors_data, &eigenvalues_data);
+        cuda_free_eigensolver_memory(ddp);
     }
     else
     {
-        cpu_free_eigensolver_memory(&eigenvectors_data, &eigenvalues_data);
+        cpu_free_eigensolver_memory(ddp);
     }
 
     console_print_hr(0, CLIENT_SIM);
@@ -900,6 +958,11 @@ int main(int argc, char *argv[])
     console_print(0, "Performance monitor records:", CLIENT_SIM);
     console_print(0, perfmon.str(), CLIENT_SIM);
     console_print_hr(0, CLIENT_SIM);
+
+    if (config.enable_csv_data_output)
+    {
+        print_csv_data(config, lut_vals, perfmon);
+    }
 
     return 0;
 }

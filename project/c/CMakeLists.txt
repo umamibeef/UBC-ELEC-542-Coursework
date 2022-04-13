@@ -1,6 +1,22 @@
 # set CMake minimum version required
 cmake_minimum_required(VERSION 3.23)
 
+# set the build type
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE Release)
+endif()
+
+# set the flags for the build types
+set(CMAKE_CXX_FLAGS "-Wall -Wextra")
+set(CMAKE_CXX_FLAGS_DEBUG "-g")
+set(CMAKE_CXX_FLAGS_RELEASE "-O3")
+
+# output build type
+message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
+if(OMP_NUM_THREADS)
+    message(STATUS "OMP_NUM_THREADS: ${OMP_NUM_THREADS}")
+endif()
+
 # tell CMake where to find extra files
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR})
 
@@ -18,10 +34,10 @@ link_libraries(CUDA::cudart CUDA::cuda_driver CUDA::cusolver)
 find_package(Eigen3 3.3 REQUIRED NO_MODULE)
 link_libraries(Eigen3::Eigen)
 
-# LAPACK/BLAS
-find_package(BLAS REQUIRED)
-find_package(LAPACK REQUIRED)
-find_package(LAPACKE REQUIRED)
+# LAPACKE/LAPACK/BLAS
+find_package(BLAS REQUIRED BLA_VENDOR ACML_MP) # use AMD Core Math Library (ACML, ACML_MP, ACML_GPU)
+find_package(LAPACK REQUIRED  BLA_VENDOR ACML_MP) # use AMD Core Math Library (ACML, ACML_MP, ACML_GPU)
+find_package(LAPACKE)
 if(LAPACK_FOUND AND BLAS_FOUND AND LAPACKE_FOUND)
     set(lapackblas_libraries ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES} ${LAPACKE_LIBRARIES})
 endif()

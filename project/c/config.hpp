@@ -42,8 +42,11 @@ typedef struct
     int num_solutions; // The number of eigenvalues and eigenvectors to keep from the solution
     float convergence_percentage; // The convergence percentage for total energy change, used for terminating the main loop
     atomic_structure_e atomic_structure; // The atomic structure to run the simulation against
+    int max_num_threads; // Maximum number of threads Eigen can use for multiprocessing
     bool enable_cuda_integration; // Enable CUDA for the the numerical integration
     bool enable_cuda_eigensolver; // Enable CUDA for the eigensolver
+    bool enable_csv_header_output; // Enable CSV output of simulation run for piping to file (disables other messages)
+    bool enable_csv_data_output; // Enable CSV output of simulation run for piping to file (disables other messages)
 } Cfg_t;
 
 typedef struct
