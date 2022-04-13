@@ -1,7 +1,7 @@
 #!/bin/bash
 
 ./build/ExactHartreeFockSim --csv-header 1 > results.csv;
-for PARTITIONS in 10 15 20 25
+for PARTITIONS in 10 15 20 25 30
 do
 # Something to note here: the max-threads parameter doesn't work, as the program
 # always uses the maximum number of cores available (16 in my case). So in order

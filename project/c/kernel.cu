@@ -76,17 +76,17 @@ int max_threads_per_multiprocessor;
 
 // Electron-electron Coulombic repulsion function
 __device__
-float cuda_repulsion_function(LutVals_t lut_vals, int linear_coordinates_1, int linear_coordinates_2)
+float cuda_repulsion_function(Lut_t lut, int linear_coordinates_1, int linear_coordinates_2)
 {
     const float epsilon = EPSILON;
 
-    float x1 = lut_vals.coordinate_value_array[IDX_X * lut_vals.matrix_dim + linear_coordinates_1];
-    float y1 = lut_vals.coordinate_value_array[IDX_Y * lut_vals.matrix_dim + linear_coordinates_1];
-    float z1 = lut_vals.coordinate_value_array[IDX_Z * lut_vals.matrix_dim + linear_coordinates_1];
+    float x1 = lut.coordinate_value_array[IDX_X * lut.matrix_dim + linear_coordinates_1];
+    float y1 = lut.coordinate_value_array[IDX_Y * lut.matrix_dim + linear_coordinates_1];
+    float z1 = lut.coordinate_value_array[IDX_Z * lut.matrix_dim + linear_coordinates_1];
 
-    float x2 = lut_vals.coordinate_value_array[IDX_X * lut_vals.matrix_dim + linear_coordinates_2];
-    float y2 = lut_vals.coordinate_value_array[IDX_Y * lut_vals.matrix_dim + linear_coordinates_2];
-    float z2 = lut_vals.coordinate_value_array[IDX_Z * lut_vals.matrix_dim + linear_coordinates_2];
+    float x2 = lut.coordinate_value_array[IDX_X * lut.matrix_dim + linear_coordinates_2];
+    float y2 = lut.coordinate_value_array[IDX_Y * lut.matrix_dim + linear_coordinates_2];
+    float z2 = lut.coordinate_value_array[IDX_Z * lut.matrix_dim + linear_coordinates_2];
 
     float denominator = sqrtf((x2 - x1)*(x2 - x1) + (y2 - y1)*(y2 - y1) + (z2 - z1)*(z2 - z1));
 
@@ -99,46 +99,46 @@ float cuda_repulsion_function(LutVals_t lut_vals, int linear_coordinates_1, int 
 }
 
 __device__
-float cuda_repulsion_matrix_integrand_function(LutVals_t lut_vals, float *orbital_values, int linear_coords_1, int linear_coords_2)
+float cuda_repulsion_matrix_integrand_function(Lut_t lut, float *orbital_values, int linear_coords_1, int linear_coords_2)
 {
-    return orbital_values[linear_coords_2] * orbital_values[linear_coords_2] * cuda_repulsion_function(lut_vals, linear_coords_1, linear_coords_2);
+    return orbital_values[linear_coords_2] * orbital_values[linear_coords_2] * cuda_repulsion_function(lut, linear_coords_1, linear_coords_2);
 }
 
 __device__
-float cuda_exchange_matrix_integrand_function(LutVals_t lut_vals, float *orbital_values, int linear_coords_1, int linear_coords_2)
+float cuda_exchange_matrix_integrand_function(Lut_t lut, float *orbital_values, int linear_coords_1, int linear_coords_2)
 {
-    return orbital_values[linear_coords_1] * orbital_values[linear_coords_2] * cuda_repulsion_function(lut_vals, linear_coords_1, linear_coords_2);
+    return orbital_values[linear_coords_1] * orbital_values[linear_coords_2] * cuda_repulsion_function(lut, linear_coords_1, linear_coords_2);
 }
 
 __global__
-void cuda_generate_repulsion_matrix_kernel(LutVals_t lut_vals, float *orbital_values, float *repulsion_diagonal)
+void cuda_generate_repulsion_matrix_kernel(Lut_t lut, float *orbital_values, float *repulsion_diagonal)
 {
     int start_index = blockIdx.x * blockDim.x + threadIdx.x;
     int stride = blockDim.x * gridDim.x;
-    for (int electron_one_coordinate_index = start_index; electron_one_coordinate_index < lut_vals.matrix_dim; electron_one_coordinate_index += stride)
+    for (int electron_one_coordinate_index = start_index; electron_one_coordinate_index < lut.matrix_dim; electron_one_coordinate_index += stride)
     {
         float sum = 0;
-        for (int electron_two_coordinate_index = 0; electron_two_coordinate_index < lut_vals.matrix_dim; electron_two_coordinate_index++)
+        for (int electron_two_coordinate_index = 0; electron_two_coordinate_index < lut.matrix_dim; electron_two_coordinate_index++)
         {
-            sum += cuda_repulsion_matrix_integrand_function(lut_vals, orbital_values, electron_one_coordinate_index, electron_two_coordinate_index);
+            sum += cuda_repulsion_matrix_integrand_function(lut, orbital_values, electron_one_coordinate_index, electron_two_coordinate_index);
         }
-        repulsion_diagonal[electron_one_coordinate_index] = sum * lut_vals.step_size_cubed;
+        repulsion_diagonal[electron_one_coordinate_index] = sum * lut.step_size_cubed;
     }
 }
 
 __global__
-void cuda_generate_exchange_matrix_kernel(LutVals_t lut_vals, float *orbital_values, float *exchange_diagonal)
+void cuda_generate_exchange_matrix_kernel(Lut_t lut, float *orbital_values, float *exchange_diagonal)
 {
     int start_index = blockIdx.x * blockDim.x + threadIdx.x;
     int stride = blockDim.x * gridDim.x;
-    for (int electron_one_coordinate_index = start_index; electron_one_coordinate_index < lut_vals.matrix_dim; electron_one_coordinate_index += stride)
+    for (int electron_one_coordinate_index = start_index; electron_one_coordinate_index < lut.matrix_dim; electron_one_coordinate_index += stride)
     {
         float sum = 0;
-        for (int electron_two_coordinate_index = 0; electron_two_coordinate_index < lut_vals.matrix_dim; electron_two_coordinate_index++)
+        for (int electron_two_coordinate_index = 0; electron_two_coordinate_index < lut.matrix_dim; electron_two_coordinate_index++)
         {
-            sum += cuda_exchange_matrix_integrand_function(lut_vals, orbital_values, electron_one_coordinate_index, electron_two_coordinate_index);
+            sum += cuda_exchange_matrix_integrand_function(lut, orbital_values, electron_one_coordinate_index, electron_two_coordinate_index);
         }
-        exchange_diagonal[electron_one_coordinate_index] = sum * lut_vals.step_size_cubed;
+        exchange_diagonal[electron_one_coordinate_index] = sum * lut.step_size_cubed;
     }
 }
 
@@ -196,7 +196,7 @@ int cuda_get_device_info(void)
     return num_devices;
 }
 
-int cuda_allocate_integration_memory(LutVals_t &lut_vals, DynamicDataPointers_t &ddp)
+int cuda_allocate_integration_memory(Lut_t &lut, DynamicDataPointers_t &ddp)
 {
     int rv = 0;
     cudaError_t error;
@@ -204,16 +204,16 @@ int cuda_allocate_integration_memory(LutVals_t &lut_vals, DynamicDataPointers_t 
     console_print_hr(2, CLIENT_CUDA);
     console_print(2, "Allocating memory for CUDA integration...", CLIENT_CUDA);
 
-    size_t orbital_vector_size_bytes = sizeof(float) * lut_vals.matrix_dim;
-    size_t repulsion_exchange_matrices_size_bytes = sizeof(float) * lut_vals.matrix_dim;
-    size_t coordinate_luts_size_bytes = sizeof(float) * IDX_NUM * lut_vals.matrix_dim;
+    size_t orbital_vector_size_bytes = sizeof(float) * lut.matrix_dim;
+    size_t repulsion_exchange_matrices_size_bytes = sizeof(float) * lut.matrix_dim;
+    size_t coordinate_luts_size_bytes = sizeof(float) * IDX_NUM * lut.matrix_dim;
 
     cudaMalloc(&(ddp.orbital_values_data), orbital_vector_size_bytes);
     cudaMalloc(&(ddp.repulsion_diagonal_data), repulsion_exchange_matrices_size_bytes);
     cudaMalloc(&(ddp.exchange_diagonal_data), repulsion_exchange_matrices_size_bytes);
 
-    cudaMalloc(&(lut_vals.coordinate_value_array), coordinate_luts_size_bytes);
-    cudaMalloc(&(lut_vals.coordinate_index_array), coordinate_luts_size_bytes);
+    cudaMalloc(&(lut.coordinate_value_array), coordinate_luts_size_bytes);
+    cudaMalloc(&(lut.coordinate_index_array), coordinate_luts_size_bytes);
 
     console_print(2, str(format("Trying to allocate %zu bytes for orbital values vector") % orbital_vector_size_bytes), CLIENT_CUDA);
     console_print(2, str(format("Trying to allocate %zu bytes for repulsion matrix diagonal") % repulsion_exchange_matrices_size_bytes), CLIENT_CUDA);
@@ -238,7 +238,7 @@ int cuda_allocate_integration_memory(LutVals_t &lut_vals, DynamicDataPointers_t 
     return rv;
 }
 
-int cuda_allocate_eigensolver_memory(LutVals_t &lut_vals, DynamicDataPointers_t &ddp)
+int cuda_allocate_eigensolver_memory(Lut_t &lut, DynamicDataPointers_t &ddp)
 {
     int rv = 0;
     cudaError_t error;
@@ -246,8 +246,8 @@ int cuda_allocate_eigensolver_memory(LutVals_t &lut_vals, DynamicDataPointers_t 
     console_print_hr(2, CLIENT_CUDA);
     console_print(2, "Allocating memory for CUDA eigensolver...", CLIENT_CUDA);
 
-    size_t eigenvectors_data_size_bytes = sizeof(float) * lut_vals.matrix_dim * lut_vals.matrix_dim;
-    size_t eigenvalues_data_size_bytes = sizeof(float) * lut_vals.matrix_dim;
+    size_t eigenvectors_data_size_bytes = sizeof(float) * lut.matrix_dim * lut.matrix_dim;
+    size_t eigenvalues_data_size_bytes = sizeof(float) * lut.matrix_dim;
 
     console_print(2, str(format("Trying to allocate %zu bytes for eigenvectors matrix") % eigenvectors_data_size_bytes), CLIENT_CUDA);
     console_print(2, str(format("Trying to allocate %zu bytes for eigenvalues vector") % eigenvalues_data_size_bytes), CLIENT_CUDA);
@@ -271,7 +271,7 @@ int cuda_allocate_eigensolver_memory(LutVals_t &lut_vals, DynamicDataPointers_t 
     return rv;
 }
 
-int cuda_free_integration_memory(LutVals_t &lut_vals, DynamicDataPointers_t &ddp)
+int cuda_free_integration_memory(Lut_t &lut, DynamicDataPointers_t &ddp)
 {
     int rv = 0;
     cudaError_t error;
@@ -281,15 +281,15 @@ int cuda_free_integration_memory(LutVals_t &lut_vals, DynamicDataPointers_t &ddp
     cudaFree((void*)ddp.orbital_values_data);
     cudaFree((void*)ddp.repulsion_diagonal_data);
     cudaFree((void*)ddp.exchange_diagonal_data);
-    cudaFree((void*)lut_vals.coordinate_value_array);
-    cudaFree((void*)lut_vals.coordinate_index_array);
+    cudaFree((void*)lut.coordinate_value_array);
+    cudaFree((void*)lut.coordinate_index_array);
 
     // null the pointers
     ddp.orbital_values_data = nullptr;
     ddp.repulsion_diagonal_data = nullptr;
     ddp.exchange_diagonal_data = nullptr;
-    lut_vals.coordinate_value_array = nullptr;
-    lut_vals.coordinate_index_array = nullptr;
+    lut.coordinate_value_array = nullptr;
+    lut.coordinate_index_array = nullptr;
 
     error = cudaGetLastError();
     if (error != cudaSuccess)
@@ -335,9 +335,9 @@ int cuda_free_eigensolver_memory(DynamicDataPointers_t &ddp)
     return rv;
 }
 
-void cuda_numerical_integration(LutVals_t lut_vals, DynamicDataPointers_t ddp)
+void cuda_numerical_integration(Lut_t lut, DynamicDataPointers_t ddp)
 {
-    LutVals_t cuda_lut_vals = lut_vals;
+    Lut_t cuda_lut = lut;
     DynamicDataPointers_t cuda_ddp;
 
     int num_blocks = multi_processor_count * max_blocks_per_multiprocessor;
@@ -347,25 +347,25 @@ void cuda_numerical_integration(LutVals_t lut_vals, DynamicDataPointers_t ddp)
     cuda_device_reset();
 
     // allocate memory
-    cuda_allocate_integration_memory(cuda_lut_vals, cuda_ddp);
+    cuda_allocate_integration_memory(cuda_lut, cuda_ddp);
 
-    size_t orbital_vector_size_bytes = sizeof(float) * lut_vals.matrix_dim;
-    size_t repulsion_exchange_matrices_size_bytes = sizeof(float) * lut_vals.matrix_dim;
-    size_t coordinate_luts_size_bytes = sizeof(float) * IDX_NUM * lut_vals.matrix_dim;
+    size_t orbital_vector_size_bytes = sizeof(float) * lut.matrix_dim;
+    size_t repulsion_exchange_matrices_size_bytes = sizeof(float) * lut.matrix_dim;
+    size_t coordinate_luts_size_bytes = sizeof(float) * IDX_NUM * lut.matrix_dim;
 
     // copy data to device
     CUDA_CHECK(cudaMemcpy(cuda_ddp.orbital_values_data, ddp.orbital_values_data, orbital_vector_size_bytes, cudaMemcpyHostToDevice));
     CUDA_CHECK(cudaMemcpy(cuda_ddp.repulsion_diagonal_data, ddp.repulsion_diagonal_data, repulsion_exchange_matrices_size_bytes, cudaMemcpyHostToDevice));
     CUDA_CHECK(cudaMemcpy(cuda_ddp.exchange_diagonal_data, ddp.exchange_diagonal_data, repulsion_exchange_matrices_size_bytes, cudaMemcpyHostToDevice));
-    CUDA_CHECK(cudaMemcpy(cuda_lut_vals.coordinate_value_array, lut_vals.coordinate_value_array, coordinate_luts_size_bytes, cudaMemcpyHostToDevice));
-    CUDA_CHECK(cudaMemcpy(cuda_lut_vals.coordinate_index_array, lut_vals.coordinate_index_array, coordinate_luts_size_bytes, cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(cuda_lut.coordinate_value_array, lut.coordinate_value_array, coordinate_luts_size_bytes, cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(cuda_lut.coordinate_index_array, lut.coordinate_index_array, coordinate_luts_size_bytes, cudaMemcpyHostToDevice));
 
     console_print(0, "Computing repulsion matrix", CLIENT_CUDA);
-    cuda_generate_repulsion_matrix_kernel<<<num_blocks, blocks_size>>>(cuda_lut_vals, cuda_ddp.orbital_values_data, cuda_ddp.repulsion_diagonal_data);
+    cuda_generate_repulsion_matrix_kernel<<<num_blocks, blocks_size>>>(cuda_lut, cuda_ddp.orbital_values_data, cuda_ddp.repulsion_diagonal_data);
     CUDA_CHECK(cudaDeviceSynchronize());
 
     console_print(0, "Computing exchange matrix", CLIENT_CUDA);
-    cuda_generate_exchange_matrix_kernel<<<num_blocks, blocks_size>>>(cuda_lut_vals, cuda_ddp.orbital_values_data, cuda_ddp.exchange_diagonal_data);
+    cuda_generate_exchange_matrix_kernel<<<num_blocks, blocks_size>>>(cuda_lut, cuda_ddp.orbital_values_data, cuda_ddp.exchange_diagonal_data);
     CUDA_CHECK(cudaDeviceSynchronize());
 
     // copy results to host
@@ -373,10 +373,10 @@ void cuda_numerical_integration(LutVals_t lut_vals, DynamicDataPointers_t ddp)
     CUDA_CHECK(cudaMemcpy(ddp.exchange_diagonal_data, cuda_ddp.exchange_diagonal_data, repulsion_exchange_matrices_size_bytes, cudaMemcpyDeviceToHost));
 
     // free memory
-    cuda_free_integration_memory(cuda_lut_vals, cuda_ddp); 
+    cuda_free_integration_memory(cuda_lut, cuda_ddp); 
 }
 
-bool cuda_eigensolver(LutVals_t lut_vals, DynamicDataPointers_t ddp)
+bool cuda_eigensolver(Lut_t lut, DynamicDataPointers_t ddp)
 {
     cusolverDnHandle_t cusolver_handle = NULL;
     cudaStream_t stream = NULL;
@@ -388,14 +388,14 @@ bool cuda_eigensolver(LutVals_t lut_vals, DynamicDataPointers_t ddp)
     cublasFillMode_t uplo = CUBLAS_FILL_MODE_UPPER; // matrix fill mode;
     DynamicDataPointers_t cuda_ddp;
 
-    size_t eigenvectors_data_size_bytes = sizeof(float) * lut_vals.matrix_dim * lut_vals.matrix_dim;
-    size_t eigenvalues_data_size_bytes = sizeof(float) * lut_vals.matrix_dim;
+    size_t eigenvectors_data_size_bytes = sizeof(float) * lut.matrix_dim * lut.matrix_dim;
+    size_t eigenvalues_data_size_bytes = sizeof(float) * lut.matrix_dim;
 
     // cuda reset
     cuda_device_reset();
 
     // allocate memory solution
-    cuda_allocate_eigensolver_memory(lut_vals, cuda_ddp);
+    cuda_allocate_eigensolver_memory(lut, cuda_ddp);
 
     // copy data to device
     CUDA_CHECK(cudaMemcpy(cuda_ddp.eigenvectors_data, ddp.eigenvectors_data, eigenvectors_data_size_bytes, cudaMemcpyHostToDevice));
@@ -413,7 +413,7 @@ bool cuda_eigensolver(LutVals_t lut_vals, DynamicDataPointers_t ddp)
 
     // query working space required for syevd
     console_print(2, TAB2 "cusolverDnSsyevd_bufferSize query", CLIENT_CUDA);
-    CUSOLVER_CHECK(cusolverDnSsyevd_bufferSize(cusolver_handle, jobz, uplo, lut_vals.matrix_dim, cuda_ddp.eigenvectors_data, lut_vals.matrix_dim, cuda_ddp.eigenvalues_data, &lwork));
+    CUSOLVER_CHECK(cusolverDnSsyevd_bufferSize(cusolver_handle, jobz, uplo, lut.matrix_dim, cuda_ddp.eigenvectors_data, lut.matrix_dim, cuda_ddp.eigenvalues_data, &lwork));
     
     console_print(2, str(format(TAB2"lwork = %d") % lwork), CLIENT_CUDA);
 
@@ -423,7 +423,7 @@ bool cuda_eigensolver(LutVals_t lut_vals, DynamicDataPointers_t ddp)
 
     // compute solution
     console_print(2, TAB2 "calling cusolverDnSsyevd", CLIENT_CUDA);
-    CUSOLVER_CHECK(cusolverDnSsyevd(cusolver_handle, jobz, uplo, lut_vals.matrix_dim, cuda_ddp.eigenvectors_data, lut_vals.matrix_dim, cuda_ddp.eigenvalues_data, workspace_ptr, lwork, device_info_ptr));
+    CUSOLVER_CHECK(cusolverDnSsyevd(cusolver_handle, jobz, uplo, lut.matrix_dim, cuda_ddp.eigenvectors_data, lut.matrix_dim, cuda_ddp.eigenvalues_data, workspace_ptr, lwork, device_info_ptr));
     CUDA_CHECK(cudaMemcpyAsync(&info, device_info_ptr, sizeof(int), cudaMemcpyDeviceToHost, stream));
     CUDA_CHECK(cudaStreamSynchronize(stream));
 

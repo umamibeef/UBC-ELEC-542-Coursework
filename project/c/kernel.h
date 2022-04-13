@@ -30,5 +30,5 @@ SOFTWARE.
 void cuda_device_reset(void);
 int cuda_get_device_info(void);
 
-void cuda_numerical_integration(LutVals_t lut_vals, DynamicDataPointers_t ddp);
-bool cuda_eigensolver(LutVals_t lut_vals, DynamicDataPointers_t ddp);
+void cuda_numerical_integration(Lut_t lut, DynamicDataPointers_t ddp);
+bool cuda_eigensolver(Lut_t lut, DynamicDataPointers_t ddp);

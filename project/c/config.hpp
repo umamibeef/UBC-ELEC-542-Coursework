@@ -26,6 +26,7 @@ SOFTWARE.
 
 #include <vector>
 
+// Atomic structure enumerator
 typedef enum
 {
     HELIUM_ATOM = 0,
@@ -33,6 +34,7 @@ typedef enum
     ATOMIC_STRUCTURE_NUM,
 } atomic_structure_e;
 
+// Program configuration struct
 typedef struct
 {
     int verbosity; // The verbosity level of the program
@@ -49,6 +51,7 @@ typedef struct
     bool enable_csv_data_output; // Enable CSV output of simulation run for piping to file (disables other messages)
 } Cfg_t;
 
+// Lookup table struct for commonly used values
 typedef struct
 {
     size_t matrix_dim; // The resulting dimensions of the solution matrices
@@ -56,4 +59,4 @@ typedef struct
     float step_size_cubed; // The step size cubed
     float *coordinate_value_array; // The linear coordinate to value LUT (array[matrix_dim][IDX_NUM])
     float *coordinate_index_array; // The linear coordinate to index LUT (array[matrix_dim][IDX_NUM])
-} LutVals_t;
+} Lut_t;
