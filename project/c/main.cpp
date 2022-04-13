@@ -885,6 +885,9 @@ int main(int argc, char *argv[])
         perfmon.record(PerformanceMonitor::ITERATION_TOTAL_TIME, (float)(iteration_time.count()));
         console_print(0, str(format("Iteration end! Iteration time: %0.3f seconds") % (float)(iteration_time.count())), CLIENT_SIM);
 
+        // Increment performance monitor data
+        perfmon.next_iteration();
+
         // check if we've hit the maximum iteration limit
         if (interation_count == config.max_iterations)
         {
@@ -896,9 +899,6 @@ int main(int argc, char *argv[])
         {
             break;
         }
-
-        // Increment performance monitor data
-        perfmon.next_iteration();
     }
     while(1);
 
