@@ -48,7 +48,8 @@ typedef struct
     bool enable_cuda_integration; // Enable CUDA for the the numerical integration
     bool enable_cuda_eigensolver; // Enable CUDA for the eigensolver
     bool enable_csv_header_output; // Enable CSV output of simulation run for piping to file (disables other messages)
-    bool enable_csv_data_output; // Enable CSV output of simulation run for piping to file (disables other messages)
+    bool enable_csv_data_all_output; // Enable CSV output (all data) of simulation run for piping to file (disables other messages)
+    bool enable_csv_data_average_output; // Enable CSV output (average data) of simulation run for piping to file (disables other messages)
 } Cfg_t;
 
 // Lookup table struct for commonly used values

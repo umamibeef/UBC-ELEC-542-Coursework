@@ -91,7 +91,8 @@ void parse_program_options(int argc, char **argv, Cfg_t &config)
         ("use-gpu-int", po::value<bool>()->default_value(1), "enable CUDA GPU acceleration for numerical integration")
         ("use-gpu-eig", po::value<bool>()->default_value(1), "enable CUDA GPU acceleration for the eigensolver")
         ("csv-header", po::value<bool>()->default_value(0), "enable CSV output (header) of simulation run for piping to file (disables other messages)")
-        ("csv-data", po::value<bool>()->default_value(0), "enable CSV output (data) of simulation run for piping to file (disables other messages)")
+        ("csv-data-all", po::value<bool>()->default_value(0), "enable CSV output (all data) of simulation run for piping to file (disables other messages)")
+        ("csv-data-avg", po::value<bool>()->default_value(0), "enable CSV output (average data) of simulation run for piping to file (disables other messages)")
     ;
     po::store(po::parse_command_line(argc, argv, desc), vm);
     po::notify(vm);    
@@ -125,8 +126,9 @@ void parse_program_options(int argc, char **argv, Cfg_t &config)
     config.enable_cuda_integration = vm["use-gpu-int"].as<bool>();
     config.enable_cuda_eigensolver = vm["use-gpu-eig"].as<bool>();
     config.enable_csv_header_output = vm["csv-header"].as<bool>();
-    config.enable_csv_data_output = vm["csv-data"].as<bool>();
-    if (config.enable_csv_header_output || config.enable_csv_data_output)
+    config.enable_csv_data_all_output = vm["csv-data-all"].as<bool>();
+    config.enable_csv_data_average_output = vm["csv-data-avg"].as<bool>();
+    if (config.enable_csv_header_output || config.enable_csv_data_all_output || config.enable_csv_data_average_output)
     {
         config.verbosity = -1;
     }
@@ -689,33 +691,19 @@ void generate_repulsion_and_integration_matrices(Cfg_t &config, Lut_t &lut, Perf
     console_print(0, str(format("Repulsion and exchange matrix computed in: %0.3f seconds") % (float)(int_time.count())), CLIENT_SIM);
 }
 
-void print_csv_header(void)
+void print_csv_header(PerformanceMonitor &perfmon)
 {
-    cout << "Date Time," << "Atomic Structure," << "Maximum CPU Threads,"
-         << "GPU Integration," << "GPU Eigensolver," <<"Num Partitions," << "Limit,"
-         << "Matrix Dim," << "Step Size," << "Convergence Percentage,"
-         << "Max Iterations," << "Iteration," << "Total Energy,"
-         << "Eigensolver Time," << "Integration Time," << "Total Time," << endl;
+    cout << perfmon.str_csv_header();
 }
 
-void print_csv_data(Cfg_t &config, Lut_t &lut, PerformanceMonitor &perfmon)
+void print_csv_data_all(Cfg_t &config, Lut_t &lut, PerformanceMonitor &perfmon)
 {
-    time_t time_now = time(nullptr);
-    char time_string[100];
-    strftime(time_string, sizeof(time_string), "%Y/%m/%d-%H:%M:%S", localtime(&time_now));
+    cout << perfmon.str_csv_data_all(config, lut);
+}
 
-    for (int i = 0; i < perfmon.num_iterations; i++)
-    {
-        cout << time_string << "," << config.atomic_structure << "," << config.max_num_threads << ","
-             << config.enable_cuda_integration << "," << config.enable_cuda_eigensolver << ","
-             << config.num_partitions << "," << config.limit << ","
-             << lut.matrix_dim << "," << lut.step_size << "," << config.convergence_percentage << ","
-             << config.max_iterations << "," << i << ","
-             << perfmon.iteration_counters[PerformanceMonitor::ITERATION_TOTAL_ENERGY][i] << ","
-             << perfmon.iteration_counters[PerformanceMonitor::ITERATION_EIGENSOLVER_TIME][i] << ","
-             << perfmon.iteration_counters[PerformanceMonitor::ITERATION_INTEGRATION_TIME][i] << ","
-             << perfmon.iteration_counters[PerformanceMonitor::ITERATION_TOTAL_TIME][i] << "," << endl;
-    }
+void print_csv_data_average(Cfg_t &config, Lut_t &lut, PerformanceMonitor &perfmon)
+{
+    cout << perfmon.str_csv_data_average(config, lut);
 }
 
 int main(int argc, char *argv[])
@@ -733,7 +721,7 @@ int main(int argc, char *argv[])
     // Print the CSV header if requested, and exit the program
     if (config.enable_csv_header_output)
     {
-        print_csv_header();
+        print_csv_header(perfmon);
         exit(EXIT_SUCCESS);
     }
 
@@ -925,9 +913,13 @@ int main(int argc, char *argv[])
     console_print(0, perfmon.str(), CLIENT_SIM);
     console_print_hr(0, CLIENT_SIM);
 
-    if (config.enable_csv_data_output)
+    if (config.enable_csv_data_all_output)
     {
-        print_csv_data(config, lut, perfmon);
+        print_csv_data_all(config, lut, perfmon);
+    }
+    else if (config.enable_csv_data_average_output)
+    {
+        print_csv_data_average(config, lut, perfmon);
     }
 
     return 0;

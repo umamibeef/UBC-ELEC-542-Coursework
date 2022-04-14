@@ -26,6 +26,9 @@ SOFTWARE.
 
 #include <vector>
 #include <iostream>
+#include <ctime>
+
+#include "config.hpp"
 
 #define NO_TIME (-1.0)
 
@@ -110,6 +113,101 @@ public:
         ss << "Total execution time: " << total_time << " seconds" << std::endl;
 
         return ss.str(); 
+    }
+
+    /**
+     * @brief      Returns the performance monitor's records as a csv string (only the header)
+     *
+     * @return     The formatted string
+     */
+    std::string str_csv_header(void)
+    {
+        std::stringstream ss;
+
+        ss  << "Time," << "Atomic," << "Threads,"
+            << "GPU Int," << "GPU Eig," <<"Parts," << "Limit,"
+            << "Dim," << "Step," << "Conv,"
+            << "Max Its," << "It," << "Total E,"
+            << "Eig Time," << "Int Time," << "Total Time," << std::endl;
+
+        return ss.str();
+    }
+
+    /**
+     * @brief      Returns the performance monitor's records as a csv string
+     *
+     * @param      cfg   A reference to the configuration structure
+     * @param      lut   A reference to the lookup value structure
+     *
+     * @return     The formatted string
+     */
+    std::string str_csv_data_all(Cfg_t &config, Lut_t &lut)
+    {
+        std::time_t time_now = std::time(nullptr);
+        char time_string[100];
+        std::strftime(time_string, sizeof(time_string), "%Y/%m/%d-%H:%M:%S", std::localtime(&time_now));
+        std::stringstream ss;
+
+        for (int i = 0; i < num_iterations; i++)
+        {
+            ss  << time_string << "," << config.atomic_structure << "," << config.max_num_threads << ","
+                << config.enable_cuda_integration << "," << config.enable_cuda_eigensolver << ","
+                << config.num_partitions << "," << config.limit << ","
+                << lut.matrix_dim << "," << lut.step_size << "," << config.convergence_percentage << ","
+                << config.max_iterations << "," << i << ","
+                << iteration_counters[PerformanceMonitor::ITERATION_TOTAL_ENERGY][i] << ","
+                << iteration_counters[PerformanceMonitor::ITERATION_EIGENSOLVER_TIME][i] << ","
+                << iteration_counters[PerformanceMonitor::ITERATION_INTEGRATION_TIME][i] << ","
+                << iteration_counters[PerformanceMonitor::ITERATION_TOTAL_TIME][i] << "," << std::endl;
+        }
+
+        return ss.str();
+    }
+
+    /**
+     * @brief      Returns the performance monitor's records as a string,
+     *             averaged as a single entry.
+     *
+     * @param      cfg   A reference to the configuration structure
+     * @param      lut   A reference to the lookup value structure
+     *
+     * @return     The formatted string averaged
+     */
+    std::string str_csv_data_average(Cfg_t &config, Lut_t &lut)
+    {
+        std::time_t time_now = std::time(nullptr);
+        char time_string[100];
+        std::strftime(time_string, sizeof(time_string), "%Y/%m/%d-%H:%M:%S", std::localtime(&time_now));
+        std::stringstream ss;
+        float total_energy_avg = 0;
+        float eigensolver_time_average = 0;
+        float integration_time_average = 0;
+        float total_time_avg = 0;
+
+        for (int i = 0; i < num_iterations; i++)
+        {
+            total_energy_avg += iteration_counters[PerformanceMonitor::ITERATION_TOTAL_ENERGY][i];
+            eigensolver_time_average += iteration_counters[PerformanceMonitor::ITERATION_EIGENSOLVER_TIME][i];
+            integration_time_average += iteration_counters[PerformanceMonitor::ITERATION_INTEGRATION_TIME][i];
+            total_time_avg += iteration_counters[PerformanceMonitor::ITERATION_TOTAL_TIME][i];
+        }
+
+        total_energy_avg /= num_iterations;
+        eigensolver_time_average /= num_iterations;
+        integration_time_average /= num_iterations;
+        total_time_avg /= num_iterations;
+
+        ss  << time_string << "," << config.atomic_structure << "," << config.max_num_threads << ","
+            << config.enable_cuda_integration << "," << config.enable_cuda_eigensolver << ","
+            << config.num_partitions << "," << config.limit << ","
+            << lut.matrix_dim << "," << lut.step_size << "," << config.convergence_percentage << ","
+            << config.max_iterations << "," << "0" << ","
+            << total_energy_avg << ","
+            << eigensolver_time_average << ","
+            << integration_time_average << ","
+            << total_time_avg << "," << std::endl;
+
+        return ss.str();
     }
 
 };
