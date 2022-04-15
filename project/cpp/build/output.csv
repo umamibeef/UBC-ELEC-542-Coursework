@@ -1,0 +1,5 @@
+Date Time,Atomic Structure,GPU Integration,GPU Eigensolver,Num Partitions,Limit,Matrix Dim,Step Size,Convergence Percentage,Max Iterations,Iteration,Total Energy,Eigensolver Time,Integration Time,Total Time,
+2022/04/12-12:48:17,0,1,1,12,4,1728,0.727273,0.01,50,0,-2.89005,0.430939,0.00075375,0.6351,
+2022/04/12-12:48:17,0,1,1,12,4,1728,0.727273,0.01,50,1,-2.87552,0.431854,0.000920819,0.633246,
+2022/04/12-12:48:17,0,1,1,12,4,1728,0.727273,0.01,50,2,-2.87825,0.432391,0.000832239,0.633769,
+2022/04/12-12:48:17,0,1,1,12,4,1728,0.727273,0.01,50,3,-2.87763,0.432204,0.000806789,0.633508,

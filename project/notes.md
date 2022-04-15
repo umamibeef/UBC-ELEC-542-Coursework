@@ -4,8 +4,9 @@
 
 # TODOs
   * Immediate:
-    - Use cudaMalloc and copy data vs cudaMallocManaged, because it doesn't work with large value instatiations for some reason
+    - ~~Use cudaMalloc and copy data vs cudaMallocManaged, because it doesn't work with large value instatiations for some reason~~
       - Can probably make all the necessary changes within the CUDA files and only call the CPU alloc stuff on the main program side
+      - Done
     - ~~Move dynamic memory allocs into their own struct so they can be more easily passed into functions that use them~~
     - ~~Add CSV outputter for performance data and results~~
     - Clean up eigensolver on CUDA side to properly take into account error conditions
