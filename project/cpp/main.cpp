@@ -139,15 +139,15 @@ void print_header(void)
 {
     stringstream ss;
 
-    ss  << ANSI_FG_COLOR_MAGENTA "                                      " ANSI_COLOR_RESET << endl
-        << ANSI_FG_COLOR_MAGENTA "   ███████╗██╗  ██╗███████╗███████╗   " ANSI_COLOR_RESET << endl
-        << ANSI_FG_COLOR_MAGENTA "   ██╔════╝██║  ██║██╔════╝██╔════╝   " ANSI_COLOR_RESET << endl
-        << ANSI_FG_COLOR_MAGENTA "   █████╗  ███████║█████╗  ███████╗   " ANSI_COLOR_RESET << endl
-        << ANSI_FG_COLOR_MAGENTA "   ██╔══╝  ██╔══██║██╔══╝  ╚════██║   " ANSI_COLOR_RESET << endl
-        << ANSI_FG_COLOR_MAGENTA "   ███████╗██║  ██║██║     ███████║   " ANSI_COLOR_RESET << endl
-        << ANSI_FG_COLOR_MAGENTA "   ╚══════╝╚═╝  ╚═╝╚═╝     ╚══════╝   " ANSI_COLOR_RESET << endl
-        << ANSI_FG_COLOR_MAGENTA "                                      " ANSI_COLOR_RESET << endl
-        <<                       "   < Exact Hartree-Fock Simulator >   " << endl << endl
+    ss  << ANSI_FG_COLOR_MAGENTA "                                           " ANSI_COLOR_RESET << endl
+        << ANSI_FG_COLOR_MAGENTA "     ██████╗ ███████╗██╗  ██╗███████╗      " ANSI_COLOR_RESET << endl
+        << ANSI_FG_COLOR_MAGENTA "     ██╔══██╗██╔════╝██║  ██║██╔════╝      " ANSI_COLOR_RESET << endl
+        << ANSI_FG_COLOR_MAGENTA "     ██║  ██║███████╗███████║█████╗        " ANSI_COLOR_RESET << endl
+        << ANSI_FG_COLOR_MAGENTA "     ██║  ██║╚════██║██╔══██║██╔══╝        " ANSI_COLOR_RESET << endl
+        << ANSI_FG_COLOR_MAGENTA "     ██████╔╝███████║██║  ██║██║           " ANSI_COLOR_RESET << endl
+        << ANSI_FG_COLOR_MAGENTA "     ╚═════╝ ╚══════╝╚═╝  ╚═╝╚═╝           " ANSI_COLOR_RESET << endl
+        << ANSI_FG_COLOR_MAGENTA "                                           " ANSI_COLOR_RESET << endl
+        <<                       " < Discrete Space Hartree-Fock Simulator > " << endl << endl
         << "Author: Michel Kakulphimp" << endl
         << "Build Date: " __DATE__ " " __TIME__ << endl
         << "Git Branch: " << GIT_BRANCH << endl

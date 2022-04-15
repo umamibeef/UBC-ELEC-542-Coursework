@@ -34,7 +34,7 @@ SOFTWARE.
 
 using namespace boost;
 
-static const std::string sim_string = ANSI_FG_COLOR_CYAN         "EHFSIM|" ANSI_COLOR_RESET;
+static const std::string sim_string = ANSI_FG_COLOR_CYAN         " DSHF |" ANSI_COLOR_RESET;
 static const std::string cuda_string = ANSI_FG_COLOR_GREEN       "CUDART|" ANSI_COLOR_RESET;
 static const std::string cusolver_string = ANSI_FG_COLOR_GREEN   "CUSOLV|" ANSI_COLOR_RESET;
 static const std::string lapack_string = ANSI_FG_COLOR_YELLOW    "LAPACK|" ANSI_COLOR_RESET;

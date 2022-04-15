@@ -64,7 +64,7 @@ using namespace boost;
         cusolverStatus_t err_ = (err);                                                                                  \
         if (err_ != CUSOLVER_STATUS_SUCCESS)                                                                            \
         {                                                                                                               \
-            console_print_err(0, str(format("cusolver error %d at %s:%d\n") % err_ % __FILE__ % __LINE__), CLIENT_CUDA);\
+            console_print_err(0, str(format("cusolver error %d at %s:%d\n") % err_ % __FILE__ % __LINE__), CLIENT_CUSOLVER);\
             throw std::runtime_error("cusolver error");                                                                 \
         }                                                                                                               \
     }                                                                                                                   \
@@ -400,8 +400,8 @@ bool cuda_eigensolver(Lut_t lut, DynamicDataPointers_t ddp)
     // copy data to device
     CUDA_CHECK(cudaMemcpy(cuda_ddp.eigenvectors_data, ddp.eigenvectors_data, eigenvectors_data_size_bytes, cudaMemcpyHostToDevice));
 
-    console_print(0, "cusolverDnSsyevd start", CLIENT_CUDA);
-    console_print(2, TAB1 "cusolverDnSsyevd solver debug", CLIENT_CUDA);
+    console_print(0, "cusolverDnSsyevd start", CLIENT_CUSOLVER);
+    console_print(2, TAB1 "cusolverDnSsyevd solver debug", CLIENT_CUSOLVER);
 
     // create a cusolver handle and bind it to a stream
     CUSOLVER_CHECK(cusolverDnCreate(&cusolver_handle));
@@ -412,22 +412,22 @@ bool cuda_eigensolver(Lut_t lut, DynamicDataPointers_t ddp)
     CUDA_CHECK(cudaMalloc(reinterpret_cast<void **>(&device_info_ptr), sizeof(int)));
 
     // query working space required for syevd
-    console_print(2, TAB2 "cusolverDnSsyevd_bufferSize query", CLIENT_CUDA);
+    console_print(2, TAB2 "cusolverDnSsyevd_bufferSize query", CLIENT_CUSOLVER);
     CUSOLVER_CHECK(cusolverDnSsyevd_bufferSize(cusolver_handle, jobz, uplo, lut.matrix_dim, cuda_ddp.eigenvectors_data, lut.matrix_dim, cuda_ddp.eigenvalues_data, &lwork));
     
-    console_print(2, str(format(TAB2"lwork = %d") % lwork), CLIENT_CUDA);
+    console_print(2, str(format(TAB2"lwork = %d") % lwork), CLIENT_CUSOLVER);
 
     // allocate memory for work area
-    console_print(2, TAB2 "allocating workspace", CLIENT_CUDA);
+    console_print(2, TAB2 "allocating workspace", CLIENT_CUSOLVER);
     CUDA_CHECK(cudaMalloc(reinterpret_cast<void **>(&workspace_ptr), sizeof(float) * lwork));
 
     // compute solution
-    console_print(2, TAB2 "calling cusolverDnSsyevd", CLIENT_CUDA);
+    console_print(2, TAB2 "calling cusolverDnSsyevd", CLIENT_CUSOLVER);
     CUSOLVER_CHECK(cusolverDnSsyevd(cusolver_handle, jobz, uplo, lut.matrix_dim, cuda_ddp.eigenvectors_data, lut.matrix_dim, cuda_ddp.eigenvalues_data, workspace_ptr, lwork, device_info_ptr));
     CUDA_CHECK(cudaMemcpyAsync(&info, device_info_ptr, sizeof(int), cudaMemcpyDeviceToHost, stream));
     CUDA_CHECK(cudaStreamSynchronize(stream));
 
-    console_print(2, str(format(TAB2"info = %d") % info), CLIENT_CUDA);
+    console_print(2, str(format(TAB2"info = %d") % info), CLIENT_CUSOLVER);
 
     // copy results to host
     CUDA_CHECK(cudaMemcpy(ddp.eigenvectors_data, cuda_ddp.eigenvectors_data, eigenvectors_data_size_bytes, cudaMemcpyDeviceToHost));
