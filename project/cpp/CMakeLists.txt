@@ -24,7 +24,7 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR})
 set(CMAKE_CUDA_COMPILER /usr/local/cuda/bin/nvcc)
 
 # set the program name
-project(ExactHartreeFockSim LANGUAGES C CXX CUDA)
+project(DiscreteSpaceHartreeFockSim LANGUAGES C CXX CUDA)
 
 # CUDA
 find_package(CUDAToolkit REQUIRED)
@@ -57,9 +57,9 @@ if(OpenMP_CXX_FOUND)
 endif()
 
 # add the executable
-add_executable(ExactHartreeFockSim main.cpp console.cpp kernel.cu kernel.cu)
+add_executable(DiscreteSpaceHartreeFockSim main.cpp console.cpp kernel.cu kernel.cu)
 
-set_target_properties(ExactHartreeFockSim PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+set_target_properties(DiscreteSpaceHartreeFockSim PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 
 # add compile options to enable GSL library
 add_compile_options(`gsl-config --cflags --libs`)
