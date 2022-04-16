@@ -128,7 +128,7 @@ public:
             << "GPU Int," << "GPU Eig," <<"Parts," << "Limit,"
             << "Dim," << "Step," << "Conv,"
             << "Max Its," << "It," << "Total E,"
-            << "Eig Time," << "Int Time," << "Total Time," << std::endl;
+            << "Eig Time," << "Int Time," << "It Time," << "Total Time," << std::endl;
 
         return ss.str();
     }
@@ -158,7 +158,8 @@ public:
                 << iteration_counters[PerformanceMonitor::ITERATION_TOTAL_ENERGY][i] << ","
                 << iteration_counters[PerformanceMonitor::ITERATION_EIGENSOLVER_TIME][i] << ","
                 << iteration_counters[PerformanceMonitor::ITERATION_INTEGRATION_TIME][i] << ","
-                << iteration_counters[PerformanceMonitor::ITERATION_TOTAL_TIME][i] << "," << std::endl;
+                << iteration_counters[PerformanceMonitor::ITERATION_TOTAL_TIME][i] << ","
+                << total_time << std::endl;
         }
 
         return ss.str();
@@ -182,20 +183,20 @@ public:
         float total_energy_avg = 0;
         float eigensolver_time_average = 0;
         float integration_time_average = 0;
-        float total_time_avg = 0;
+        float total_iteration_time_avg = 0;
 
         for (int i = 0; i < num_iterations; i++)
         {
             total_energy_avg += iteration_counters[PerformanceMonitor::ITERATION_TOTAL_ENERGY][i];
             eigensolver_time_average += iteration_counters[PerformanceMonitor::ITERATION_EIGENSOLVER_TIME][i];
             integration_time_average += iteration_counters[PerformanceMonitor::ITERATION_INTEGRATION_TIME][i];
-            total_time_avg += iteration_counters[PerformanceMonitor::ITERATION_TOTAL_TIME][i];
+            total_iteration_time_avg += iteration_counters[PerformanceMonitor::ITERATION_TOTAL_TIME][i];
         }
 
         total_energy_avg /= num_iterations;
         eigensolver_time_average /= num_iterations;
         integration_time_average /= num_iterations;
-        total_time_avg /= num_iterations;
+        total_iteration_time_avg /= num_iterations;
 
         ss  << time_string << "," << config.atomic_structure << "," << config.max_num_threads << ","
             << config.enable_cuda_integration << "," << config.enable_cuda_eigensolver << ","
@@ -205,7 +206,8 @@ public:
             << total_energy_avg << ","
             << eigensolver_time_average << ","
             << integration_time_average << ","
-            << total_time_avg << "," << std::endl;
+            << total_iteration_time_avg << ","
+            << total_time << "," << std::endl;
 
         return ss.str();
     }
