@@ -56,7 +56,10 @@ michel@kakulphimp.net}
 
 \subsection{Hartree-Fock Method}
 
-\cite{szabo-ostlund}
+The Hartree-Fock (HF) method \cite{szabo-ostlund} is designed to help approximate a solution to the Schr\"{o}dinger equation for many-electron systems. This is accomplished by making some key approximations, including: the Born-Oppenheimer approximation to fix the kinematics of the nucleus, using a single slater determinant composed of orthogonal molecular spin orbitals to satisfy the Pauli exclusion principle, and most importantly approximating the Hamiltonian as a single electron function by treating the other electrons in the system as a mean field rather than evaluating with their exact states. HF iteratively converges to its solution by progressively making better guesses at the structure of the mean field of the system.
+
+Combined, these techniques help reduce the original multivariate and computationally intensive problem into one that is easily solved by a computer program which is described within this report.
+
 \lipsum[1]
 
 \begin{figure*}[h]
@@ -75,10 +78,15 @@ michel@kakulphimp.net}
 
 \subsection{CUDA Parallel Computing Platform}
 
+% What CUDA provides
+% GPU architecture
+% GPU limitations
+% CPU-GPU memory transfers
+
 \cite{nvidia-cuda}
 \lipsum[4]
 
-\section{Acceleration Vectors}
+\section{Acceleration Opporunities}
 
 \lipsum[4]
 
@@ -97,6 +105,8 @@ michel@kakulphimp.net}
 \section{Results}
 
 \lipsum[4]
+
+% Mention overhead that show up in results when integrating on GPU
 
 \begin{table*}
     \renewcommand{\arraystretch}{1.3} % vertically stretch table out
