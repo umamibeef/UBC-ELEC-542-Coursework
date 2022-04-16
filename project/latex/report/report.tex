@@ -56,9 +56,36 @@ michel@kakulphimp.net}
 
 \subsection{Hartree-Fock Method}
 
-The Hartree-Fock (HF) method \cite{szabo-ostlund} is designed to help approximate a solution to the Schr\"{o}dinger equation for many-electron systems. This is accomplished by making some key approximations, including: the Born-Oppenheimer approximation to fix the kinematics of the nucleus, using a single slater determinant composed of orthogonal molecular spin orbitals to satisfy the Pauli exclusion principle, and most importantly approximating the Hamiltonian as a single electron function by treating the other electrons in the system as a mean field rather than evaluating with their exact states. HF iteratively converges to its solution by progressively making better guesses at the structure of the mean field of the system.
+The Hartree-Fock (HF) method \cite{szabo-ostlund} is designed to help approximate a solution to the Schr\"{o}dinger equation for many-electron systems. This is accomplished by making some key approximations, including: the Born-Oppenheimer approximation to fix the kinematics of the nucleus, using a single slater determinant composed of orthogonal molecular spin orbitals to satisfy the Pauli exclusion principle, and most importantly approximating the Hamiltonian as a single electron function by treating the other electrons in the system as a mean field rather than evaluating with their exact states. HF iteratively converges to its solution by progressively making better guesses at the structure of the mean field of the system. Combined, these techniques help reduce the original multivariate and computationally intensive problem into one that is easily solved by a computer program. One such implementation is described within this report, where we perform the restricted, closed-shell Hartree Fock algorithm on a Helium atom.
 
-Combined, these techniques help reduce the original multivariate and computationally intensive problem into one that is easily solved by a computer program which is described within this report.
+Since Helium has an even number of electrons that close shells, we can use the restricted Hartree-Fock equation for closed shell systems to numerically calculate the resulting orbitals. The equation is as follows:
+
+\begin{align*}
+  \hat{F}(\vec{r})\psi_n(\vec{r}) &= \epsilon_n\psi_n(\vec{r})
+\end{align*}
+
+Where $\hat{F}(\vec{r})$ is the Fock operator which is defined as follows:
+
+\begin{align*}
+  \hat{F}(\vec{r}) &= \hat{H}_{core}(\vec{r}) + \sum_{n=1}^{N/2}\left[2J_n(\vec{r}) - K_n(\vec{r})\right]\\
+\end{align*}
+
+The Fock operator is composed of the core Hamiltonian operator $\hat{H}(\vec{r})$, the Coulomb operator $\hat{J}(\vec{r})$, and the exchange operator $\hat{K}(\vec{r})$.
+
+\begin{align*}
+  \hat{H}_{core}(\vec{r}) &= -\frac{1}{2}\nabla_1^2 - \sum_A\frac{Z_A}{\|\vec{r}_{1 A}\|}\\
+  \hat{J}_j(\vec{r}_1)\psi_i(\vec{r}_1) &= \psi_i(\vec{r}_1)\int_{-\infty}^{\infty}\left|\psi_i(\vec{r}_2)\right|^2\frac{1}{\|\vec{r}_{12}\|}d\vec{r}_2 \\
+  \hat{K}_j(\vec{r}_1)\psi_i(\vec{r}_1) &= \psi_j(\vec{r}_1)\int_{-\infty}^{\infty}\frac{\psi_j^\ast(\vec{r}_2)\psi_i(\vec{r}_2)}{\|\vec{r}_{12}\|}d\vec{r}_2 \\
+\end{align*}
+
+Expanded, the Fock operator takes the following form:
+
+\begin{align*}
+  \hat{F}(\vec{r}) &= -\frac{1}{2}\nabla_1^2 - \sum_A\frac{Z_A}{\|\vec{r}_{1 A}\|} + \\ & \sum_{n=1}^{N/2} \bigg[ 2\int_{-\infty}^{\infty}\left|\psi_n(\vec{r}_2)\right|^2\frac{1}{\|\vec{r}_{12}\|}d\vec{r}_2 \\ & - \int_{-\infty}^{\infty}\frac{\psi_n^\ast(\vec{r}_2)P_2\psi_n(\vec{r}_2)}{\|\vec{r}_{12}\|}d\vec{r}_2 \bigg]
+\end{align*}
+
+$P_2$ is a transposition operator which switches the indices of the electron indices, something required by the exchange operator.
+
 
 \lipsum[1]
 
@@ -88,7 +115,6 @@ Combined, these techniques help reduce the original multivariate and computation
 
 \section{Acceleration Opporunities}
 
-\lipsum[4]
 
 \subsection{Numerical Integration}
 
