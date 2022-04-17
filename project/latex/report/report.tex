@@ -76,9 +76,13 @@ The Fock operator is composed of the core Hamiltonian operator $\hat{H}(\vec{r})
 
 By discretizing the solution space of the problem into $N$ partitions in the three Cartesian coordinate directions and representing the Fock equation in matrix form, we can solve for the discretized wave equation $\psi_n(\vec{r})$ by solving for the eigenvectors of the Fock matrix. For each iteration of the HF algorithm, a new guess is obtained for the discretized wave equation, which can be used to compute the Fock matrix for the following iteration. If initial conditions are favourable, the iterations will eventually settle on a solution with little to no variation. The numeric value of the total energy of the system on every iteration can be used as an indicator for convergence.
 
-This report does not take the concept of HF further than what is presented; however, it is important to note that there is an improvement on the technique by using the Roothaan-Hall equations. This elevates HF by representing the solution wave functions through a linear combination of known spatial basis equations. This allows HF to take another matrix form and has the benefit of being much lighter in terms of computation. All of the techniques discussed in this report can be applied to HF using basis functions.
+This report does not take the concept of HF further than what is presented; however, it is important to note that there is are numerous improvement on the technique. One such improvement uses the Roothaan-Hall equations, by representing the solution wave functions through a linear combination of known spatial basis equations. This allows HF to take another matrix form and has the benefit of being much lighter in terms of computation. Since the techniques discussed in the report target fundamental computations shared by HF and its derivaties, they can of course be applied to them as well.
 
 \subsection{CUDA Parallel Computing Platform}
+
+Graphics processing units (GPUs) are primarily designed to accelerate the computational requirements of realtime raster 3D graphics. However, their hardware is also well suited for accelerating other, highly paralellizable workloads. This is made possible by GPU manufacturers providing APIs that allow developers to write specially designed software to run on the CPUs. Since GPUs have a fundamentally different architecture than CPUs, the software must be written with the architecture in mind and must also be compiled as a seperate executable entitity to be run exclusively on the GPU. In an example implementation of GPU acceleration, a developer identifies workloads that are well suited for the architecture of a GPU to accelerate and write routines to be executed exclusively on the GPU. The host program would then call these routines and provide the necessary data for the GPU to perform execution and return results.
+
+NVIDIA, a GPU manufacturer, provides one such API for developers called Computer Unified Architecture or CUDA. It is also known as the CUDA parallel computing platform \cite{nvidia-cuda}
 
 % What CUDA provides
 % GPU architecture
@@ -95,21 +99,21 @@ This report does not take the concept of HF further than what is presented; howe
 
 \section{Implementation}
 
-For this investigation, a program written in C++ was created to evaluate the acceleration of the eigensolver and the numerical integration on a discrete space HF solver for the Helium atom. The program is designed to be able to variably define the number of partitions used in the discretization of the solution space and selectively run the eigensolver and numerical integration on either the CPU or the GPU. C++ was chosen as the programming language as it is straightforward to integrate with the CUDA C APIs and the language has wide support in terms of libraries for utility support. To facilitate the linear algebra operations required by HF, the Eigen \cite{eigen} C++ template library was chosen. This provides structures and types to support matrix arithmetic. Eigen was linked with AMD Basic Linear Algebra Subprograms (BLAS) libraries \cite{amd-blas} to provide low level multi-core CPU support for matrix operations. Eigen was also linked with LAPACK (Linear Algebra PACKage) \cite{lapack} libraries which are used in higher-level linear algebra operations such as those to compute the eigenvectors and eigenvalues of a matrix. OpenMP is used to enable multiprocessor support for the CPU BLAS and LAPACK operations, and the LAPACKE C API is used to wrap around the LAPACK libraries which are written in Fortran. Finally, the C++ Boost libraries provide the program with quality of life tools for things such as command line arguments parsing and string formatting.
+For this investigation, a program written in C++ was created to evaluate the acceleration of the eigensolver and the numerical integration on a discrete space HF solver for the Helium atom. The program is designed to be able to variably define the number of partitions used in the discretization of the solution space and selectively run the eigensolver and numerical integration on either the CPU or the GPU. C++ was chosen as the programming language as it is straightforward to integrate with the CUDA C APIs and the language has wide support in terms of libraries for utilities. To facilitate the linear algebra operations required by HF, the Eigen \cite{eigen} C++ template library was chosen. This provides structures and types to support matrix arithmetic. Eigen was linked with AMD Basic Linear Algebra Subprograms (BLAS) libraries \cite{amd-blas} to provide low level multi-core CPU support for matrix operations. Eigen was also linked with LAPACK (Linear Algebra PACKage) \cite{lapack} libraries which are used in higher-level linear algebra operations such as those to compute the eigenvectors and eigenvalues of a matrix. OpenMP is used to enable multiprocessor support for the CPU BLAS and LAPACK operations, and the LAPACKE C API is used to wrap around the LAPACK libraries which are written in Fortran. Finally, the C++ Boost libraries provide the program with quality of life tools for things such as command line arguments parsing and string formatting.
 
 % List features of the program, how it's structured (the cfg/lut for example), and how at runtime the CPU or the GPU is chosen
 % Add any other details relating to the implementation of the program
 
 \section{Results}
 
-\begin{figure*}[h]
+\begin{figure*}[ht]
 \centering
 \includegraphics[width=7in]{figures/one-core-results.pdf}
 \caption{Performance Results Per Iteration (1 CPU Thread)}
 \label{perf-results-per-iteration-one-core}
 \end{figure*}
 
-\begin{figure*}[h]
+\begin{figure*}[ht]
 \centering
 \includegraphics[width=7in]{figures/sixteen-core-results.pdf}
 \caption{Performance Results Per Iteration (16 CPU Threads)}
