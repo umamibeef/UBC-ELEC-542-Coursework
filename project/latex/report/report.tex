@@ -48,46 +48,59 @@ michel@kakulphimp.net}
 
 \section{Introduction}
 
-\lipsum[1]
-
 \section{Background and Related Work}
-
-\lipsum[1]
 
 \subsection{Hartree-Fock Method}
 
-The Hartree-Fock (HF) method \cite{szabo-ostlund} is designed to help approximate a solution to the Schr\"{o}dinger equation for many-electron systems. This is accomplished by making some key approximations, including: the Born-Oppenheimer approximation to fix the kinematics of the nucleus, using a single slater determinant composed of orthogonal molecular spin orbitals to satisfy the Pauli exclusion principle, and most importantly approximating the Hamiltonian as a single electron function by treating the other electrons in the system as a mean field rather than evaluating with their exact states. HF iteratively converges to its solution by progressively making better guesses at the structure of the mean field of the system. Combined, these techniques help reduce the original multivariate and computationally intensive problem into one that is easily solved by a computer program. One such implementation is described within this report, where we perform the restricted, closed-shell Hartree Fock algorithm on a Helium atom.
+The Hartree-Fock (HF) method \cite{szabo-ostlund} is designed to help approximate a solution to the Schr\"{o}dinger equation for many-electron systems. This is accomplished by making some key approximations, including: the Born-Oppenheimer approximation to fix the kinematics of the nucleus, using a single slater determinant composed of orthogonal molecular spin orbitals to satisfy the Pauli exclusion principle, and most importantly approximating the Hamiltonian as a single electron function by treating the other electrons in the system as a mean field rather than evaluating with their exact states. HF iteratively converges to its solution by progressively making better guesses at the structure of the mean field of the system. Combined, these techniques help reduce the original multivariate and computationally intensive problem into one that is easily solved by a computer program. One such implementation is described within this report, where we perform the restricted, closed-shell HF algorithm on a Helium atom.
 
-Since Helium has an even number of electrons that close shells, we can use the restricted Hartree-Fock equation for closed shell systems to numerically calculate the resulting orbitals. The equation is as follows:
+Since Helium has an even number of electrons that close shells, we can use the restricted HF (RHF) equation for closed shell systems to numerically calculate the resulting orbitals. The equation is as follows:
 
-\begin{align*}
+\begin{align}
   \hat{F}(\vec{r})\psi_n(\vec{r}) &= \epsilon_n\psi_n(\vec{r})
-\end{align*}
+\end{align}
 
 Where $\hat{F}(\vec{r})$ is the Fock operator which is defined as follows:
 
-\begin{align*}
-  \hat{F}(\vec{r}) &= \hat{H}_{core}(\vec{r}) + \sum_{n=1}^{N/2}\left[2J_n(\vec{r}) - K_n(\vec{r})\right]\\
-\end{align*}
+\begin{align}
+  \hat{F}(\vec{r}) &= \hat{H}_{core}(\vec{r}) + \sum_{n=1}^{N/2}\left[2J_n(\vec{r}) - K_n(\vec{r})\right]
+\end{align}
 
 The Fock operator is composed of the core Hamiltonian operator $\hat{H}(\vec{r})$, the Coulomb operator $\hat{J}(\vec{r})$, and the exchange operator $\hat{K}(\vec{r})$.
 
-\begin{align*}
+\begin{align}
   \hat{H}_{core}(\vec{r}) &= -\frac{1}{2}\nabla_1^2 - \sum_A\frac{Z_A}{\|\vec{r}_{1 A}\|}\\
   \hat{J}_j(\vec{r}_1)\psi_i(\vec{r}_1) &= \psi_i(\vec{r}_1)\int_{-\infty}^{\infty}\left|\psi_i(\vec{r}_2)\right|^2\frac{1}{\|\vec{r}_{12}\|}d\vec{r}_2 \\
-  \hat{K}_j(\vec{r}_1)\psi_i(\vec{r}_1) &= \psi_j(\vec{r}_1)\int_{-\infty}^{\infty}\frac{\psi_j^\ast(\vec{r}_2)\psi_i(\vec{r}_2)}{\|\vec{r}_{12}\|}d\vec{r}_2 \\
-\end{align*}
+  \hat{K}_j(\vec{r}_1)\psi_i(\vec{r}_1) &= \psi_j(\vec{r}_1)\int_{-\infty}^{\infty}\frac{\psi_j^\ast(\vec{r}_2)\psi_i(\vec{r}_2)}{\|\vec{r}_{12}\|}d\vec{r}_2
+\end{align}
 
-Expanded, the Fock operator takes the following form:
+By discretizing the solution space of the problem into $N$ partitions in the three Cartesian coordinate directions and representing the Fock equation in matrix form, we can solve for the discretized wave equation $\psi_n(\vec{r})$ by solving for the eigenvectors of the Fock matrix. For each iteration of the HF algorithm, a new guess is obtained for the discretized wave equation, which can be used to compute the Fock matrix for the following iteration. If initial conditions are favourable, the iterations will eventually settle on a solution with little to no variation. The numeric value of the total energy of the system on every iteration can be used as an indicator for convergence.
 
-\begin{align*}
-  \hat{F}(\vec{r}) &= -\frac{1}{2}\nabla_1^2 - \sum_A\frac{Z_A}{\|\vec{r}_{1 A}\|} + \\ & \sum_{n=1}^{N/2} \bigg[ 2\int_{-\infty}^{\infty}\left|\psi_n(\vec{r}_2)\right|^2\frac{1}{\|\vec{r}_{12}\|}d\vec{r}_2 \\ & - \int_{-\infty}^{\infty}\frac{\psi_n^\ast(\vec{r}_2)P_2\psi_n(\vec{r}_2)}{\|\vec{r}_{12}\|}d\vec{r}_2 \bigg]
-\end{align*}
+This report does not take the concept of HF further than what is presented; however, it is important to note that there is an improvement on the technique by using the Roothaan-Hall equations. This elevates HF by representing the solution wave functions through a linear combination of known spatial basis equations. This allows HF to take another matrix form and has the benefit of being much lighter in terms of computation. All of the techniques discussed in this report can be applied to HF using basis functions.
 
-$P_2$ is a transposition operator which switches the indices of the electron indices, something required by the exchange operator.
+\subsection{CUDA Parallel Computing Platform}
 
+% What CUDA provides
+% GPU architecture
+% GPU limitations
+% CPU-GPU memory transfers
 
-\lipsum[1]
+\cite{nvidia-cuda}
+
+\section{Acceleration Opporunities}
+
+\subsection{Numerical Integration}
+
+\subsection{Eigensolver}
+
+\section{Implementation}
+
+For this investigation, a program written in C++ was created to evaluate the acceleration of the eigensolver and the numerical integration on a discrete space HF solver for the Helium atom. The program is designed to be able to variably define the number of partitions used in the discretization of the solution space and selectively run the eigensolver and numerical integration on either the CPU or the GPU. C++ was chosen as the programming language as it is straightforward to integrate with the CUDA C APIs and the language has wide support in terms of libraries for utility support. To facilitate the linear algebra operations required by HF, the Eigen \cite{eigen} C++ template library was chosen. This provides structures and types to support matrix arithmetic. Eigen was linked with AMD Basic Linear Algebra Subprograms (BLAS) libraries \cite{amd-blas} to provide low level multi-core CPU support for matrix operations. Eigen was also linked with LAPACK (Linear Algebra PACKage) \cite{lapack} libraries which are used in higher-level linear algebra operations such as those to compute the eigenvectors and eigenvalues of a matrix. OpenMP is used to enable multiprocessor support for the CPU BLAS and LAPACK operations, and the LAPACKE C API is used to wrap around the LAPACK libraries which are written in Fortran. Finally, the C++ Boost libraries provide the program with quality of life tools for things such as command line arguments parsing and string formatting.
+
+% List features of the program, how it's structured (the cfg/lut for example), and how at runtime the CPU or the GPU is chosen
+% Add any other details relating to the implementation of the program
+
+\section{Results}
 
 \begin{figure*}[h]
 \centering
@@ -102,35 +115,6 @@ $P_2$ is a transposition operator which switches the indices of the electron ind
 \caption{Performance Results Per Iteration (16 CPU Threads)}
 \label{perf-results-per-iteration-sixteen-core}
 \end{figure*}
-
-\subsection{CUDA Parallel Computing Platform}
-
-% What CUDA provides
-% GPU architecture
-% GPU limitations
-% CPU-GPU memory transfers
-
-\cite{nvidia-cuda}
-\lipsum[4]
-
-\section{Acceleration Opporunities}
-
-
-\subsection{Numerical Integration}
-
-\lipsum[4]
-
-\subsection{Eigensolver}
-
-\lipsum[4]
-
-\section{Implementation}
-
-\lipsum[2]
-
-\section{Results}
-
-\lipsum[4]
 
 % Mention overhead that show up in results when integrating on GPU
 
@@ -210,11 +194,7 @@ $P_2$ is a transposition operator which switches the indices of the electron ind
 
 \section{Future Work}
 
-\lipsum[4]
-
 \section{Conclusion}
-
-\lipsum[2]
 
 \bibliographystyle{IEEEtran}
 \bibliography{IEEEabrv, refs}
