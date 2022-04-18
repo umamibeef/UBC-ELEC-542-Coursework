@@ -1,4 +1,4 @@
-\documentclass[journal, twoside]{IEEEtran}
+\documentclass[conference, twoside]{IEEEtran}
 \IEEEoverridecommandlockouts
 % The preceding line is only needed to identify funding in the first footnote. If that is unneeded, please comment it out.
 \usepackage{cite}
@@ -98,11 +98,13 @@ NVIDIA, a GPU manufacturer, provides one such API for developers called Computer
 
 \section{Implementation}
 
-For this investigation, a program written in C++ was created to evaluate the acceleration of the eigensolver and the numerical integration on a discrete space HF solver for the Helium atom. The program is designed to be able to variably define the number of partitions used in the discretization of the solution space and selectively run the eigensolver and numerical integration on either the CPU or the GPU. C++ was chosen as the programming language as it is straightforward to integrate with the CUDA C APIs and the language has wide support in terms of libraries for utilities. To facilitate the linear algebra operations required by HF, the Eigen \cite{eigen} C++ template library was chosen. This provides structures and types to support matrix arithmetic. Eigen was linked with AMD Basic Linear Algebra Subprograms (BLAS) libraries \cite{amd-blas} to provide low level multi-core CPU support for matrix operations. Eigen was also linked with LAPACK (Linear Algebra PACKage) \cite{lapack} libraries which are used in higher-level linear algebra operations such as those to compute the eigenvectors and eigenvalues of a matrix. OpenMP is used to enable multiprocessor support for the CPU BLAS and LAPACK operations, and the LAPACKE C API is used to wrap around the LAPACK libraries which are written in Fortran. Finally, the C++ Boost libraries provide the program with quality of life tools for things such as command line arguments parsing and string formatting.
+For this investigation, a program written in C++ was created to evaluate the acceleration of the eigensolver and the numerical integration on a discrete space HF solver for the Helium atom. The program is designed to be able to variably define the number of partitions used in the discretization of the solution space and selectively run the eigensolver and numerical integration on either the CPU or the GPU. C++ was chosen as the programming language as it is straightforward to integrate with the CUDA C APIs and the language has wide support in terms of libraries for utilities. To facilitate the linear algebra operations required by HF, the Eigen \cite{eigen} C++ template library was chosen. This provides structures and types to support matrix arithmetic. Eigen was linked with AMD Basic Linear Algebra Subprograms (BLAS) libraries \cite{amd-blas} to provide low level multi-core CPU support for matrix operations. Eigen was also linked with LAPACK (Linear Algebra PACKage) \cite{lapack} libraries which are used in higher-level linear algebra operations such as those to compute the eigenvectors and eigenvalues of a matrix. OpenMP is used to enable multiprocessor support for the CPU BLAS and LAPACK operations, and the LAPACKE C API is used to wrap around the LAPACK libraries which are written in FORTRAN. Finally, the C++ Boost libraries provide the program with quality of life tools for things such as command line arguments parsing and string formatting.
 
 Due to the locality requirements of the data to be computed on, the program is architected in such a way where GPU accelerated routine data can either be allocated in RAM or in VRAM. In a CPU-only run of a routine, the data is only allocated on the CPU side and remains resident in RAM. However, in the GPU-accelerated run of a routine, data required for computation is allocated and copied over to the GPU's VRAM over PCIe. Once GPU computation is complete, the resulting data is copied back to the host RAM. The Eigen template library provides a means to map its matrix and vector structures over a pointer to data in memory, allowing for this dynamically allocated data to be computed on during matrix arithmetic.
 
-% mention matrix creation, how data is organized
+The number of partitions in the solution space is passed as an argument into the simulator. This defines how the three dimensions of the space are divided in all three Cartesian coordinate directions. To calculate the solution, every possible coordinate in the three dimensional space is placed along the dimensions of a solution matrix. If $N$ partitions are chosen, then the resulting matrix has dimensions of $N^3 \times N^3$. Increasing the partition size of the problem imposes an exponential growth of the solution space, which is evident in the runtime of the program. Arranging the problem in this matrix form allows for the implementation of the second order differential operator ($\nabla^2$) that exists in the kinetic energy term which relies on neighboring values. The exchange, Coulombic attraction/repulsion, are sparse diagonal matrices and are stored as such in the program to save on memory. When accessing elements of the matrices, the program will often only iterate over a single dimension of matrix. This is largely due to many of the matrices only requiring their diagonals to be evaluated. This has the benefit of simplifying the code and also maximizing the effectiveness of the GPU to work on its data, as it works best on sequential, ordered data \cite{special-purpose-hf-computer}.
+
+Program configuration values are stored in structs which are passed around the program's execution, including to functions that are executed on the GPU. Some data in these structures are large enough to warrant semi-permanent residence in the GPU's memory, so these are copied over to the GPU in bulk so that they remain available for GPU calculations. These values also include those that would have incurred repeated calculations of the same data. Having them calculated once at startup and stored in these structs allows for some optimizations in the program's execution on both the CPU and GPU.
 
 \section{Results}
 
@@ -112,16 +114,9 @@ The results for this investigation were obtained using a personal computing plat
     \item CPU: AMD Ryzen 9 5950X 16-Core Processor
     \item RAM: 64 GB DDR4
     \item GPU: NVIDIA GeForce RTX 3080 Ti
-    \item VRAM: 12 GB GDDR6X
+    \item VRAM: 12 GB GDDR6X 
     \item CPU-GPU Interconnect: PCIe 4.0 x16 (32 GB/s maximum bandwidth)
 \end{itemize}
-
-% \begin{figure*}[ht]
-% \centering
-% \includegraphics[width=7in]{figures/one-core-results.pdf}
-% \caption{Performance Results Per Iteration (1 CPU Thread)}
-% \label{perf-results-per-iteration-one-core}
-% \end{figure*}
 
 \begin{figure*}[ht]
 \centering
