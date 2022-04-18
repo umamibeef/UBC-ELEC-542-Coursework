@@ -80,18 +80,17 @@ This report does not take the concept of HF further than what is presented; howe
 
 \subsection{CUDA Parallel Computing Platform}
 
-Graphics processing units (GPUs) are primarily designed to accelerate the computational requirements of real-time raster 3D graphics. However, their hardware is also well suited for accelerating other, highly parallelizable workloads. This is made possible by GPU manufacturers providing APIs that allow developers to write specially designed software to run on the CPUs. Since GPUs have a fundamentally different architecture than CPUs, the software must be written with the architecture in mind and must also be compiled as a separate executable entity to be run exclusively on the GPU. In an example implementation of GPU acceleration, a developer identifies workloads that are well suited for the architecture of a GPU to accelerate and write routines to be executed exclusively on the GPU. The host program would then call these routines and provide the necessary data for the GPU to perform execution and return results.
+Graphics processing units (GPUs) are primarily designed to accelerate and support the computational requirements of real-time raster 3D graphics. However, their hardware is also well suited for accelerating other, highly parallelizable workloads. This is made possible through GPU manufacturers providing APIs that allow developers to write specially designed software to run on the GPU processing units. Since GPUs have a fundamentally different architecture than CPUs, the software must be written with the architecture in mind and must also be compiled as a separate executable entity to be run exclusively on the GPU.
 
-NVIDIA, a GPU manufacturer, provides one such API for developers called Computer Unified Architecture or CUDA. It is also known as the CUDA parallel computing platform \cite{nvidia-cuda}. As an NVIDIA-based GPU
+In GPU terminology, the host is the CPU that the GPU is coupled to and the device is the GPU itself. The host is what will be running the main program and the device will be executing offloaded accelerated portions of the main program. The device is connected to the host via a peripheral component interconnect, which by modern standards will likely be PCIe. The functions running on the device are called kernels. When a developer is designing a kernel, the API provides mechanisms to define how that kernel will be parallelized on the device. This would allow, for example, the developer to slice up a problem among the GPU's processing units in a programmatic way.
 
-% What CUDA provides
-% GPU architecture
-% GPU limitations
-% CPU-GPU memory transfers
+In an example implementation of GPU acceleration, a developer identifies workloads that are well suited for the architecture of a GPU to accelerate and write routines to be executed exclusively on the GPU. The host program would then call these routines and provide the necessary data for the device to perform execution and return results.
 
-\cite{nvidia-cuda}
+NVIDIA, a GPU manufacturer, provides one such API for developers called Computer Unified Architecture or CUDA. It is also known as the CUDA parallel computing platform \cite{nvidia-cuda}. CUDA is only available for NVIDIA GPU hardware, but there also exists an alternative that works on other GPU vendors called OpenCL. Since an NVIDIA-based GPU was available for use in this project, CUDA was chosen as the API for GPU acceleration.
 
-\section{Acceleration Opporunities}
+\cite{electronic-structure-calculations-on-gpus}
+
+\section{Acceleration Opportunities}
 
 \subsection{Numerical Integration}
 
@@ -103,8 +102,7 @@ For this investigation, a program written in C++ was created to evaluate the acc
 
 Due to the locality requirements of the data to be computed on, the program is architected in such a way where GPU accelerated routine data can either be allocated in RAM or in VRAM. In a CPU-only run of a routine, the data is only allocated on the CPU side and remains resident in RAM. However, in the GPU-accelerated run of a routine, data required for computation is allocated and copied over to the GPU's VRAM over PCIe. Once GPU computation is complete, the resulting data is copied back to the host RAM. The Eigen template library provides a means to map its matrix and vector structures over a pointer to data in memory, allowing for this dynamically allocated data to be computed on during matrix arithmetic.
 
-% List features of the program, how it's structured (the cfg/lut for example), and how at runtime the CPU or the GPU is chosen
-% Add any other details relating to the implementation of the program
+% mention matrix creation, how data is organized
 
 \section{Results}
 
@@ -118,12 +116,12 @@ The results for this investigation were obtained using a personal computing plat
     \item CPU-GPU Interconnect: PCIe 4.0 x16 (32 GB/s maximum bandwidth)
 \end{itemize}
 
-\begin{figure*}[ht]
-\centering
-\includegraphics[width=7in]{figures/one-core-results.pdf}
-\caption{Performance Results Per Iteration (1 CPU Thread)}
-\label{perf-results-per-iteration-one-core}
-\end{figure*}
+% \begin{figure*}[ht]
+% \centering
+% \includegraphics[width=7in]{figures/one-core-results.pdf}
+% \caption{Performance Results Per Iteration (1 CPU Thread)}
+% \label{perf-results-per-iteration-one-core}
+% \end{figure*}
 
 \begin{figure*}[ht]
 \centering
@@ -136,74 +134,68 @@ The results for this investigation were obtained using a personal computing plat
 
 \begin{table*}
     \renewcommand{\arraystretch}{1.3} % vertically stretch table out
-    \caption{5 MB Workload Execution Times (1 millisecond dead-time)}
-    \label{main-workload-results-1ms}
-    \centering
-    \begin{tabular}{c||c|c|c|c|c|c|c|c}
-        \hline
-        \multirow{2}{*}{Scaling Policy} & \multicolumn{8}{c}{Power-Loss Profile Period Sweep (Sawtooth-Down) Runtimes (s)} \\\cline{2-9}
-        {} & {10 ms to 8 ms} & {S.F.} & {10 ms to 4 ms} & {S.F.} & {10 ms to 2 ms} & {S.F.} & {10 ms to 1 ms} & {S.F.} \\
-        \hline
-        \hline
-        {Baseline}                  & {48.429} & {1.00} & {48.429}  & {1.00} & {48.429}  & {1.00} & {48.429}  & {1.00}\\
-        {Linear Scaling}            & {86.326} & {1.78} & {85.405}  & {1.76} & {153.755} & {3.18} & {462.042} & {9.54}\\
-        {Random Adaptive Scaling}   & {95.498} & {1.97} & {117.985} & {2.44} & {119.484} & {2.47} & {132.488} & {2.74}\\
-        {Linear Adaptive Scaling}   & {95.611} & {1.97} & {94.244}  & {1.95} & {110.304} & {2.28} & {124.021} & {2.56}\\
-        \hline
-    \end{tabular}
-\end{table*}
-
-\begin{table*}
-    \renewcommand{\arraystretch}{1.3} % vertically stretch table out
-    \caption{5 MB Workload Execution Times (500 microsecond dead-time)}
-    \label{main-workload-results-500us}
-    \centering
-    \begin{tabular}{c||c|c|c|c|c|c|c|c}
-        \hline
-        \multirow{2}{*}{Scaling Policy} & \multicolumn{8}{c}{Power-Loss Profile Period Sweep (Sawtooth-Down) Runtimes (s)} \\\cline{2-9}
-        {} & {10 ms to 8 ms} & {S.F.} & {10 ms to 4 ms} & {S.F.} & {10 ms to 2 ms} & {S.F.} & {10 ms to 1 ms} & {S.F.} \\
-        \hline
-        \hline
-        {Baseline}                  & {45.811} & {1.00} & {45.811}  & {1.00} & {45.811} & {1.00}  & {45.811}  & {1.00}\\
-        {Linear Scaling}            & {71.445} & {1.56} & {69.302}  & {1.51} & {80.453} & {1.76}  & {255.806} & {5.58}\\
-        {Random Adaptive Scaling}   & {75.260} & {1.64} & {79.272}  & {1.73} & {86.970} & {1.90}  & {95.449}  & {2.08}\\
-        {Linear Adaptive Scaling}   & {65.013} & {1.42} & {74.533}  & {1.63} & {82.870} & {1.81}  & {87.939}  & {1.92}\\
-        \hline
-    \end{tabular}
-\end{table*}
-
-\begin{table*}
-    \renewcommand{\arraystretch}{1.3} % vertically stretch table out
-    \caption{Workload Execution Times (1000 microsecond dead-time)}
-    \label{workload-size-performance}
+    \caption{CPU Only Results}
+    \label{cpu-only-results}
     \centering
     \begin{tabular}{c||c|c|c|c|c}
         \hline
-        \multirow{2}{*}{Scaling Policy} & \multicolumn{4}{c|}{Workload Runtimes (s)}\\\cline{2-6}
-        {} & {5 MB} & {4 MB} & {2 MB} & {1 MB} & {R\textsuperscript{2}}\\
+        {Solution Partitions} & {10} & {15} & {20} & {25} & {30} \\
         \hline
         \hline
-        {Baseline}                  &  {48.429} &  {38.749} &  {19.373} &   {9.688} & {1.0}\\
-        {Linear Scaling}            & {462.042} & {359.176} & {154.856} &  {52.047} & {1.0}\\
-        {Linear Adaptive Scaling}   & {124.021} &  {97.080} &  {47.392} &  {23.261} & {1.0}\\
+        {Eigensolver Time (s)}              & {0.0884} & {1.0962} & {16.853} & {160.63} & {877.85}\\
+        {Integration Time (s)}              & {0.0228} & {0.1649} & {0.8228} & {3.1488} & {9.3617}\\
+        {Total Time (s)}                    & {0.1141} & {1.3169} & {17.977} & {164.99} & {891.47}\\
         \hline
     \end{tabular}
 \end{table*}
 
 \begin{table*}
     \renewcommand{\arraystretch}{1.3} % vertically stretch table out
-    \caption{5 MB Workload Execution Times (1 millisecond dead-time)}
-    \label{power-loss-profile-performance}
+    \caption{GPU Eigensolver Results}
+    \label{gpu-eigensolver-results}
     \centering
-    \begin{tabular}{c||c|c|c|c}
+    \begin{tabular}{c||c|c|c|c|c}
         \hline
-        \multirow{2}{*}{Scaling Policy} & \multicolumn{4}{c}{Power-Loss Profile (10 ms to 1 ms Sweep) Runtimes (s)} \\\cline{2-5}
-        {} & {Sawtooth-Down} & {Sawtooth-Up} & {Sine} & {Square}\\
+        {Solution Partitions} & {10} & {15} & {20} & {25} & {30} \\
         \hline
         \hline
-        {Baseline}                  &  {48.429} &  {48.429} &  {48.429} &  {48.429}\\
-        {Linear Scaling}            & {462.042} & {512.373} & {523.763} & {885.978}\\
-        {Linear Adaptive Scaling}   & {124.021} & {123.280} & {123.580} & {173.061}\\
+        {Eigensolver Time (s)}              & {0.7677} & {0.9546} & {1.972}  & {7.3264} & {28.903}\\
+        {Integration Time (s)}              & {0.0125} & {0.1433} & {0.8101} & {3.123}  & {9.1942}\\
+        {Total Time (s)}                    & {0.7835} & {1.1514} & {3.0773} & {11.789} & {41.99} \\
+        \hline
+    \end{tabular}
+\end{table*}
+
+\begin{table*}
+    \renewcommand{\arraystretch}{1.3} % vertically stretch table out
+    \caption{GPU Integration Results}
+    \label{gpu-integration-results}
+    \centering
+    \begin{tabular}{c||c|c|c|c|c}
+        \hline
+        {Solution Partitions} & {10} & {15} & {20} & {25} & {30} \\
+        \hline
+        \hline
+        {Eigensolver Time (s)}              & {0.0905} & {1.0869} & {16.844} & {159.43} & {880.25}\\
+        {Integration Time (s)}              & {0.1473} & {0.1396} & {0.1488} & {0.1514} & {0.1491}\\
+        {Total Time (s)}                    & {0.2411} & {1.2816} & {17.295} & {160.71} & {883.72}\\
+        \hline
+    \end{tabular}
+\end{table*}
+
+\begin{table*}
+    \renewcommand{\arraystretch}{1.3} % vertically stretch table out
+    \caption{GPU Eigensolver \& GPU Integration Results}
+    \label{gpu-eigensolver-and-integration-results}
+    \centering
+    \begin{tabular}{c||c|c|c|c|c}
+        \hline
+        {Solution Partitions} & {10} & {15} & {20} & {25} & {30} \\
+        \hline
+        \hline
+        {Eigensolver Time (s)}              & {0.6014} & {0.8232} & {1.8666} & {6.95}   & {28.565}\\
+        {Integration Time (s)}              & {0.2445} & {0.2478} & {0.2618} & {0.2837} & {0.3606}\\
+        {Total Time (s)}                    & {0.8501} & {1.1239} & {2.4401} & {8.422}  & {32.54} \\
         \hline
     \end{tabular}
 \end{table*}
