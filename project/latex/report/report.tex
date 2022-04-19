@@ -116,7 +116,7 @@ A telemetry object exists within the program to record key statistics from the e
 
 \section{Results}
 
-The results for this investigation were obtained by calling the program using different parameters through a shell script.
+A summary plot of the results can be found in Figure \ref{perf-results-per-iteration-sixteen-core}. This plot contains a chart comparing the average iteration execution times for problems of varying partition size as well as varying GPU acceleration strategies. % finish this thought, explain the chart in greater detail and break down/refer to the numerical results tables below
 
 The results for this investigation were obtained using a personal computing platform with the following relevant technical specifications:
 
@@ -135,7 +135,13 @@ The results for this investigation were obtained using a personal computing plat
 \label{perf-results-per-iteration-sixteen-core}
 \end{figure*}
 
-% Mention overhead that show up in results when integrating on GPU
+In both the eigensolver and integration accelerations, the performance penalty incurred by copying from the host to the device and back evident is made clearly evident. When enabling the GPU eigensolver, performance benefits are marginal at 15 partitions and start becoming substantial at 20 partitions. At 30 partitions, the GPU eigensolver manages to solve 30 times faster than the CPU eigensolver. The CPU eigensolver is well optimized for partition sizes smaller than 15, however, executing almost 10 times faster when using 10 partitions.
+
+Similarly, the CPU integration is 6.5 times faster at 10 partitions, but breaks even at approximately 15 partitions. Increases in the partition sizes only marginally increases the execution time of the integration when performed on the GPU, indicating that the majority of the GPU integration time is spent copying data to and from the device from the host.
+
+When enabling both the GPU eigensolver and the GPU integration in the program, the 10 partition total iteration execution time is 7.4 times slower on the GPU than on the CPU-only execution. However, this advantage is already lost at 15 partitions and at 30 partitions demonstrates a speedup of 27 times when using both the GPU eigensolver and the GPU integration.
+
+Note that these results represent the average time for each iteration. Therefore these time savings are compounded by the amount of iterations required to obtain the desired convergence percentage.
 
 \begin{table*}
     \renewcommand{\arraystretch}{1.3} % vertically stretch table out
