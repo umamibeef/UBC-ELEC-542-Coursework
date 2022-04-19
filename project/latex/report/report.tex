@@ -92,9 +92,15 @@ NVIDIA, a GPU manufacturer, provides one such API for developers called Computer
 
 \section{Acceleration Opportunities}
 
+In the HF computation, the core Hamiltonian is computed only once, and this data is resident in memory for the iterations to use when solving for the eigenvectors of the solution. Accelerating any portion of this would not yield significant performance increases for the program, especially if the convergence percentage is small enough to result in a long convergence pattern. This largely leaves the numerical integration and the eigensolver up for acceleration opportunities. This section explores these two computations and how they can be accelerated on a GPU.
+
 \subsection{Numerical Integration}
 
+Performing the numerical integration is straightforward on a GPU. This is largely a result of the program only needing to iterate sequentially once over all of the possible coordinates of the solution space. This allows the input data to be cleanly subdivided into smaller chunks of work to be performed in a massively paralleled manner on the GPU.
+
 \subsection{Eigensolver}
+
+Obtaining the eigenvectors and eigenvalues of a matrix requires an algorithm to perform diagonalization. 
 
 \section{Implementation}
 
@@ -106,7 +112,11 @@ The number of partitions in the solution space is passed as an argument into the
 
 Program configuration values are stored in structs which are passed around the program's execution, including to functions that are executed on the GPU. Some data in these structures are large enough to warrant semi-permanent residence in the GPU's memory, so these are copied over to the GPU in bulk so that they remain available for GPU calculations. These values also include those that would have incurred repeated calculations of the same data. Having them calculated once at startup and stored in these structs allows for some optimizations in the program's execution on both the CPU and GPU.
 
+A telemetry object exists within the program to record key statistics from the execution of the program. For each HF iteration, it records the runtime of the eigensolver, the numerical integration, the total energy, and the iteration time. It will also record the total time it took to converge to the final solution. To simplify the output of numerous runs, the object is able to print out CSV-formatted data for each of its iterations or perform an average of all iterations. Using this mode allows for the program to run and only print to the console CSV-formatted data to be piped into a results file. This allows a shell script to make multiple calls to the program using varying parameters and have the results piped directly to a file.
+
 \section{Results}
+
+The results for this investigation were obtained by calling the program using different parameters through a shell script.
 
 The results for this investigation were obtained using a personal computing platform with the following relevant technical specifications:
 
