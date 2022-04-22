@@ -46,9 +46,13 @@ michel@kakulphimp.net}
 {}
 \maketitle
 
-\section{Introduction} % Not started
+\section{Introduction} % Complete
 
-\section{Background and Related Work} % Not started
+Graphics processing units (GPUs) have been a mainstay of the computing world for many decades now, thanks in large part to an ever-evolving need to push more and more pixels to displays to showcase a rich variety of real-time graphics and media. At their core, however, they are programmable devices used to perform application-specific computations. It is unsurprising then that GPUs can be leveraged to process other types of workloads. This report outlines a short investigation on how GPUs can be leveraged to accelerate molecular simulation algorithms, specifically the Hartree-Fock method.
+
+\section{Background} % Complete
+
+The following sections provide a brief overview of the Hartree-Fock method as well as GPU acceleration. The information provide should provide enough context to understand how the investigation was able to obtain the results presented towards the end of the report.
 
 \subsection{Hartree-Fock Method} % Complete
 
@@ -80,9 +84,11 @@ This report does not take the concept of HF further than what is presented; howe
 
 \subsection{GPU Acceleration} % Almost complete - add architecture detail on blocks, also explain RAM is on host and VRAM is on GPU
 
-Graphics processing units (GPUs) are primarily designed to accelerate and support the computational requirements of real-time raster 3D graphics. However, their hardware is also well suited for accelerating other, highly parallelizable workloads, such as molecular simulations \cite{electronic-structure-calculations-on-gpus}. This is made possible through GPU manufacturers providing APIs that allow developers to write specially designed software to run on the GPU processing units. Since GPUs have a fundamentally different architectures than CPUs, the software must be written with the architecture in mind and must also be compiled as a separate executable entity to be run exclusively on the GPU.
+GPUs are primarily designed to accelerate and support the computational requirements of real-time raster 3D graphics. However, their hardware is also well suited for accelerating other, highly parallelizable workloads, such as molecular simulations \cite{electronic-structure-calculations-on-gpus}. This is made possible through GPU manufacturers providing APIs that allow developers to write specially designed software to run on the GPU processing units. Since GPUs have a fundamentally different architectures than CPUs, the software must be written with the architecture in mind and must also be compiled as a separate executable entity to be run exclusively on the GPU.
 
 In GPU terminology, the host is the CPU that the GPU is coupled to and the device is the GPU itself. The host is what will be running the main program and the device will be executing offloaded accelerated portions of the main program. The device is connected to the host via a peripheral component interconnect, which by modern standards will likely be PCIe. The functions running on the device are called kernels. When a developer is designing a kernel, the API provides mechanisms to define how that kernel will be parallelized on the device. This would allow, for example, the developer to slice up a problem among the GPU's processing units in a programmatic way.
+
+At its core, a modern GPU is designed to maximize the throughput of a parallel workload. Given the nature of graphics displays and the millions of pixels contained within them, this architecture makes sense. While the exact implementation details will vary depending on the GPU vendor and the capabilities that are designed into them, one can generally expect them to contain clusters of numerous processing units with varying levels of memory found throughout the device. Due to how these clusters are interconnected, there are limitations to how processor can access memory within the system. This also limits the flexibility of the processors to perform incongruous tasks within the clusters. All of these architectural considerations must taken into account when developing for a given GPU platform.
 
 NVIDIA, a GPU manufacturer, provides one such API for developers called Computer Unified Architecture or CUDA. It is also known as the CUDA parallel computing platform \cite{nvidia-cuda}. CUDA is only available for NVIDIA GPU hardware, but there also exists an alternative that works on other GPU vendors called OpenCL. Since an NVIDIA-based GPU was available for use in this project, CUDA was chosen as the API for GPU acceleration.
 
@@ -106,7 +112,7 @@ Performing the numerical integration is straightforward on a GPU. This is largel
 
 \subsection{Eigensolver}
 
-Solving for the eigenvalues and eigenvectors requires the implementation of a diagonalization algorithm. Since the Fock matrix is real and symmetric, a divide-and-conquer algorithm can be used. As these algorithms are generally well studied and implemented in common linear algebra routines, re-implementing them from scratch would likely not be worth the effort. As outlined in the following sections, libraries were found for both the CPU and GPU implementations of the eigensolver.`'
+Solving for the eigenvalues and eigenvectors requires the implementation of a diagonalization algorithm. Since the Fock matrix is real and symmetric, a divide-and-conquer algorithm can be used. As these algorithms are generally well studied and implemented in common linear algebra routines, re-implementing them from scratch would likely not be worth the effort. As outlined in the following sections, libraries were found for both the CPU and GPU implementations of the eigensolver.
 
 \section{Implementation} % Complete
 
@@ -124,17 +130,19 @@ On the CPU-side, the LAPACK \texttt{SSYEVD} function is used to compute the eige
 
 Finally, the C++ Boost libraries provide the program with quality of life tools for things such as command line arguments parsing and string formatting.
 
-\subsection{Program Architecture} % Almost complete, include details on how memory is allocated on every entry of the GPU to be able to allocate as much space as possible on the GPU for the eigensolver - show a calculation of the total matrix size: sizeof(float) * matrix_dim * matrix_dim
+\subsection{Program Architecture} % Complete
 
 Due to the locality requirements of the data to be computed on, the program is architected in such a way where GPU accelerated routine data can either be allocated in RAM or in VRAM. In a CPU-only run of a routine, the data is only allocated on the CPU side and remains resident in RAM. However, in the GPU-accelerated run of a routine, data required for computation is allocated and copied over to the GPU's VRAM over PCIe. Once GPU computation is complete, the resulting data is copied back to the host RAM. The Eigen template library provides a means to map its matrix and vector structures over a pointer to data in memory, allowing for this dynamically allocated data to be computed on during matrix arithmetic.
 
 The number of partitions in the solution space is passed as an argument into the simulator. This defines how the three dimensions of the space are divided in all three Cartesian coordinate directions. To calculate the solution, every possible coordinate in the three dimensional space is placed along the dimensions of a solution matrix. If $N$ partitions are chosen, then the resulting matrix has dimensions of $N^3 \times N^3$. Increasing the partition size of the problem imposes an exponential growth of the solution space, which is evident in the runtime of the program. Arranging the problem in this matrix form allows for the implementation of the second order differential operator ($\nabla^2$) that exists in the kinetic energy term which relies on neighboring values. The exchange, Coulombic attraction/repulsion, are sparse diagonal matrices and are stored as such in the program to save on memory. When accessing elements of the matrices, the program will often only iterate over a single dimension of matrix. This is largely due to many of the matrices only requiring their diagonals to be evaluated. This has the benefit of simplifying the code and also maximizing the effectiveness of the GPU to work on its data, as it works best on sequential, ordered data \cite{special-purpose-hf-computer}.
 
+The eigensolver required the largest workspace out of the two GPU accelerated routines. For the integration, only $N^3$-length vectors of \texttt(float) type (4 bytes) were needed to compute the new diagonals. However, the eigensolver required $N^3 \times N^3$ the size of a \texttt(float) type for the matrix to be solved as well as an additional workspace for the algorithm to store temporary values in (approximately 2.5x the size of the matrix in bytes). In order to allocate as much of the GPU's VRAM as possible to the workspace for the eigensolver, it was necessary to dynamically allocate and subsequently free the memory allocated on the CPU. This occurs before and after each GPU kernel is executed.
+
 Program configuration values are stored in structs which are passed around the program's execution, including to functions that are executed on the GPU. Some data in these structures are large enough to warrant semi-permanent residence in the GPU's memory, so these are copied over to the GPU in bulk so that they remain available for GPU calculations. These values also include those that would have incurred repeated calculations of the same data. Having them calculated once at startup and stored in these structs allows for some optimizations in the program's execution on both the CPU and GPU.
 
 A telemetry object exists within the program to record key statistics from the execution of the program. For each HF iteration, the telemetry object records the runtime of the eigensolver, the numerical integration, the total energy, and the iteration time. It will also record the total time it took to converge to the final solution. To simplify the output of numerous runs, the object is able to return CSV-formatted telemetry data for each of its iterations or perform an average of all iterations. Using these functions allows for the program to run and only print to the console CSV-formatted data to be piped into a results file. This allows a shell script to make multiple calls to the program using varying parameters and have the results piped directly to a file.
 
-\section{Results}
+\section{Results} % Complete
 
 Using the program described in the sections above along with the shell script executing different invocations of the parameters, the results for this investigation were obtained using a personal computing platform with the following relevant technical specifications:
 
@@ -155,13 +163,11 @@ A summary plot of the results can be found in Figure \ref{perf-results-per-itera
 \label{perf-results-per-iteration-sixteen-core}
 \end{figure*}
 
-In both the eigensolver and integration accelerations results, the performance penalty incurred by copying from the host to the device and back again is evident as performance decreases if the workload is small enough. When enabling the GPU eigensolver, performance benefits are marginal at 15 partitions and start becoming substantial at 20 partitions. At 30 partitions, the GPU eigensolver manages to solve 30 times faster than the CPU eigensolver. The CPU eigensolver is well optimized for partition sizes smaller than 15, however, executing almost 10 times faster when using 10 partitions.
+In both the eigensolver and integration accelerations results, the performance penalty incurred by copying from the host to the device and back again is evident as performance decreases if the workload is small enough. When enabling the GPU eigensolver, performance benefits are marginal at 15 partitions and start becoming substantial at 20 partitions. At 30 partitions, the GPU eigensolver manages to solve 30.4 times faster than the CPU eigensolver. The CPU eigensolver is well optimized for partition sizes smaller than 15, however, executing almost 10 times faster when using 10 partitions.
 
-Similarly, the CPU integration is 6.5 times faster at 10 partitions, but breaks even at approximately 15 partitions. Increases in the partition sizes only marginally increases the execution time of the integration when performed on the GPU, indicating that the majority of the GPU integration time is spent copying data to and from the device from the host.
+Similarly, the CPU integration is 6.5 times faster at 10 partitions, but breaks even at approximately 15 partitions. Increases in the partition sizes only marginally increases the execution time of the integration when performed on the GPU, indicating that the majority of the GPU integration time is spent copying data to and from the device from the host. Compared to the CPU integration, the GPU integration is able to find a solution 61.7 times faster at 30 partitions.
 
-When enabling both the GPU eigensolver and the GPU integration in the program, the 10 partition total iteration execution time is 7.4 times slower on the GPU than on the CPU-only execution. However, this advantage is already lost at 15 partitions and at 30 partitions demonstrates a speedup of 27 times when using both the GPU eigensolver and the GPU integration.
-
-Note that these results represent the average time for each iteration. Therefore these time savings are compounded by the amount of iterations required to obtain the desired convergence percentage.
+When enabling both the GPU eigensolver and the GPU integration in the program, the 10 partition total iteration execution time is 7.4 times slower on the GPU than on the CPU-only execution. However, this advantage is already lost at 15 partitions and at 30 partitions demonstrates a speedup of 27 times when using both the GPU eigensolver and the GPU integration. Note that all these results represent the average time for each iteration. Therefore, all of these iteration times are compounded by the amount of iterations required to obtain the desired convergence percentage.
 
 \begin{table*}
     \renewcommand{\arraystretch}{1.3} % vertically stretch table out
@@ -231,18 +237,19 @@ Note that these results represent the average time for each iteration. Therefore
     \end{tabular}
 \end{table*}
 
-\section{Future Work}
+\section{Future Work} % Complete
 
-% Apply these GPU techniques to more commonly used HF algorithms
-% Implemented integration grid acceleration as outlined in the reference papers
-% Better optimize the summation of the integration as it may not be ideal the way it's performed right now
-% Naive implementation
+The investigation performed in this report performs a rudimentary HF iteration algorithm. Time permitting, it would be best to apply GPU acceleration techniques to more commonly used HF algorithms and other current molecular simulations.
 
-\section{Conclusion}
+The numerical integration performed in this investigation was rudimentary and has room for improvement. The current implementation parallelizes each of the integrations along the diagonal of the repulsion and exchanges matrices. This means that each kernel thread is performing a numerical integration for a diagonal entry. This could be further improved by exposing further parallelization of the integrands themselves and finding a way to synchronize the summation after calculation. More investigation and work is required in this area.
 
-% Even a naive implementation can have benefits
-% Effort to implement is non-trivial
-% Must understand the underlying architecture of GPUs well enough to properly use it
+Using the CUDA cuSOLVER library was a good first attempt at improving the performance of the eigensolver, but a bespoke implementation may be able to improve the performance even more. This would require a deep dive into diagonalization algorithms to expose parallelism and implement a tailor-made solution for a given GPU platform.
+
+\section{Conclusion} % Complete
+
+The GPU acceleration implemented in this project is at best naive. The eigensolver was implemented using the GPU vendor's supplied linear algebra routines and the integration algorithm was divided up into as many parallel kernels as the GPU could provide. Despite this, however, the results undeniably demonstrated how much more effective the GPU architecture was at accelerating the investigated tasks. At 30 partitions, the GPU eigensolver was 30.4 times faster than the CPU eigensolver and the GPU integration was 61.7 times faster than the CPU integration. However, this performance increase was only available when the memory access latency was hidden by the large problem sizes.
+
+Despite the naive GPU implementation of the algorithms, the effort to architect the data sharing between host and device as well as manipulating the original CPU-only routines to work well on the GPU is non-trivial. One must take into account the ramp in knowledge required to develop for a new computing architecture. It is also entirely possible to implement a GPU kernel which is slower than its CPU equivalent if the architecture of the GPU is not taken properly into account. However, as this investigation has revealed, there are clear benefits to using the GPU for accelerating both eigensolvers as well as numerical integration. As molecular simulations make heavy use of these algorithms, it is not unreasonable to assume that GPUs can be very effective in accelerating their solutions. Perhaps other algorithms used by molecular simulations can effectively leverage GPUs as well.
 
 \bibliographystyle{IEEEtran}
 \bibliography{IEEEabrv, refs}

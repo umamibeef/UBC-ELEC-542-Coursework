@@ -419,6 +419,7 @@ bool cuda_eigensolver(Lut_t lut, DynamicDataPointers_t ddp)
 
     // allocate memory for work area
     console_print(2, TAB2 "allocating workspace", CLIENT_CUSOLVER);
+    console_print(2, str(format(TAB2"total: %d bytes") % (sizeof(float) * lwork)), CLIENT_CUSOLVER);
     CUDA_CHECK(cudaMalloc(reinterpret_cast<void **>(&workspace_ptr), sizeof(float) * lwork));
 
     // compute solution
