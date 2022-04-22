@@ -132,9 +132,9 @@ Finally, the C++ Boost libraries provide the program with quality of life tools 
 
 \begin{figure*}[ht] % approximately here, at the top
 \centering
-\includegraphics[width=7in]{figures/sixteen-core-results.pdf}
-\caption{Performance Results Per Iteration (16 CPU Threads)}
-\label{perf-results-per-iteration-sixteen-core}
+\includegraphics[width=7in]{figures/thirtytwo-thread-results.pdf}
+\caption{Performance Results Per Iteration (32 CPU Threads)}
+\label{perf-results-per-iteration-thirtytwo-thread}
 \end{figure*}
 
 \begin{table*}
@@ -205,14 +205,14 @@ A telemetry object exists within the program to record key statistics from the e
 Using the program described in the sections above along with the shell script executing different invocations of the parameters, the results for this investigation were obtained using a personal computing platform with the following relevant technical specifications:
 
 \begin{itemize}
-    \item CPU: AMD Ryzen 9 5950X 16-Core Processor
+    \item CPU: AMD Ryzen 9 5950X 16-Core/32-Thread Processor
     \item RAM: 64 GB DDR4
     \item GPU: NVIDIA GeForce RTX 3080 Ti
     \item VRAM: 12 GB GDDR6X 
     \item CPU-GPU Interconnect: PCIe 4.0 x16 (32 GB/s maximum bandwidth)
 \end{itemize}
 
-A summary plot of the results can be found in Figure \ref{perf-results-per-iteration-sixteen-core}. This plot contains a chart comparing the average iteration execution times for problems of varying partition size as well as varying GPU acceleration strategies. The four different modes of the program are clustered into their own category: CPU-only execution, GPU-accelerated eigensolver enabled, GPU-accelerated integration enabled, and both GPU-accelerated eigensolver and integration enabled. Each mode cluster includes executions of the program using partition sizes of 10, 15, 20, 25, and 30, which correspond to Fock matrix solution sizes of 1000, 3375, 8000, 15625, and 27000 respectively. Note that the problem becomes exponentially larger with linear increases in partition size. The numerical results can be found in Table \ref{numeric-results}.
+A summary plot of the results can be found in Figure \ref{perf-results-per-iteration-thirtytwo-thread}. This plot contains a chart comparing the average iteration execution times for problems of varying partition size as well as varying GPU acceleration strategies. The four different modes of the program are clustered into their own category: CPU-only execution, GPU-accelerated eigensolver enabled, GPU-accelerated integration enabled, and both GPU-accelerated eigensolver and integration enabled. Each mode cluster includes executions of the program using partition sizes of 10, 15, 20, 25, and 30, which correspond to Fock matrix solution sizes of 1000, 3375, 8000, 15625, and 27000 respectively. Note that the problem becomes exponentially larger with linear increases in partition size. The numerical results can be found in Table \ref{numeric-results}.
 
 In both the eigensolver and integration accelerations results, the performance penalty incurred by copying from the host to the device and back again is evident as performance decreases if the workload is small enough. When enabling the GPU eigensolver, performance benefits are marginal at 15 partitions and start becoming substantial at 20 partitions. At 30 partitions, the GPU eigensolver manages to solve 30.4 times faster than the CPU eigensolver. The CPU eigensolver is well optimized for partition sizes smaller than 15, however, executing almost 10 times faster when using 10 partitions.
 
