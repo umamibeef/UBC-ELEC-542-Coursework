@@ -46,6 +46,10 @@ michel@kakulphimp.net}
 {}
 \maketitle
 
+% These two force the page numbers to show up again
+\thispagestyle{plain} % Make title page have a number
+\pagestyle{plain} % Make the rest of the pages have numbers
+
 \section{Introduction} % Complete
 
 Graphics processing units (GPUs) have been a mainstay of the computing world for many decades now, thanks in large part to an ever-evolving need to push more and more pixels to displays to showcase a rich variety of real-time graphics and media. At their core, however, they are programmable devices used to perform application-specific computations. It is unsurprising then that GPUs can be leveraged to process other types of workloads. This report outlines a short investigation on how GPUs can be leveraged to accelerate molecular simulation algorithms, specifically the Hartree-Fock method.
@@ -101,18 +105,6 @@ Parallel efficiency relates to optimizing the amount of parallel execution that 
 Memory throughput must also be optimized as there are different pools of memory to consider. The GPU has some memory that is private per thread, private per certain number of blocks of threads, and memory that is available to all devices in the GPU. There is of course also the main pool of memory that exists in the host system. Moving between host and device incurs the largest penalty as the memory is copied across the interconnect fabric (PCIe). Care must be taken when designing applications to properly place data within these memories to hide as much memory access latency as possible.
 
 Optimizations in instruction throughput relates to ensuring that the GPU execution units are kept busy in order to reduce idle time. This efficiency is impacted by factors such as data residency (local or global) and synchronization requirements between threads. Global memory access would stall execution until data can be moved into local storage and thread synchronization would occur if there is a data dependency between two threads.
-
-\section{Acceleration Opportunities}
-
-In the HF computation, the core Hamiltonian is computed only once, and this data is resident in memory for the iterations to use when solving for the eigenvectors of the solution. Accelerating any portion of this would not yield significant performance increases for the program, especially if the convergence percentage is small enough to result in a long convergence pattern. This largely leaves the numerical integration and the eigensolver up for acceleration opportunities. This section explores these two computations and how they can be accelerated on a GPU.
-
-\subsection{Numerical Integration}
-
-Performing the numerical integration is straightforward on a GPU. This is largely a result of the program only needing to iterate sequentially once over all of the possible coordinates of the solution space. This allows the input data to be cleanly subdivided into smaller chunks of work to be performed in a massively paralleled manner on the GPU.
-
-\subsection{Eigensolver}
-
-Solving for the eigenvalues and eigenvectors requires the implementation of a diagonalization algorithm. Since the Fock matrix is real and symmetric, a divide-and-conquer algorithm can be used. As these algorithms are generally well studied and implemented in common linear algebra routines, re-implementing them from scratch would likely not be worth the effort. As outlined in the following sections, libraries were found for both the CPU and GPU implementations of the eigensolver.
 
 \section{Implementation} % Complete
 
